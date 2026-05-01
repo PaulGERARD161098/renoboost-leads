@@ -18,7 +18,6 @@ import time
 import urllib.parse
 import urllib.robotparser
 from dataclasses import dataclass, field
-from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -191,8 +190,8 @@ def extraire_emails_du_html(html: str, domaine_attendu: str | None = None) -> li
                 email_part = href[7:].split("?")[0].strip().lower()
                 if email_est_valide(email_part):
                     emails.add(email_part)
-    except Exception:  # noqa: BLE001 — on est tolérant sur HTML cassé
-        pass
+    except Exception as e:  # noqa: BLE001 — on est tolérant sur HTML cassé
+        logger.debug("Parsing HTML mailto échoué (HTML cassé) : %s", e)
 
     # Filtrage par domaine si demandé
     if domaine_attendu:
@@ -318,7 +317,8 @@ class ScraperContact:
             url = base_url + path
             try:
                 html = self._fetch(url)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                logger.debug("Scraping %s échoué : %s", url, e)
                 continue
 
             if html is None:

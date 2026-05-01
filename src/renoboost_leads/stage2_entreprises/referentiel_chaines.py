@@ -151,7 +151,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "villavita": "Villavita",
 
     # Auberges / autres marques hôtelières
-    "première classe": "Groupe Louvre Hotels",
     "fasthotel": "Fasthôtel",
     "ace hotel": "Ace Hôtel France",
     "p'tit dej hotel": "P'tit Dej Hôtel",

@@ -15,8 +15,6 @@ Logique :
 from __future__ import annotations
 
 import time
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from ..common.cache import SessionCache
@@ -189,9 +187,9 @@ class EnricheurStage2:
         n = len(leads_l2)
         if n == 0:
             return {"total": 0}
-        nb_siren = sum(1 for l in leads_l2 if l.siren)
-        nb_chaines = sum(1 for l in leads_l2 if l.flag_chaine)
-        nb_dirigeant = sum(1 for l in leads_l2 if l.dirigeant_nom)
+        nb_siren = sum(1 for lead in leads_l2 if lead.siren)
+        nb_chaines = sum(1 for lead in leads_l2 if lead.flag_chaine)
+        nb_dirigeant = sum(1 for lead in leads_l2 if lead.dirigeant_nom)
         return {
             "total": n,
             "siren_trouve": nb_siren,
