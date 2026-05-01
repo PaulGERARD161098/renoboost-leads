@@ -1,6 +1,7 @@
 """Models Pydantic — structures de données du projet.
 
 Chaque étage enrichit progressivement le `Lead` avec ses propres champs.
+Les modèles suivent une logique d'extension : LeadStage2 hérite/contient LeadStage1, etc.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ════════════════════════════════════════════════════════════════
-# Configuration YAML
+# Configuration YAML (campagne)
 # ════════════════════════════════════════════════════════════════
 
 
@@ -23,7 +24,6 @@ class RunInfo(BaseModel):
     @field_validator("client_name")
     @classmethod
     def _slug(cls, v: str) -> str:
-        # Pas de caractères "trop bizarres" pour qu'on s'en serve dans des noms de fichier
         forbidden = set("/\\:*?\"<>|")
         if any(c in v for c in forbidden):
             raise ValueError(f"client_name contient des caractères interdits : {forbidden}")
@@ -38,9 +38,7 @@ class StagesFlags(BaseModel):
 
 
 class SecteurCible(BaseModel):
-    type: str = Field(
-        description="Type Google Places officiel (ex: 'lodging', 'restaurant')"
-    )
+    type: str = Field(description="Type Google Places officiel (ex: 'lodging', 'restaurant')")
     query: str = Field(description="Texte de recherche utilisé par Text Search")
 
 
@@ -91,7 +89,7 @@ class CampaignConfig(BaseModel):
 
 
 # ════════════════════════════════════════════════════════════════
-# Lead — structure progressive sur les 4 étages
+# ÉTAGE 1 — Données Google Places
 # ════════════════════════════════════════════════════════════════
 
 
@@ -100,18 +98,17 @@ class LeadStage1(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    # Identifiants
     place_id: str
     extraction_date: datetime
 
-    # Identité de l'établissement
+    # Identité
     nom: str
     adresse: str | None = None
     ville: str | None = None
     code_postal: str | None = None
     pays: str | None = "France"
 
-    # Géolocalisation
+    # Géoloc
     latitude: float | None = None
     longitude: float | None = None
 
@@ -129,16 +126,87 @@ class LeadStage1(BaseModel):
     statut_business: str | None = None
     niveau_prix: int | None = None
 
-    # Sources consultables
+    # Sources
     google_maps_url: str | None = None
 
-    # Métadonnées de l'extraction
+    # Métadonnées
     secteur_recherche: str | None = None
     requete_origine: str | None = None
 
 
 # ════════════════════════════════════════════════════════════════
-# Stats / résultats d'un run
+# ÉTAGE 2 — Données entreprise (data.gouv.fr)
+# ════════════════════════════════════════════════════════════════
+
+
+class LeadStage2(LeadStage1):
+    """LeadStage1 + colonnes enrichies via API recherche-entreprises.api.gouv.fr."""
+
+    # SIREN / SIRET
+    siren: str | None = None
+    siret: str | None = None
+
+    # NAF / catégorie
+    code_naf: str | None = None
+    libelle_naf: str | None = None
+
+    # Forme juridique & statut
+    forme_juridique: str | None = None
+    statut_actif: bool | None = None
+
+    # Effectif (tranche INSEE)
+    tranche_effectif: str | None = None
+    libelle_effectif: str | None = None
+
+    # Dirigeant principal
+    dirigeant_nom: str | None = None
+    dirigeant_prenom: str | None = None
+    dirigeant_qualite: str | None = None  # ex: "Président", "Gérant"
+
+    # Adresse normalisée (depuis Sirene)
+    adresse_normalisee: str | None = None
+
+    # Date de création
+    date_creation: str | None = None  # format YYYY-MM-DD
+
+    # Métadonnées de matching
+    score_matching: float | None = None  # 0-100
+    match_incertain: bool = False  # True si score < 60
+    flag_chaine: bool = False  # True si Accor / Carrefour / etc.
+    note_chaine: str | None = None  # "Lead à enrichir manuellement via siège"
+
+
+# ════════════════════════════════════════════════════════════════
+# ÉTAGE 3 — Contacts (scraping + patterns)
+# ════════════════════════════════════════════════════════════════
+
+
+class LeadStage3(LeadStage2):
+    """LeadStage2 + emails (scrapés et patterns générés)."""
+
+    # Emails issus du scraping (présumés valides car publiés sur le site)
+    emails_verifies: list[str] = []  # emails effectivement scrapés
+
+    # Emails générés par patterns (à vérifier avant envoi)
+    emails_candidats: list[str] = []  # patterns générés
+
+    # Métadonnées
+    domaine_extrait: str | None = None  # ex: "hotellesud.fr"
+    page_source_emails: str | None = None  # URL où les emails ont été trouvés
+    nb_emails_verifies: int = 0
+    nb_emails_candidats: int = 0
+    source_globale: Literal[
+        "scraping_uniquement",
+        "patterns_uniquement",
+        "scraping_et_patterns",
+        "aucun_email",
+        "chaine_non_traitee",
+    ] = "aucun_email"
+    contient_dirigeant_pattern: bool = False  # True si patterns nominatifs générés
+
+
+# ════════════════════════════════════════════════════════════════
+# Stats & résultats du run
 # ════════════════════════════════════════════════════════════════
 
 

@@ -1,0 +1,61 @@
+# ════════════════════════════════════════════════════════════════
+# Config — Client OMBRIÈRES SOLAIRES
+# ════════════════════════════════════════════════════════════════
+# Cible : entreprises B2B avec parking exploitable pour
+#   - ombrières solaires bois français
+#   - panneaux PV
+#   - bornes IRVE
+#
+# Premier run de validation : Bouches-du-Rhone (13) — département test
+# ════════════════════════════════════════════════════════════════
+
+run:
+  client_name: "ombrieres-bouches-du-rhone"
+  description: "Test 200 leads — hôtels 3*+, cliniques privées, salles séminaires, hypers — Bouches-du-Rhône"
+  campaign_date: "2026-05-01"
+
+# Pour le run de test L1, on n'active que l'étage 1
+# On activera 2, 3, 4 dans les livraisons L2, L3, L4
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: false
+  enable_stage_3_contacts: false
+  enable_stage_4_prospection: false
+
+secteurs:
+  - type: "lodging"
+    query: "hôtel 4 étoiles"
+  - type: "lodging"
+    query: "hôtel 5 étoiles"
+  - type: "hospital"
+    query: "clinique privée"
+  - type: "event_venue"
+    query: "salle de séminaire entreprise"
+  - type: "supermarket"
+    query: "hypermarché"
+
+zone:
+  type: "departement"
+  codes: ["13"]                           # Bouches-du-rhone
+  rayon_par_point_km: 8
+  pas_grille_km: 12
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  note_min: null                          # On ne filtre pas, on veut le pool large
+  nb_avis_min: 5                          # Au moins 5 avis pour éviter les fiches mortes
+  nb_avis_max: null
+  exiger_telephone: false
+  exiger_site_web: false
+  dedup_chaines: false                    # On garde toutes les fiches (chaque parking compte)
+
+volume:
+  cible: 200
+  max_par_secteur: 60                     # Évite que 1 secteur écrase les autres
+
+budget:
+  max_eur: 15                             # Étage 1 seul
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

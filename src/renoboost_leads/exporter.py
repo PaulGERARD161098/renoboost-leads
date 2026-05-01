@@ -1,19 +1,23 @@
-"""Export CSV des leads."""
+"""Export CSV des leads (étages 1, 2, 3) + sauvegardes horodatées."""
 
 from __future__ import annotations
 
 import csv
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 from .common.logger import get_logger
-from .models import LeadStage1, RunStats
+from .models import LeadStage1, LeadStage2, LeadStage3, RunStats
 
 logger = get_logger(__name__)
 
 
-# Ordre des colonnes pour le CSV étage 1
+# ════════════════════════════════════════════════════════════════
+# Schémas de colonnes
+# ════════════════════════════════════════════════════════════════
+
 COLONNES_STAGE1 = [
     "place_id",
     "nom",
@@ -37,35 +41,134 @@ COLONNES_STAGE1 = [
     "extraction_date",
 ]
 
+COLONNES_STAGE2 = COLONNES_STAGE1 + [
+    "siren",
+    "siret",
+    "code_naf",
+    "libelle_naf",
+    "forme_juridique",
+    "statut_actif",
+    "tranche_effectif",
+    "libelle_effectif",
+    "dirigeant_nom",
+    "dirigeant_prenom",
+    "dirigeant_qualite",
+    "adresse_normalisee",
+    "date_creation",
+    "score_matching",
+    "match_incertain",
+    "flag_chaine",
+    "note_chaine",
+]
 
-def export_stage1_csv(leads: list[LeadStage1], output_path: Path) -> Path:
-    """Écrit les leads dans un CSV (séparateur virgule, encodage utf-8-sig pour Excel FR)."""
+COLONNES_STAGE3 = COLONNES_STAGE2 + [
+    "emails_verifies",
+    "emails_candidats",
+    "domaine_extrait",
+    "page_source_emails",
+    "nb_emails_verifies",
+    "nb_emails_candidats",
+    "source_globale",
+    "contient_dirigeant_pattern",
+]
+
+
+# ════════════════════════════════════════════════════════════════
+# Helpers de sérialisation
+# ════════════════════════════════════════════════════════════════
+
+
+def _serialize_value(val):
+    """Sérialise un champ pour le CSV (listes → 'a|b|c', date → ISO)."""
+    if val is None:
+        return ""
+    if isinstance(val, list):
+        return "|".join(str(x) for x in val)
+    if isinstance(val, datetime):
+        return val.isoformat()
+    if isinstance(val, bool):
+        return "VRAI" if val else "FAUX"
+    return val
+
+
+# ════════════════════════════════════════════════════════════════
+# Exports CSV
+# ════════════════════════════════════════════════════════════════
+
+
+def _ecrire_csv(rows: list[dict], colonnes: list[str], output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
     with output_path.open("w", encoding="utf-8-sig", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=COLONNES_STAGE1, quoting=csv.QUOTE_MINIMAL)
+        writer = csv.DictWriter(fh, fieldnames=colonnes, quoting=csv.QUOTE_MINIMAL)
         writer.writeheader()
-
-        for lead in leads:
-            row = lead.model_dump()
-            # Conversions pour CSV
-            row["types"] = "|".join(row.get("types") or [])
-            row["extraction_date"] = (
-                row["extraction_date"].isoformat() if row.get("extraction_date") else ""
-            )
-            # Filtre les colonnes au schéma
-            writer.writerow({k: row.get(k, "") for k in COLONNES_STAGE1})
-
-    logger.info("CSV étage 1 écrit : %s (%d leads)", output_path, len(leads))
+        for row in rows:
+            sanitized = {k: _serialize_value(row.get(k)) for k in colonnes}
+            writer.writerow(sanitized)
     return output_path
 
 
+def export_stage1_csv(leads: list[LeadStage1], output_path: Path) -> Path:
+    """CSV étage 1."""
+    rows = [l.model_dump() for l in leads]
+    p = _ecrire_csv(rows, COLONNES_STAGE1, output_path)
+    logger.info("CSV étage 1 écrit : %s (%d leads)", p, len(leads))
+    return p
+
+
+def export_stage2_csv(leads: list[LeadStage2], output_path: Path) -> Path:
+    """CSV étage 2 (= étage 1 + colonnes Pappers/data.gouv.fr)."""
+    rows = [l.model_dump() for l in leads]
+    p = _ecrire_csv(rows, COLONNES_STAGE2, output_path)
+    logger.info("CSV étage 2 écrit : %s (%d leads)", p, len(leads))
+    return p
+
+
+def export_stage3_csv(leads: list[LeadStage3], output_path: Path) -> Path:
+    """CSV étage 3 (= étage 1 + 2 + colonnes contacts)."""
+    rows = [l.model_dump() for l in leads]
+    p = _ecrire_csv(rows, COLONNES_STAGE3, output_path)
+    logger.info("CSV étage 3 écrit : %s (%d leads)", p, len(leads))
+    return p
+
+
+# ════════════════════════════════════════════════════════════════
+# Backup horodaté
+# ════════════════════════════════════════════════════════════════
+
+
+def backup_csv(csv_path: Path) -> Path | None:
+    """Copie le CSV dans <output>/backups/ avec un timestamp."""
+    if not csv_path.exists():
+        return None
+    backup_dir = csv_path.parent / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    backup_name = f"{csv_path.stem}_{timestamp}{csv_path.suffix}"
+    target = backup_dir / backup_name
+    try:
+        shutil.copy2(csv_path, target)
+        logger.debug("Backup créé : %s", target)
+        return target
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Échec backup %s : %s", csv_path, e)
+        return None
+
+
+# ════════════════════════════════════════════════════════════════
+# Stats run
+# ════════════════════════════════════════════════════════════════
+
+
 def export_run_stats(stats: RunStats, output_path: Path) -> Path:
-    """Sérialise les stats du run en JSON."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as fh:
         json.dump(stats.model_dump(mode="json"), fh, ensure_ascii=False, indent=2, default=str)
     return output_path
+
+
+# ════════════════════════════════════════════════════════════════
+# Registre RGPD
+# ════════════════════════════════════════════════════════════════
 
 
 def generer_registre_rgpd(
@@ -73,14 +176,15 @@ def generer_registre_rgpd(
     client_name: str,
     nb_leads: int,
     sources: list[str],
+    etages_executes: list[int],
 ) -> Path:
-    """Génère le registre RGPD du run (article 30)."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     contenu = f"""# Registre des traitements — Run RénoBoost Leads
 
 **Date** : {datetime.now().isoformat()}
 **Client / Campagne** : {client_name}
-**Nombre de leads collectés** : {nb_leads}
+**Étages exécutés** : {', '.join(f'L{i}' for i in etages_executes)}
+**Nombre de leads finaux** : {nb_leads}
 
 ## Sources des données
 {chr(10).join(f'- {s}' for s in sources)}
@@ -91,20 +195,23 @@ Prospection commerciale B2B (article 6.1.f RGPD — intérêt légitime).
 ## Catégories de personnes concernées
 - Personnes morales (entreprises, établissements)
 - Le cas échéant, contacts professionnels génériques (`contact@`, `direction@`)
+- Le cas échéant, dirigeants identifiés via le registre du commerce (donnée publique)
 
 ## Catégories de données traitées
 - Identification entreprise (raison sociale, adresse, téléphone, site web)
 - Métadonnées Google Places (note, nb avis, catégories)
-- Données légales (SIREN, NAF, dirigeants) — si étage 2 activé
-- Emails professionnels — si étage 3 activé
+- Données légales (SIREN, NAF, dirigeants) — étage 2
+- Emails professionnels — étage 3 (mentions légales publiques + patterns)
 
 ## Durée de conservation
-3 ans à compter du dernier contact, conformément aux recommandations CNIL pour la prospection B2B.
+3 ans à compter du dernier contact (recommandation CNIL — prospection B2B).
 
 ## Mesures de sécurité
 - Données stockées en local, pas de transmission vers des tiers non autorisés
 - Clés API en variables d'environnement (jamais en clair dans le code)
-- Restriction par adresses IP des accès aux APIs
+- Restriction par adresses IP des accès aux APIs Google
+- User-Agent identifiable lors du scraping de mentions légales (transparence)
+- robots.txt respecté
 
 ## Droits des personnes
 Toute personne dont les données figurent dans ce fichier peut exercer ses droits
@@ -112,3 +219,94 @@ Toute personne dont les données figurent dans ce fichier peut exercer ses droit
 """
     output_path.write_text(contenu, encoding="utf-8")
     return output_path
+
+
+# ════════════════════════════════════════════════════════════════
+# Lecture CSV (pour reprendre L2/L3 sur un CSV L1 existant)
+# ════════════════════════════════════════════════════════════════
+
+
+def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
+    """Re-charge un CSV L1 vers des LeadStage1."""
+    if not csv_path.exists():
+        raise FileNotFoundError(f"CSV étage 1 introuvable : {csv_path}")
+
+    leads: list[LeadStage1] = []
+    with csv_path.open("r", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            # Reconvertir les types
+            data = dict(row)
+            # types: liste séparée par |
+            types_str = data.get("types") or ""
+            data["types"] = [t for t in types_str.split("|") if t] if types_str else []
+            # numériques
+            for col in ("note", "latitude", "longitude"):
+                v = data.get(col)
+                data[col] = float(v) if v not in (None, "", "None") else None
+            for col in ("nb_avis", "niveau_prix"):
+                v = data.get(col)
+                data[col] = int(v) if v not in (None, "", "None") else None
+            # date
+            ed = data.get("extraction_date")
+            if ed:
+                try:
+                    data["extraction_date"] = datetime.fromisoformat(ed)
+                except ValueError:
+                    data["extraction_date"] = datetime.now()
+            else:
+                data["extraction_date"] = datetime.now()
+            # vide → None pour str
+            for col in (
+                "adresse", "ville", "code_postal", "pays",
+                "telephone", "site_web", "type_principal",
+                "statut_business", "google_maps_url",
+                "secteur_recherche", "requete_origine",
+            ):
+                if data.get(col) == "":
+                    data[col] = None
+            try:
+                leads.append(LeadStage1.model_validate(data))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Ligne CSV invalide ignorée : %s", e)
+    logger.info("CSV étage 1 lu : %d leads depuis %s", len(leads), csv_path)
+    return leads
+
+
+def lire_stage2_csv(csv_path: Path) -> list[LeadStage2]:
+    """Re-charge un CSV L2 vers des LeadStage2."""
+    leads_l1 = lire_stage1_csv(csv_path)  # L2 contient toutes les colonnes L1
+
+    # On relit pour récupérer aussi les colonnes L2
+    with csv_path.open("r", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+
+    leads_l2: list[LeadStage2] = []
+    for l1, row in zip(leads_l1, rows, strict=False):
+        score = row.get("score_matching")
+        match_incertain_raw = row.get("match_incertain") or ""
+        flag_chaine_raw = row.get("flag_chaine") or ""
+        statut_actif_raw = row.get("statut_actif") or ""
+
+        leads_l2.append(LeadStage2(
+            **l1.model_dump(),
+            siren=row.get("siren") or None,
+            siret=row.get("siret") or None,
+            code_naf=row.get("code_naf") or None,
+            libelle_naf=row.get("libelle_naf") or None,
+            forme_juridique=row.get("forme_juridique") or None,
+            statut_actif=(statut_actif_raw == "VRAI") if statut_actif_raw else None,
+            tranche_effectif=row.get("tranche_effectif") or None,
+            libelle_effectif=row.get("libelle_effectif") or None,
+            dirigeant_nom=row.get("dirigeant_nom") or None,
+            dirigeant_prenom=row.get("dirigeant_prenom") or None,
+            dirigeant_qualite=row.get("dirigeant_qualite") or None,
+            adresse_normalisee=row.get("adresse_normalisee") or None,
+            date_creation=row.get("date_creation") or None,
+            score_matching=float(score) if score not in (None, "", "None") else None,
+            match_incertain=(match_incertain_raw == "VRAI"),
+            flag_chaine=(flag_chaine_raw == "VRAI"),
+            note_chaine=row.get("note_chaine") or None,
+        ))
+    return leads_l2
