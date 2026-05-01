@@ -1,0 +1,59 @@
+# ════════════════════════════════════════════════════════════════
+# Template de configuration RénoBoost Leads
+# ════════════════════════════════════════════════════════════════
+# Copier ce fichier et adapter pour chaque nouveau client :
+#   cp config/_template.yaml config/<nom_client>.yaml
+# ════════════════════════════════════════════════════════════════
+
+# ─── Identification du run ────────────────────────────────────────
+run:
+  client_name: "exemple-client"           # Nom court (utilisé dans nom de fichier)
+  description: "Description du client et besoin"
+  campaign_date: "2026-05-01"
+
+# ─── Étages activés ───────────────────────────────────────────────
+stages:
+  enable_stage_1_decouverte: true         # Google Places — toujours
+  enable_stage_2_entreprises: false       # Pappers — activer après ajout clé .env
+  enable_stage_3_contacts: false          # Dropcontact — idem
+  enable_stage_4_prospection: false       # Claude — idem
+
+# ─── Cibles : Secteurs (catégories Google Places) ─────────────────
+# Voir liste complète : https://developers.google.com/maps/documentation/places/web-service/place-types
+secteurs:
+  # Format : (type Places officiel, query texte qui sera utilisée si Text Search)
+  - type: "restaurant"
+    query: "restaurant"
+  - type: "lodging"
+    query: "hôtel"
+
+# ─── Cibles : Zone géographique ───────────────────────────────────
+zone:
+  type: "departement"                     # "ville" | "departement" | "region" | "france"
+  codes: ["34"]                           # Liste de codes (INSEE pour dept, codes postaux pour ville)
+  rayon_par_point_km: 10                  # Rayon de recherche autour de chaque point de la grille
+  pas_grille_km: 15                       # Espacement entre points de la grille
+
+# ─── Filtres qualité (optionnels) ─────────────────────────────────
+filtres:
+  statut_requis: "OPERATIONAL"            # OPERATIONAL | CLOSED_TEMPORARILY | tout
+  note_min: null                          # ex: 3.5 ou null
+  nb_avis_min: null                       # ex: 10 ou null
+  nb_avis_max: null                       # ex: 500 ou null
+  exiger_telephone: false
+  exiger_site_web: false
+  dedup_chaines: false                    # true = 1 seul Carrefour par enseigne
+
+# ─── Volume cible ─────────────────────────────────────────────────
+volume:
+  cible: 200                              # Nombre de leads visés
+  max_par_secteur: null                   # Limiter par secteur (null = pas de limite)
+
+# ─── Budget ───────────────────────────────────────────────────────
+budget:
+  max_eur: 30                             # Plafond € pour le run (stop auto)
+
+# ─── Sortie ───────────────────────────────────────────────────────
+sortie:
+  format: ["csv"]                         # csv | json | html
+  langue: "fr"                            # fr | en
