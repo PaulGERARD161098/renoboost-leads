@@ -179,7 +179,7 @@ class EnricheurStage2:
             nb_match_incertain,
             100 * nb_match_incertain / max(1, len(leads)),
             nb_no_match,
-            100 * nb_no_match / max(1, len(leads)),
+            100 * nb_no_match / max(1, len(leads) - nb_chaines),
             nb_chaines,
             100 * nb_chaines / max(1, len(leads)),
         )
@@ -195,12 +195,15 @@ class EnricheurStage2:
         nb_siren = sum(1 for lead in leads_l2 if lead.siren)
         nb_chaines = sum(1 for lead in leads_l2 if lead.flag_chaine)
         nb_dirigeant = sum(1 for lead in leads_l2 if lead.dirigeant_nom)
+        # Bug B4 fix : exclure les chaines du denominateur pour siren_pct et dirigeant_pct
+        # (les chaines sont volontairement non-cherchees, cf. _enrichir_un_lead)
+        n_recherche = n - nb_chaines
         return {
             "total": n,
             "siren_trouve": nb_siren,
-            "siren_pct": round(100 * nb_siren / n, 1),
+            "siren_pct": round(100 * nb_siren / n_recherche, 1) if n_recherche > 0 else 0.0,
             "chaines": nb_chaines,
             "chaines_pct": round(100 * nb_chaines / n, 1),
             "dirigeant_trouve": nb_dirigeant,
-            "dirigeant_pct": round(100 * nb_dirigeant / n, 1),
+            "dirigeant_pct": round(100 * nb_dirigeant / n_recherche, 1) if n_recherche > 0 else 0.0,
         }
