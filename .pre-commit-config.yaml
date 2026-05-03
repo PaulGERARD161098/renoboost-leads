@@ -1,0 +1,32 @@
+# .pre-commit-config.yaml
+# Hooks executes avant chaque commit pour garantir la qualite du code.
+# Installation : pre-commit install
+# Run manuel : pre-commit run --all-files
+
+repos:
+  # ----- Lint et formatage Python (cohérent avec CI) -----
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # ----- Hygiene de base -----
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  # ----- Detection de secrets (apres incident cle Google) -----
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
