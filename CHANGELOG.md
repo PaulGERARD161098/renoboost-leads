@@ -4,6 +4,43 @@ Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer
 
 ---
 
+## [0.2.3] — 2026-05-03 — Bug B4 fix + tooling renforce
+
+### Fixed
+- **Bug B4** : `stats_l2()` siren_pct et dirigeant_pct incluaient les chaines flaguees dans le denominateur, faussant les KPIs L2.
+  - Avant : `siren_pct = nb_siren / n_total` (FAUX si chaines presentes)
+  - Apres : `siren_pct = nb_siren / (n_total - nb_chaines)` (correct, zero-safe)
+  - Impact : sur le run BdR (200 leads, 10% chaines), le vrai siren_pct passe de 51,5% affiche a ~57,2% reel.
+  - Idem pour `dirigeant_pct` et le log `Pas de SIREN trouve` dans `enrichir()`.
+- **Bug B1** (race condition OneDrive vs CSV) : resolu structurellement par deplacement du repo de OneDrive vers `C:\dev\renoboost-leads`. La sync OneDrive ne peut plus interferer avec les ecritures CSV incrementales.
+
+### Added
+- **Tooling de qualite** :
+  - `.pre-commit-config.yaml` avec ruff (lint + format), hygiene checks (trailing whitespace, EOF, YAML/TOML/JSON validation, large files), et **gitleaks** pour la detection de secrets.
+  - `.gitattributes` pour normaliser les line endings (LF pour Python/YAML/MD, CRLF pour scripts Windows).
+  - Hooks installes via `pre-commit install`, executes automatiquement a chaque commit.
+- **Tests Bug B4** : `tests/test_stats_l2.py` avec 6 tests (TDD strict, 2 commits separes RED + GREEN).
+
+### Changed
+- **Format global** : `ruff-format` applique sur les 18 fichiers Python du projet (cosmetique uniquement, aucune logique modifiee).
+- **Encodage** : tous les fichiers Python critiques verifies en UTF-8 propre (pas de mojibake).
+
+### Validated
+- `pytest` : 68/68 tests verts (62 anciens + 6 nouveaux pour B4)
+- `ruff check` : All checks passed!
+- `ruff format --check` : 34 files already formatted
+- `pre-commit run --all-files` : tous les hooks passent
+- `gitleaks` : aucun secret detecte dans l'historique Git
+
+### Security
+- **Incident cle Google API** (detecte en debut de session) : ancienne cle `AIzaSyAi...Uo2M` revoquee definitivement, nouvelle cle creee avec restriction API (Places New uniquement). Le fichier `.env` qui contenait la cle etait deja gitignore - aucune fuite reelle dans l'historique Git (verifie via gitleaks).
+- **Pre-commit hook gitleaks** desormais actif pour bloquer toute future tentative de commit d'un secret.
+
+### Known issues (a corriger en prochaine session)
+- `_trouver_dossier_existant()` ne detecte pas le dossier dans certains cas (Bug B2, contournement via `--from-csv`)
+- Cas dossier sans CSV : message d'erreur peu clair (Bug B3)
+
+---
 ## [0.2.2] — 2026-05-01 — Lint cleanup
 
 ### Fixed
