@@ -172,11 +172,16 @@ class EnricheurStage2:
             "  Match incertain : %d (%.0f%%)\n"
             "  Pas de SIREN trouvé : %d (%.0f%%)\n"
             "  Chaînes flaguées : %d (%.0f%%)",
-            len(leads), duree,
-            nb_match_ok, 100 * nb_match_ok / max(1, len(leads)),
-            nb_match_incertain, 100 * nb_match_incertain / max(1, len(leads)),
-            nb_no_match, 100 * nb_no_match / max(1, len(leads)),
-            nb_chaines, 100 * nb_chaines / max(1, len(leads)),
+            len(leads),
+            duree,
+            nb_match_ok,
+            100 * nb_match_ok / max(1, len(leads)),
+            nb_match_incertain,
+            100 * nb_match_incertain / max(1, len(leads)),
+            nb_no_match,
+            100 * nb_no_match / max(1, len(leads)),
+            nb_chaines,
+            100 * nb_chaines / max(1, len(leads)),
         )
 
         return leads_l2

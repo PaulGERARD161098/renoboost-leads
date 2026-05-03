@@ -54,9 +54,7 @@ def grille_pour_bbox(
     Le pas est calculé en latitude (constant) et en longitude (variable selon lat).
     """
     if sw_lat >= ne_lat or sw_lng >= ne_lng:
-        raise ValueError(
-            f"Bbox invalide : SW({sw_lat},{sw_lng}) doit être < NE({ne_lat},{ne_lng})"
-        )
+        raise ValueError(f"Bbox invalide : SW({sw_lat},{sw_lng}) doit être < NE({ne_lat},{ne_lng})")
 
     points: list[PointGrille] = []
 
@@ -103,10 +101,7 @@ def grille_pour_zone(zone: Zone) -> list[PointGrille]:
     for code in zone.codes:
         bbox = bbox_departement(code)
         if bbox is None:
-            raise ValueError(
-                f"Département inconnu : '{code}'. "
-                f"Codes valides : 01-95, 2A, 2B."
-            )
+            raise ValueError(f"Département inconnu : '{code}'. Codes valides : 01-95, 2A, 2B.")
         _, _, sw_lat, sw_lng, ne_lat, ne_lng = bbox
         pts = grille_pour_bbox(
             sw_lat=sw_lat,

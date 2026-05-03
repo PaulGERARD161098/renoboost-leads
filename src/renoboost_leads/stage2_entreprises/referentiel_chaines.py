@@ -15,7 +15,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     # ════════════════════════════════════════════════════════════════
     # HÔTELLERIE
     # ════════════════════════════════════════════════════════════════
-
     # Groupe Accor
     "ibis": "Groupe Accor",
     "ibis budget": "Groupe Accor",
@@ -35,7 +34,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "hotelf1": "Groupe Accor",
     "hôtelf1": "Groupe Accor",
     "f1": "Groupe Accor (à vérifier)",  # ambigu
-
     # Marriott International (toutes marques)
     "marriott": "Marriott International",
     "ac hotel": "Marriott International (AC Hotels)",
@@ -53,7 +51,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "w hotel": "Marriott International (W Hotels)",
     "st. regis": "Marriott International (St. Regis)",
     "st regis": "Marriott International (St. Regis)",
-
     # Hilton Worldwide
     "hilton": "Hilton Worldwide",
     "hilton garden inn": "Hilton Worldwide",
@@ -64,7 +61,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "waldorf astoria": "Hilton Worldwide",
     "conrad": "Hilton Worldwide (Conrad)",
     "canopy": "Hilton Worldwide (Canopy)",
-
     # InterContinental Hotels Group (IHG)
     "intercontinental": "IHG (InterContinental)",
     "holiday inn": "IHG (Holiday Inn)",
@@ -73,21 +69,18 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "kimpton": "IHG (Kimpton)",
     "indigo": "IHG (Hotel Indigo)",
     "voco": "IHG (voco)",
-
     # Hyatt
     "hyatt": "Hyatt Hotels Corporation",
     "hyatt regency": "Hyatt Hotels Corporation",
     "andaz": "Hyatt Hotels Corporation (Andaz)",
     "park hyatt": "Hyatt Hotels Corporation",
     "grand hyatt": "Hyatt Hotels Corporation",
-
     # Wyndham
     "wyndham": "Wyndham Hotels & Resorts",
     "ramada": "Wyndham Hotels & Resorts",
     "days inn": "Wyndham Hotels & Resorts",
     "super 8": "Wyndham Hotels & Resorts",
     "tryp": "Wyndham Hotels & Resorts",
-
     # Choice Hotels
     "comfort": "Choice Hotels",
     "comfort inn": "Choice Hotels",
@@ -99,18 +92,15 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "clarion": "Choice Hotels",
     "econo lodge": "Choice Hotels",
     "sleep inn": "Choice Hotels",
-
     # NH Hotel Group
     "nh hotel": "NH Hotel Group",
     "nh collection": "NH Hotel Group",
     "nhow": "NH Hotel Group",
     "nh ": "NH Hotel Group",  # début avec NH suivi d'espace
-
     # Best Western
     "best western": "Best Western International",
     "best western plus": "Best Western International",
     "best western premier": "Best Western International",
-
     # Louvre Hotels Group
     "campanile": "Groupe Louvre Hotels",
     "kyriad": "Groupe Louvre Hotels",
@@ -119,12 +109,10 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "premiere classe": "Groupe Louvre Hotels",
     "tulip inn": "Groupe Louvre Hotels",
     "golden tulip": "Groupe Louvre Hotels",
-
     # B&B Hotels
     "b&b hôtel": "B&B Hotels",
     "b&b hotel": "B&B Hotels",
     "b et b hotel": "B&B Hotels",
-
     # Aparthotels et résidences hôtelières
     "appart'city": "Appart'City",
     "appart city": "Appart'City",
@@ -134,7 +122,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "all suites": "All Suites Appart Hotel",
     "résidhome": "Réside Études (Résidhome)",
     "residhome": "Réside Études (Résidhome)",
-
     # Résidences services seniors
     "domitys": "Domitys",
     "les girandières": "Senioriales / Girandières",
@@ -149,7 +136,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "cogedim club": "Cogedim Club",
     "villavie": "Villavie",
     "villavita": "Villavita",
-
     # Auberges / autres marques hôtelières
     "fasthotel": "Fasthôtel",
     "ace hotel": "Ace Hôtel France",
@@ -158,11 +144,9 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "balladins": "Balladins",
     "the originals": "The Originals Hotels",
     "logis hotels": "Logis Hôtels",
-
     # ════════════════════════════════════════════════════════════════
     # GRANDE DISTRIBUTION (alimentaire)
     # ════════════════════════════════════════════════════════════════
-
     # Carrefour
     "carrefour": "Groupe Carrefour",
     "carrefour market": "Groupe Carrefour",
@@ -170,24 +154,20 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "carrefour express": "Groupe Carrefour",
     "carrefour contact": "Groupe Carrefour",
     "carrefour voyages": "Groupe Carrefour (Voyages)",
-
     # Auchan
     "auchan": "Groupe Auchan",
     "auchan supermarché": "Groupe Auchan",
     "auchan drive": "Groupe Auchan",
-
     # E.Leclerc
     "leclerc": "E.Leclerc",
     "e.leclerc": "E.Leclerc",
     "e leclerc": "E.Leclerc",
-
     # Mousquetaires
     "intermarche": "Les Mousquetaires (Intermarché)",
     "intermarché": "Les Mousquetaires (Intermarché)",
     "netto": "Les Mousquetaires (Netto)",
     "bricomarché": "Les Mousquetaires (Bricomarché)",
     "bricomarche": "Les Mousquetaires (Bricomarché)",
-
     # Casino
     "casino supermarché": "Groupe Casino",
     "géant casino": "Groupe Casino",
@@ -199,7 +179,6 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "petit casino": "Groupe Casino",
     "spar": "Groupe Casino (Spar)",
     "vival": "Groupe Casino (Vival)",
-
     # Autres distributeurs
     "lidl": "Lidl France",
     "aldi": "Aldi France",
@@ -211,11 +190,9 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "naturhouse": "NaturHouse",
     "picard": "Picard Surgelés",
     "grand frais": "Grand Frais",
-
     # ════════════════════════════════════════════════════════════════
     # SANTÉ — Cliniques privées (chaînes)
     # ════════════════════════════════════════════════════════════════
-
     "ramsay": "Ramsay Santé",
     "ramsay santé": "Ramsay Santé",
     "ramsay sante": "Ramsay Santé",
@@ -224,22 +201,18 @@ ENSEIGNES_CHAINES: dict[str, str] = {
     "almaviva": "Almaviva Santé",
     "korian": "Korian (santé)",
     "orpea": "Orpea (santé)",
-
     # ════════════════════════════════════════════════════════════════
     # AUTOMOBILE / Services
     # ════════════════════════════════════════════════════════════════
-
     "norauto": "Mobivia (Norauto)",
     "feu vert": "Feu Vert",
     "midas": "Midas France",
     "speedy": "Speedy France",
     "euromaster": "Euromaster",
     "point s": "Point S",
-
     # ════════════════════════════════════════════════════════════════
     # RESTAURATION (chaînes avec parking)
     # ════════════════════════════════════════════════════════════════
-
     "mcdonald": "McDonald's France",
     "mcdo": "McDonald's France",
     "burger king": "Burger King France",
@@ -310,6 +283,6 @@ def note_chaine_standard() -> str:
     return (
         "Lead appartenant à une chaîne nationale/internationale. "
         "Le décideur d'achat se trouve au siège du groupe, pas sur ce site local. "
-        "À enrichir manuellement via : LinkedIn (cherche \"Directeur Achats\" + nom du groupe), "
-        "ou via le site du groupe pour identifier le contact \"Développement\" / \"Immobilier\"."
+        'À enrichir manuellement via : LinkedIn (cherche "Directeur Achats" + nom du groupe), '
+        'ou via le site du groupe pour identifier le contact "Développement" / "Immobilier".'
     )

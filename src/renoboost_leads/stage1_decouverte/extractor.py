@@ -27,9 +27,19 @@ logger = get_logger(__name__)
 
 # Types Places "natifs" : on peut utiliser Nearby Search (plus précis qu'un Text Search)
 _TYPES_PLACES_NATIFS = {
-    "restaurant", "lodging", "hospital", "supermarket", "shopping_mall",
-    "movie_theater", "bowling_alley", "car_dealer", "gym", "spa",
-    "amusement_park", "tourist_attraction", "event_venue",
+    "restaurant",
+    "lodging",
+    "hospital",
+    "supermarket",
+    "shopping_mall",
+    "movie_theater",
+    "bowling_alley",
+    "car_dealer",
+    "gym",
+    "spa",
+    "amusement_park",
+    "tourist_attraction",
+    "event_venue",
 }
 
 
@@ -37,11 +47,32 @@ def _est_chaine(nom: str) -> str | None:
     """Détecte les enseignes connues (pour dédup_chaines)."""
     n = nom.lower()
     chaines = {
-        "carrefour", "auchan", "leclerc", "casino", "intermarche", "intermarché",
-        "lidl", "aldi", "monoprix", "franprix", "biocoop", "naturalia",
-        "ibis", "novotel", "mercure", "accor", "kyriad", "campanile",
-        "best western", "holiday inn", "marriott", "hilton",
-        "feu vert", "norauto", "midas", "speedy",
+        "carrefour",
+        "auchan",
+        "leclerc",
+        "casino",
+        "intermarche",
+        "intermarché",
+        "lidl",
+        "aldi",
+        "monoprix",
+        "franprix",
+        "biocoop",
+        "naturalia",
+        "ibis",
+        "novotel",
+        "mercure",
+        "accor",
+        "kyriad",
+        "campanile",
+        "best western",
+        "holiday inn",
+        "marriott",
+        "hilton",
+        "feu vert",
+        "norauto",
+        "midas",
+        "speedy",
     }
     for marque in chaines:
         if marque in n:

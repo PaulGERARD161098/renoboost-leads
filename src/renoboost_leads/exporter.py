@@ -183,11 +183,11 @@ def generer_registre_rgpd(
 
 **Date** : {datetime.now().isoformat()}
 **Client / Campagne** : {client_name}
-**Étages exécutés** : {', '.join(f'L{i}' for i in etages_executes)}
+**Étages exécutés** : {", ".join(f"L{i}" for i in etages_executes)}
 **Nombre de leads finaux** : {nb_leads}
 
 ## Sources des données
-{chr(10).join(f'- {s}' for s in sources)}
+{chr(10).join(f"- {s}" for s in sources)}
 
 ## Finalité du traitement
 Prospection commerciale B2B (article 6.1.f RGPD — intérêt légitime).
@@ -258,10 +258,17 @@ def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
                 data["extraction_date"] = datetime.now()
             # vide → None pour str
             for col in (
-                "adresse", "ville", "code_postal", "pays",
-                "telephone", "site_web", "type_principal",
-                "statut_business", "google_maps_url",
-                "secteur_recherche", "requete_origine",
+                "adresse",
+                "ville",
+                "code_postal",
+                "pays",
+                "telephone",
+                "site_web",
+                "type_principal",
+                "statut_business",
+                "google_maps_url",
+                "secteur_recherche",
+                "requete_origine",
             ):
                 if data.get(col) == "":
                     data[col] = None
@@ -289,24 +296,26 @@ def lire_stage2_csv(csv_path: Path) -> list[LeadStage2]:
         flag_chaine_raw = row.get("flag_chaine") or ""
         statut_actif_raw = row.get("statut_actif") or ""
 
-        leads_l2.append(LeadStage2(
-            **l1.model_dump(),
-            siren=row.get("siren") or None,
-            siret=row.get("siret") or None,
-            code_naf=row.get("code_naf") or None,
-            libelle_naf=row.get("libelle_naf") or None,
-            forme_juridique=row.get("forme_juridique") or None,
-            statut_actif=(statut_actif_raw == "VRAI") if statut_actif_raw else None,
-            tranche_effectif=row.get("tranche_effectif") or None,
-            libelle_effectif=row.get("libelle_effectif") or None,
-            dirigeant_nom=row.get("dirigeant_nom") or None,
-            dirigeant_prenom=row.get("dirigeant_prenom") or None,
-            dirigeant_qualite=row.get("dirigeant_qualite") or None,
-            adresse_normalisee=row.get("adresse_normalisee") or None,
-            date_creation=row.get("date_creation") or None,
-            score_matching=float(score) if score not in (None, "", "None") else None,
-            match_incertain=(match_incertain_raw == "VRAI"),
-            flag_chaine=(flag_chaine_raw == "VRAI"),
-            note_chaine=row.get("note_chaine") or None,
-        ))
+        leads_l2.append(
+            LeadStage2(
+                **l1.model_dump(),
+                siren=row.get("siren") or None,
+                siret=row.get("siret") or None,
+                code_naf=row.get("code_naf") or None,
+                libelle_naf=row.get("libelle_naf") or None,
+                forme_juridique=row.get("forme_juridique") or None,
+                statut_actif=(statut_actif_raw == "VRAI") if statut_actif_raw else None,
+                tranche_effectif=row.get("tranche_effectif") or None,
+                libelle_effectif=row.get("libelle_effectif") or None,
+                dirigeant_nom=row.get("dirigeant_nom") or None,
+                dirigeant_prenom=row.get("dirigeant_prenom") or None,
+                dirigeant_qualite=row.get("dirigeant_qualite") or None,
+                adresse_normalisee=row.get("adresse_normalisee") or None,
+                date_creation=row.get("date_creation") or None,
+                score_matching=float(score) if score not in (None, "", "None") else None,
+                match_incertain=(match_incertain_raw == "VRAI"),
+                flag_chaine=(flag_chaine_raw == "VRAI"),
+                note_chaine=row.get("note_chaine") or None,
+            )
+        )
     return leads_l2
