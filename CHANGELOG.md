@@ -4,6 +4,42 @@ Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer
 
 ---
 
+## [0.3.0] — 2026-05-04 — Phase A complete (audit dette technique solde)
+
+### Fixed
+- **Bug B2** : `_trouver_dossier_existant()` matchait `endswith(client_name)` en strict, ce qui echouait sur :
+  - variations de casse (ex: `BdR` vs `..._bdr`)
+  - accents differents (ex: `Hérault` vs `..._Herault`)
+  - espaces vs underscores (ex: `Mon Client` vs `..._Mon_Client`)
+  - Fix : nouvelle fonction `_normalize_for_match()` (lowercase + strip accents + espaces->underscores), suffix `_{normalized}` pour eviter les faux positifs sur noms courts.
+- **Bug B3** : message d'erreur peu clair quand le CSV etait introuvable (`lire_stage1_csv`).
+  - Fix : distinction entre dossier parent inexistant (session inconnue) vs dossier existant mais CSV absent (avec liste des fichiers presents et suggestion d'action).
+
+### Added
+- **CI** : Python 3.13 ajoute a la matrice de test (3.10, 3.11, 3.12, 3.13) pour parite avec l'env de dev local.
+- **Tests Bug B2** : `tests/test_trouver_dossier_existant.py` avec 8 tests (TDD strict, 2 commits separes RED + GREEN).
+- **Tests Bug B3** : `tests/test_lire_stage1_csv.py` avec 3 tests (TDD strict, 2 commits separes RED + GREEN).
+
+### Validated
+- `pytest` : 79/79 tests verts (68 anciens + 11 nouveaux : 3 pour B3 + 8 pour B2)
+- `ruff check` : All checks passed!
+- `ruff format --check` : tous les fichiers formates
+- `pre-commit run --all-files` : tous les hooks passent
+- Encodage UTF-8 propre verifie sur tous les fichiers modifies (`exporter.py`, `cli.py`)
+
+### Phase A : OFFICIELLEMENT TERMINEE
+Audit dette technique soldee. Les 4 bugs identifies en debut de session 1 (B1-B4) sont desormais tous resolus :
+- **B1** (race condition OneDrive) : resolu structurellement par deplacement du repo (v0.2.3)
+- **B2** (`_trouver_dossier_existant` matching strict) : fixe en TDD (v0.3.0)
+- **B3** (message d'erreur peu clair sur CSV manquant) : fixe en TDD (v0.3.0)
+- **B4** (stat SIREN trompeuse) : fixe en TDD (v0.2.3)
+
+### Next : Phase B
+Validation ROI commercial des 400 leads existants (Herault + BdR) avant tout investissement L4.
+La question fondamentale : *"Est-ce que les leads convertissent en RDV signes ?"*
+
+---
+
 ## [0.2.3] — 2026-05-03 — Bug B4 fix + tooling renforce
 
 ### Fixed
