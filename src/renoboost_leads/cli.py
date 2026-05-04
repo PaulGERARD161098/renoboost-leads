@@ -77,13 +77,34 @@ def _check_google_key_or_exit() -> str:
     return settings.google_places_api_key.get_secret_value()
 
 
+def _normalize_for_match(s: str) -> str:
+    """Normalise un nom pour matching robuste (case + accents + espaces).
+
+    Lowercase, strip accents, replace spaces by underscores. Used by
+    _trouver_dossier_existant to match folder names robustly.
+    """
+    import unicodedata
+
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s.lower().replace(" ", "_").strip()
+
+
 def _trouver_dossier_existant(client_name: str) -> Path | None:
-    """Cherche le dernier dossier de sortie existant pour ce client (pour réutiliser CSV L1)."""
+    """Cherche le dernier dossier de sortie existant pour ce client.
+
+    Matching robuste (bug B2 fix) : insensible à la casse, aux accents,
+    et aux espaces vs underscores. Format attendu : {YYYY-MM-DD_HHMM}_{client_name}.
+    Le suffix recherché inclut un underscore pour éviter les faux positifs
+    sur des noms courts (ex: client=\"X\" ne doit pas matcher \"..._XYZ\").
+    """
     base = PROJECT_ROOT / "data" / "output"
     if not base.exists():
         return None
+    target = _normalize_for_match(client_name)
+    suffix = f"_{target}"
     candidats = sorted(
-        [d for d in base.iterdir() if d.is_dir() and d.name.endswith(client_name)],
+        [d for d in base.iterdir() if d.is_dir() and _normalize_for_match(d.name).endswith(suffix)],
         reverse=True,
     )
     return candidats[0] if candidats else None
