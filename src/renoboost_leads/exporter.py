@@ -227,9 +227,28 @@ Toute personne dont les données figurent dans ce fichier peut exercer ses droit
 
 
 def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
-    """Re-charge un CSV L1 vers des LeadStage1."""
+    """Re-charge un CSV L1 vers des LeadStage1.
+
+    Raises:
+        FileNotFoundError: avec message contextuel selon que le dossier parent
+            existe (CSV manquant ou supprime) ou non (session inconnue).
+    """
     if not csv_path.exists():
-        raise FileNotFoundError(f"CSV étage 1 introuvable : {csv_path}")
+        parent = csv_path.parent
+        if not parent.exists():
+            raise FileNotFoundError(
+                f"Dossier de session introuvable : {parent}\n"
+                f"  -> Verifie le nom de session ou lance d abord l etage 1 "
+                f"avec : run --stages 1 <config.yaml>"
+            )
+        existing = sorted(p.name for p in parent.iterdir() if p.is_file())
+        existing_str = ", ".join(existing) if existing else "(dossier vide)"
+        raise FileNotFoundError(
+            f"CSV etage 1 introuvable : {csv_path}\n"
+            f"  Dossier existe mais ne contient pas {csv_path.name!r}.\n"
+            f"  Fichiers presents : {existing_str}\n"
+            f"  -> Lance d abord l etage 1, ou verifie le nom du CSV."
+        )
 
     leads: list[LeadStage1] = []
     with csv_path.open("r", encoding="utf-8-sig") as fh:
