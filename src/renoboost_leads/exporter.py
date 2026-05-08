@@ -229,7 +229,20 @@ Toute personne dont les données figurent dans ce fichier peut exercer ses droit
 def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
     """Re-charge un CSV L1 vers des LeadStage1."""
     if not csv_path.exists():
-        raise FileNotFoundError(f"CSV étage 1 introuvable : {csv_path}")
+        parent = csv_path.parent
+        if not parent.exists():
+            raise FileNotFoundError(
+                f"Dossier de session introuvable : {parent}"
+            )
+        autres = sorted(f.name for f in parent.iterdir() if f.is_file())
+        if not autres:
+            raise FileNotFoundError(
+                f"CSV étage 1 introuvable (dossier vide) : {csv_path}"
+            )
+        raise FileNotFoundError(
+            f"CSV étage 1 introuvable : {csv_path}\n"
+            f"Fichiers presents dans le dossier : {', '.join(autres)}"
+        )
 
     leads: list[LeadStage1] = []
     with csv_path.open("r", encoding="utf-8-sig") as fh:

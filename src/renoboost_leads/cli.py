@@ -78,12 +78,23 @@ def _check_google_key_or_exit() -> str:
 
 
 def _trouver_dossier_existant(client_name: str) -> Path | None:
-    """Cherche le dernier dossier de sortie existant pour ce client (pour réutiliser CSV L1)."""
+    """Cherche le dernier dossier de sortie existant pour ce client.
+
+    BUG B2 fix : matching tolerant (case-insensitive, accents, espaces vs underscores).
+    """
+    import unicodedata
     base = PROJECT_ROOT / "data" / "output"
     if not base.exists():
         return None
+
+    def _normalize(s: str) -> str:
+        nfkd = unicodedata.normalize("NFKD", s)
+        ascii_only = "".join(c for c in nfkd if not unicodedata.combining(c))
+        return ascii_only.lower().replace(" ", "_").replace("-", "_")
+
+    cible = _normalize(client_name)
     candidats = sorted(
-        [d for d in base.iterdir() if d.is_dir() and d.name.endswith(client_name)],
+        [d for d in base.iterdir() if d.is_dir() and _normalize(d.name).endswith(cible)],
         reverse=True,
     )
     return candidats[0] if candidats else None

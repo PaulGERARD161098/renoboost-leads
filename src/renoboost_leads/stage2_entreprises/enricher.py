@@ -190,12 +190,15 @@ class EnricheurStage2:
         nb_siren = sum(1 for lead in leads_l2 if lead.siren)
         nb_chaines = sum(1 for lead in leads_l2 if lead.flag_chaine)
         nb_dirigeant = sum(1 for lead in leads_l2 if lead.dirigeant_nom)
+        # BUG B4 fix : exclure chaines du denominateur pour SIREN et dirigeant
+        n_non_chaines = n - nb_chaines
+        denom = n_non_chaines if n_non_chaines > 0 else 1
         return {
             "total": n,
             "siren_trouve": nb_siren,
-            "siren_pct": round(100 * nb_siren / n, 1),
+            "siren_pct": round(100 * nb_siren / denom, 1),
             "chaines": nb_chaines,
             "chaines_pct": round(100 * nb_chaines / n, 1),
             "dirigeant_trouve": nb_dirigeant,
-            "dirigeant_pct": round(100 * nb_dirigeant / n, 1),
+            "dirigeant_pct": round(100 * nb_dirigeant / denom, 1),
         }
