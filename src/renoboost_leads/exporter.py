@@ -109,7 +109,7 @@ def _ecrire_csv(rows: list[dict], colonnes: list[str], output_path: Path) -> Pat
 
 def export_stage1_csv(leads: list[LeadStage1], output_path: Path) -> Path:
     """CSV étage 1."""
-    rows = [lead.model_dump() for lead in leads]
+    rows = [l.model_dump() for l in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE1, output_path)
     logger.info("CSV étage 1 écrit : %s (%d leads)", p, len(leads))
     return p
@@ -117,7 +117,7 @@ def export_stage1_csv(leads: list[LeadStage1], output_path: Path) -> Path:
 
 def export_stage2_csv(leads: list[LeadStage2], output_path: Path) -> Path:
     """CSV étage 2 (= étage 1 + colonnes Pappers/data.gouv.fr)."""
-    rows = [lead.model_dump() for lead in leads]
+    rows = [l.model_dump() for l in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE2, output_path)
     logger.info("CSV étage 2 écrit : %s (%d leads)", p, len(leads))
     return p
@@ -125,7 +125,7 @@ def export_stage2_csv(leads: list[LeadStage2], output_path: Path) -> Path:
 
 def export_stage3_csv(leads: list[LeadStage3], output_path: Path) -> Path:
     """CSV étage 3 (= étage 1 + 2 + colonnes contacts)."""
-    rows = [lead.model_dump() for lead in leads]
+    rows = [l.model_dump() for l in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE3, output_path)
     logger.info("CSV étage 3 écrit : %s (%d leads)", p, len(leads))
     return p
@@ -183,11 +183,11 @@ def generer_registre_rgpd(
 
 **Date** : {datetime.now().isoformat()}
 **Client / Campagne** : {client_name}
-**Étages exécutés** : {", ".join(f"L{i}" for i in etages_executes)}
+**Étages exécutés** : {', '.join(f'L{i}' for i in etages_executes)}
 **Nombre de leads finaux** : {nb_leads}
 
 ## Sources des données
-{chr(10).join(f"- {s}" for s in sources)}
+{chr(10).join(f'- {s}' for s in sources)}
 
 ## Finalité du traitement
 Prospection commerciale B2B (article 6.1.f RGPD — intérêt légitime).
@@ -227,28 +227,9 @@ Toute personne dont les données figurent dans ce fichier peut exercer ses droit
 
 
 def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
-    """Re-charge un CSV L1 vers des LeadStage1.
-
-    Raises:
-        FileNotFoundError: avec message contextuel selon que le dossier parent
-            existe (CSV manquant ou supprime) ou non (session inconnue).
-    """
+    """Re-charge un CSV L1 vers des LeadStage1."""
     if not csv_path.exists():
-        parent = csv_path.parent
-        if not parent.exists():
-            raise FileNotFoundError(
-                f"Dossier de session introuvable : {parent}\n"
-                f"  -> Verifie le nom de session ou lance d abord l etage 1 "
-                f"avec : run --stages 1 <config.yaml>"
-            )
-        existing = sorted(p.name for p in parent.iterdir() if p.is_file())
-        existing_str = ", ".join(existing) if existing else "(dossier vide)"
-        raise FileNotFoundError(
-            f"CSV etage 1 introuvable : {csv_path}\n"
-            f"  Dossier existe mais ne contient pas {csv_path.name!r}.\n"
-            f"  Fichiers presents : {existing_str}\n"
-            f"  -> Lance d abord l etage 1, ou verifie le nom du CSV."
-        )
+        raise FileNotFoundError(f"CSV étage 1 introuvable : {csv_path}")
 
     leads: list[LeadStage1] = []
     with csv_path.open("r", encoding="utf-8-sig") as fh:
@@ -277,17 +258,10 @@ def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
                 data["extraction_date"] = datetime.now()
             # vide → None pour str
             for col in (
-                "adresse",
-                "ville",
-                "code_postal",
-                "pays",
-                "telephone",
-                "site_web",
-                "type_principal",
-                "statut_business",
-                "google_maps_url",
-                "secteur_recherche",
-                "requete_origine",
+                "adresse", "ville", "code_postal", "pays",
+                "telephone", "site_web", "type_principal",
+                "statut_business", "google_maps_url",
+                "secteur_recherche", "requete_origine",
             ):
                 if data.get(col) == "":
                     data[col] = None
@@ -315,26 +289,24 @@ def lire_stage2_csv(csv_path: Path) -> list[LeadStage2]:
         flag_chaine_raw = row.get("flag_chaine") or ""
         statut_actif_raw = row.get("statut_actif") or ""
 
-        leads_l2.append(
-            LeadStage2(
-                **l1.model_dump(),
-                siren=row.get("siren") or None,
-                siret=row.get("siret") or None,
-                code_naf=row.get("code_naf") or None,
-                libelle_naf=row.get("libelle_naf") or None,
-                forme_juridique=row.get("forme_juridique") or None,
-                statut_actif=(statut_actif_raw == "VRAI") if statut_actif_raw else None,
-                tranche_effectif=row.get("tranche_effectif") or None,
-                libelle_effectif=row.get("libelle_effectif") or None,
-                dirigeant_nom=row.get("dirigeant_nom") or None,
-                dirigeant_prenom=row.get("dirigeant_prenom") or None,
-                dirigeant_qualite=row.get("dirigeant_qualite") or None,
-                adresse_normalisee=row.get("adresse_normalisee") or None,
-                date_creation=row.get("date_creation") or None,
-                score_matching=float(score) if score not in (None, "", "None") else None,
-                match_incertain=(match_incertain_raw == "VRAI"),
-                flag_chaine=(flag_chaine_raw == "VRAI"),
-                note_chaine=row.get("note_chaine") or None,
-            )
-        )
+        leads_l2.append(LeadStage2(
+            **l1.model_dump(),
+            siren=row.get("siren") or None,
+            siret=row.get("siret") or None,
+            code_naf=row.get("code_naf") or None,
+            libelle_naf=row.get("libelle_naf") or None,
+            forme_juridique=row.get("forme_juridique") or None,
+            statut_actif=(statut_actif_raw == "VRAI") if statut_actif_raw else None,
+            tranche_effectif=row.get("tranche_effectif") or None,
+            libelle_effectif=row.get("libelle_effectif") or None,
+            dirigeant_nom=row.get("dirigeant_nom") or None,
+            dirigeant_prenom=row.get("dirigeant_prenom") or None,
+            dirigeant_qualite=row.get("dirigeant_qualite") or None,
+            adresse_normalisee=row.get("adresse_normalisee") or None,
+            date_creation=row.get("date_creation") or None,
+            score_matching=float(score) if score not in (None, "", "None") else None,
+            match_incertain=(match_incertain_raw == "VRAI"),
+            flag_chaine=(flag_chaine_raw == "VRAI"),
+            note_chaine=row.get("note_chaine") or None,
+        ))
     return leads_l2

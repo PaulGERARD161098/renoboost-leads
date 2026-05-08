@@ -38,24 +38,22 @@ NEARBY_SEARCH_URL = "https://places.googleapis.com/v1/places:searchNearby"
 # ─── Field masks ───
 # On reste en niveau "Pro" autant que possible (champs essentiels + contact + rating)
 # Tarification mai 2026 : Pro ~0.017€/req, Enterprise ~0.020€/req
-FIELD_MASK_SEARCH = ",".join(
-    [
-        "places.id",
-        "places.displayName",
-        "places.formattedAddress",
-        "places.location",
-        "places.types",
-        "places.primaryType",
-        "places.businessStatus",
-        "places.nationalPhoneNumber",
-        "places.internationalPhoneNumber",
-        "places.websiteUri",
-        "places.rating",
-        "places.userRatingCount",
-        "places.priceLevel",
-        "places.googleMapsUri",
-    ]
-)
+FIELD_MASK_SEARCH = ",".join([
+    "places.id",
+    "places.displayName",
+    "places.formattedAddress",
+    "places.location",
+    "places.types",
+    "places.primaryType",
+    "places.businessStatus",
+    "places.nationalPhoneNumber",
+    "places.internationalPhoneNumber",
+    "places.websiteUri",
+    "places.rating",
+    "places.userRatingCount",
+    "places.priceLevel",
+    "places.googleMapsUri",
+])
 
 # ─── Coûts estimés (€) — à recaler avec la facturation réelle après run ───
 COUT_TEXT_SEARCH_EUR = 0.032
@@ -175,13 +173,8 @@ class PlacesClient:
         self.config.rate_limiter.acquire()
         self.config.budget.ajouter_cout(COUT_TEXT_SEARCH_EUR, contexte=f"text_search:{query}")
 
-        logger.debug(
-            "Text Search: query=%s pos=(%.3f,%.3f) r=%sm",
-            query,
-            latitude or 0,
-            longitude or 0,
-            rayon_metres,
-        )
+        logger.debug("Text Search: query=%s pos=(%.3f,%.3f) r=%sm",
+                     query, latitude or 0, longitude or 0, rayon_metres)
 
         try:
             resp = self.session.post(
@@ -230,14 +223,13 @@ class PlacesClient:
             payload["includedTypes"] = included_types
 
         self.config.rate_limiter.acquire()
-        self.config.budget.ajouter_cout(COUT_NEARBY_SEARCH_EUR, contexte=f"nearby:{included_types}")
+        self.config.budget.ajouter_cout(
+            COUT_NEARBY_SEARCH_EUR, contexte=f"nearby:{included_types}"
+        )
 
         logger.debug(
             "Nearby Search: types=%s pos=(%.3f,%.3f) r=%sm",
-            included_types,
-            latitude,
-            longitude,
-            rayon_metres,
+            included_types, latitude, longitude, rayon_metres,
         )
 
         try:

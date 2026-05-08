@@ -74,7 +74,8 @@ def candidat_to_l2_fields(candidat: dict[str, Any]) -> dict[str, Any]:
         "siren": candidat.get("siren"),
         "siret": _safe_get(siege, "siret") or candidat.get("siret"),
         "code_naf": (
-            _safe_get(candidat, "activite_principale") or _safe_get(siege, "activite_principale")
+            _safe_get(candidat, "activite_principale")
+            or _safe_get(siege, "activite_principale")
         ),
         "libelle_naf": (
             _safe_get(candidat, "libelle_activite_principale")

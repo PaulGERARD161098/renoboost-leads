@@ -51,8 +51,7 @@ class TestScoring:
             },
         }
         sd = scorer_candidat(
-            candidat,
-            nom_cible="Hôtel Le Sud",
+            candidat, nom_cible="Hôtel Le Sud",
             code_postal_cible="34000",
             ville_cible="Montpellier",
         )
@@ -66,8 +65,7 @@ class TestScoring:
             "siege": {"code_postal": "75001"},
         }
         sd = scorer_candidat(
-            candidat,
-            nom_cible="Hôtel Le Sud",
+            candidat, nom_cible="Hôtel Le Sud",
             code_postal_cible="34000",
             ville_cible="Montpellier",
         )
@@ -81,8 +79,7 @@ class TestScoring:
             "nature_juridique": "5710",
         }
         sd = scorer_candidat(
-            candidat,
-            nom_cible="Hôtel Le Sud",
+            candidat, nom_cible="Hôtel Le Sud",
             code_postal_cible="34000",
             ville_cible="Montpellier",
         )

@@ -24,7 +24,7 @@ class RunInfo(BaseModel):
     @field_validator("client_name")
     @classmethod
     def _slug(cls, v: str) -> str:
-        forbidden = set('/\\:*?"<>|')
+        forbidden = set("/\\:*?\"<>|")
         if any(c in v for c in forbidden):
             raise ValueError(f"client_name contient des caractères interdits : {forbidden}")
         return v

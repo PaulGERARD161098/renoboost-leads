@@ -113,8 +113,7 @@ class EnricheurStage3:
             inclure_fonctionnels=True,
         )
 
-        # Évite de redoublonner : si un pattern est déjà dans les scrapés,
-        # on le retire des candidats
+        # Évite de redoublonner : si un pattern est déjà dans les scrapés, on le retire des candidats
         if emails_scrapes and emails_candidats:
             scrapes_set = {e.lower() for e in emails_scrapes}
             emails_candidats = [e for e in emails_candidats if e.lower() not in scrapes_set]
@@ -191,16 +190,11 @@ class EnricheurStage3:
             "  Patterns générés seuls : %d (%.0f%%)\n"
             "  Aucun email : %d (%.0f%%)\n"
             "  Chaînes ignorées : %d (%.0f%%)",
-            len(leads_l2),
-            duree,
-            nb_scraping_ok,
-            100 * nb_scraping_ok / max(1, len(leads_l2)),
-            nb_patterns_only,
-            100 * nb_patterns_only / max(1, len(leads_l2)),
-            nb_aucun,
-            100 * nb_aucun / max(1, len(leads_l2)),
-            nb_chaines_skip,
-            100 * nb_chaines_skip / max(1, len(leads_l2)),
+            len(leads_l2), duree,
+            nb_scraping_ok, 100 * nb_scraping_ok / max(1, len(leads_l2)),
+            nb_patterns_only, 100 * nb_patterns_only / max(1, len(leads_l2)),
+            nb_aucun, 100 * nb_aucun / max(1, len(leads_l2)),
+            nb_chaines_skip, 100 * nb_chaines_skip / max(1, len(leads_l2)),
         )
 
         return leads_l3
@@ -210,11 +204,11 @@ class EnricheurStage3:
         n = len(leads_l3)
         if n == 0:
             return {"total": 0}
-        nb_scrape = sum(1 for lead in leads_l3 if lead.nb_emails_verifies > 0)
+        nb_scrape = sum(1 for l in leads_l3 if l.nb_emails_verifies > 0)
         nb_au_moins_un = sum(
-            1 for lead in leads_l3 if lead.nb_emails_verifies > 0 or lead.nb_emails_candidats > 0
+            1 for l in leads_l3 if l.nb_emails_verifies > 0 or l.nb_emails_candidats > 0
         )
-        nb_dirigeant = sum(1 for lead in leads_l3 if lead.contient_dirigeant_pattern)
+        nb_dirigeant = sum(1 for l in leads_l3 if l.contient_dirigeant_pattern)
         return {
             "total": n,
             "scrape_au_moins_un_email": nb_scrape,

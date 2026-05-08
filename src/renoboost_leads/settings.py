@@ -58,7 +58,9 @@ class Settings(BaseSettings):
         """Format Google : commence par AIza et fait ~39 caractères."""
         secret = v.get_secret_value()
         if secret and not secret.startswith("AIza"):
-            raise ValueError("GOOGLE_PLACES_API_KEY format inattendu (doit commencer par 'AIza').")
+            raise ValueError(
+                "GOOGLE_PLACES_API_KEY format inattendu (doit commencer par 'AIza')."
+            )
         return v
 
     # ─── Helpers ───

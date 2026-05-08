@@ -18,6 +18,7 @@ import time
 import urllib.parse
 import urllib.robotparser
 from dataclasses import dataclass, field
+from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -67,68 +68,32 @@ EMAIL_REGEX = re.compile(
 
 # Faux positifs courants à filtrer
 EXTENSIONS_PARASITES = {
-    "jpg",
-    "jpeg",
-    "png",
-    "gif",
-    "webp",
-    "svg",
-    "ico",
-    "css",
-    "js",
-    "json",
-    "xml",
-    "ttf",
-    "woff",
-    "woff2",
-    "otf",
-    "eot",
-    "pdf",
-    "doc",
-    "docx",
-    "xls",
-    "xlsx",
-    "zip",
-    "rar",
+    "jpg", "jpeg", "png", "gif", "webp", "svg", "ico",
+    "css", "js", "json", "xml",
+    "ttf", "woff", "woff2", "otf", "eot",
+    "pdf", "doc", "docx", "xls", "xlsx",
+    "zip", "rar",
 }
 
 DOMAINES_PARASITES = {
-    "sentry.io",
-    "sentry.wixpress.com",
-    "wixpress.com",
-    "wix.com",
-    "googleusercontent.com",
-    "googletagmanager.com",
+    "sentry.io", "sentry.wixpress.com",
+    "wixpress.com", "wix.com",
+    "googleusercontent.com", "googletagmanager.com",
     "gstatic.com",
-    "cloudflare.com",
-    "cloudflareinsights.com",
-    "facebook.com",
-    "twitter.com",
-    "instagram.com",
-    "linkedin.com",
-    "youtube.com",
-    "example.com",
-    "example.org",
-    "domain.com",
-    "domain.fr",
-    "test.com",
-    "test.fr",
+    "cloudflare.com", "cloudflareinsights.com",
+    "facebook.com", "twitter.com", "instagram.com",
+    "linkedin.com", "youtube.com",
+    "example.com", "example.org",
+    "domain.com", "domain.fr",
+    "test.com", "test.fr",
 }
 
 # Préfixes/locaux suspects
 LOCAUX_SUSPECTS = {
-    "noreply",
-    "no-reply",
-    "donotreply",
-    "do-not-reply",
-    "name",
-    "email",
-    "yourname",
-    "user",
-    "abuse",
-    "postmaster",
-    "admin@admin",
-    "root@root",
+    "noreply", "no-reply", "donotreply", "do-not-reply",
+    "name", "email", "yourname", "user",
+    "abuse", "postmaster",
+    "admin@admin", "root@root",
 }
 
 
@@ -226,8 +191,8 @@ def extraire_emails_du_html(html: str, domaine_attendu: str | None = None) -> li
                 email_part = href[7:].split("?")[0].strip().lower()
                 if email_est_valide(email_part):
                     emails.add(email_part)
-    except Exception as e:  # noqa: BLE001 — on est tolérant sur HTML cassé
-        logger.debug("Parsing HTML mailto échoué (HTML cassé) : %s", e)
+    except Exception:  # noqa: BLE001 — on est tolérant sur HTML cassé
+        pass
 
     # Filtrage par domaine si demandé
     if domaine_attendu:
@@ -353,8 +318,7 @@ class ScraperContact:
             url = base_url + path
             try:
                 html = self._fetch(url)
-            except Exception as e:  # noqa: BLE001
-                logger.debug("Scraping %s échoué : %s", url, e)
+            except Exception:  # noqa: BLE001
                 continue
 
             if html is None:

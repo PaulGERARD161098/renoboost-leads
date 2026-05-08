@@ -31,6 +31,7 @@ from .settings import PROJECT_ROOT, get_settings
 from .stage1_decouverte.extractor import ExtracteurStage1
 from .stage1_decouverte.geo_grid import grille_pour_zone
 from .stage1_decouverte.places_client import (
+    COUT_NEARBY_SEARCH_EUR,
     COUT_TEXT_SEARCH_EUR,
     PlacesClient,
     PlacesClientConfig,
@@ -77,34 +78,13 @@ def _check_google_key_or_exit() -> str:
     return settings.google_places_api_key.get_secret_value()
 
 
-def _normalize_for_match(s: str) -> str:
-    """Normalise un nom pour matching robuste (case + accents + espaces).
-
-    Lowercase, strip accents, replace spaces by underscores. Used by
-    _trouver_dossier_existant to match folder names robustly.
-    """
-    import unicodedata
-
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    return s.lower().replace(" ", "_").strip()
-
-
 def _trouver_dossier_existant(client_name: str) -> Path | None:
-    """Cherche le dernier dossier de sortie existant pour ce client.
-
-    Matching robuste (bug B2 fix) : insensible à la casse, aux accents,
-    et aux espaces vs underscores. Format attendu : {YYYY-MM-DD_HHMM}_{client_name}.
-    Le suffix recherché inclut un underscore pour éviter les faux positifs
-    sur des noms courts (ex: client=\"X\" ne doit pas matcher \"..._XYZ\").
-    """
+    """Cherche le dernier dossier de sortie existant pour ce client (pour réutiliser CSV L1)."""
     base = PROJECT_ROOT / "data" / "output"
     if not base.exists():
         return None
-    target = _normalize_for_match(client_name)
-    suffix = f"_{target}"
     candidats = sorted(
-        [d for d in base.iterdir() if d.is_dir() and _normalize_for_match(d.name).endswith(suffix)],
+        [d for d in base.iterdir() if d.is_dir() and d.name.endswith(client_name)],
         reverse=True,
     )
     return candidats[0] if candidats else None
@@ -347,9 +327,7 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         if leads_l1 is None:
             csv_l1 = from_csv_path or (output_dir / "etage1_decouverte.csv")
             if not csv_l1.exists():
-                console.print(
-                    f"[red]✗ Impossible de lancer L2 : CSV L1 introuvable ({csv_l1}).[/red]"
-                )
+                console.print(f"[red]✗ Impossible de lancer L2 : CSV L1 introuvable ({csv_l1}).[/red]")
                 sys.exit(2)
             leads_l1 = lire_stage1_csv(csv_l1)
             logger.info("L1 chargé depuis CSV existant : %d leads", len(leads_l1))
@@ -392,12 +370,9 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
 
     # ─── Finalisation : registre RGPD + stats ───
     nb_leads_finaux = (
-        len(leads_l3)
-        if leads_l3 is not None
-        else len(leads_l2)
-        if leads_l2 is not None
-        else len(leads_l1)
-        if leads_l1 is not None
+        len(leads_l3) if leads_l3 is not None
+        else len(leads_l2) if leads_l2 is not None
+        else len(leads_l1) if leads_l1 is not None
         else 0
     )
     stats.leads_finaux = nb_leads_finaux
@@ -425,7 +400,6 @@ def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
     """Exécute l'étage 1 et retourne la liste des leads L1."""
     if dry_run:
         from .models import LeadStage1
-
         leads = [
             LeadStage1(
                 place_id=f"FAKE_{i}",
@@ -458,17 +432,15 @@ def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
 
         duree = (datetime.now(timezone.utc) - t0).total_seconds()
         stats.cout_total_eur += budget.cout_actuel_eur
-        stats.etages_executes.append(
-            StageStats(
-                nom_etage="stage1_decouverte",
-                duree_secondes=duree,
-                nb_appels_api=budget.nb_appels,
-                nb_succes=len(leads),
-                nb_echecs=0,
-                cout_eur_estime=budget.cout_actuel_eur,
-                leads_collectes=len(leads),
-            )
-        )
+        stats.etages_executes.append(StageStats(
+            nom_etage="stage1_decouverte",
+            duree_secondes=duree,
+            nb_appels_api=budget.nb_appels,
+            nb_succes=len(leads),
+            nb_echecs=0,
+            cout_eur_estime=budget.cout_actuel_eur,
+            leads_collectes=len(leads),
+        ))
 
     csv_path = output_dir / "etage1_decouverte.csv"
     export_stage1_csv(leads, csv_path)
@@ -502,20 +474,15 @@ def _executer_stage2(leads_l1, cache, output_dir, stats):
 
     # Stats
     stats_e2 = enricheur.stats_l2(leads_l2)
-    nb_echecs_e2 = (
-        stats_e2.get("total", 0) - stats_e2.get("siren_trouve", 0) - stats_e2.get("chaines", 0)
-    )
-    stats.etages_executes.append(
-        StageStats(
-            nom_etage="stage2_entreprises",
-            duree_secondes=duree,
-            nb_appels_api=stats_e2.get("total", 0) - stats_e2.get("chaines", 0),
-            nb_succes=stats_e2.get("siren_trouve", 0),
-            nb_echecs=nb_echecs_e2,
-            cout_eur_estime=0.0,
-            leads_collectes=len(leads_l2),
-        )
-    )
+    stats.etages_executes.append(StageStats(
+        nom_etage="stage2_entreprises",
+        duree_secondes=duree,
+        nb_appels_api=stats_e2.get("total", 0) - stats_e2.get("chaines", 0),
+        nb_succes=stats_e2.get("siren_trouve", 0),
+        nb_echecs=stats_e2.get("total", 0) - stats_e2.get("siren_trouve", 0) - stats_e2.get("chaines", 0),
+        cout_eur_estime=0.0,
+        leads_collectes=len(leads_l2),
+    ))
 
     console.print(
         f"\n[green]✓ Étage 2 : {len(leads_l2)} leads enrichis → {csv_path.name}[/green]\n"
@@ -548,17 +515,15 @@ def _executer_stage3(leads_l2, cache, output_dir, stats):
     backup_csv(csv_path)
 
     stats_e3 = enricheur.stats_l3(leads_l3)
-    stats.etages_executes.append(
-        StageStats(
-            nom_etage="stage3_contacts",
-            duree_secondes=duree,
-            nb_appels_api=stats_e3.get("scrape_au_moins_un_email", 0),
-            nb_succes=stats_e3.get("au_moins_un_email", 0),
-            nb_echecs=stats_e3.get("total", 0) - stats_e3.get("au_moins_un_email", 0),
-            cout_eur_estime=0.0,
-            leads_collectes=len(leads_l3),
-        )
-    )
+    stats.etages_executes.append(StageStats(
+        nom_etage="stage3_contacts",
+        duree_secondes=duree,
+        nb_appels_api=stats_e3.get("scrape_au_moins_un_email", 0),
+        nb_succes=stats_e3.get("au_moins_un_email", 0),
+        nb_echecs=stats_e3.get("total", 0) - stats_e3.get("au_moins_un_email", 0),
+        cout_eur_estime=0.0,
+        leads_collectes=len(leads_l3),
+    ))
 
     console.print(
         f"\n[green]✓ Étage 3 : {len(leads_l3)} leads → {csv_path.name}[/green]\n"

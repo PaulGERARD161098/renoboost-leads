@@ -3,7 +3,7 @@
 Outil de prospection B2B paramétrable. Pipeline en 4 étages.
 
 **Architecture en 4 étages indépendants** :
-1. **Étage 1 — Découverte** : établissements via Google Places API (~0.005€/lead)
+1. **Étage 1 — Découverte** : établissements via Google Places API (~0.05€/lead)
 2. **Étage 2 — Entreprises** : SIREN / NAF / dirigeants via API data.gouv.fr (**gratuit**)
 3. **Étage 3 — Contacts** : emails via scraping mentions légales + patterns (**gratuit**)
 4. **Étage 4 — Prospection** : scoring + hooks via Claude (à venir, ~0.02€/lead)
@@ -69,7 +69,7 @@ python -m renoboost_leads.cli run --config config/client_ombrieres.yaml --stages
 
 ```bash
 python -m renoboost_leads.cli resume \
-  --session-id 2026-05-01_2042_ombrieres-bouches-du-rhone \
+  --session-id 2026-05-01_1833_ombrieres-bouches-du-rhone \
   --stages 2,3 \
   --config config/client_ombrieres.yaml
 ```
@@ -102,27 +102,15 @@ Chaque run produit dans `data/output/<YYYY-MM-DD>_<HHMM>_<nom_run>/` :
 
 ---
 
-## ⚖️ Principes de l'outil
-
-> **Précision avant volume.** L'outil ne génère **jamais** de données fausses ou inventées.
-> Les champs vides sont préférables aux suppositions. Les promesses sont alignées sur la réalité.
-
-- ✅ Aucun SIREN faux : seuil de confiance 60 pts strict + flag `match_incertain`
-- ✅ Aucun dirigeant inventé : champ vide si non trouvé
-- ✅ Aucune chaîne traitée comme indépendant : 189 enseignes détectées + flag dédié
-- ✅ Tous les emails L3 sont soit **scrapés du site** (publics LCEN) soit **flagués comme patterns à vérifier**
-
----
-
-## 💰 Coûts (mesurés sur 200 leads BdR — 1er mai 2026)
+## 💰 Coûts
 
 | Étage | API | Coût/lead | Pour 200 leads |
 |---|---|---|---|
-| 1 | Google Places | 0.005 € | ~1 € |
+| 1 | Google Places | 0.05 € | ~10 € |
 | 2 | data.gouv.fr | **gratuit** | **0 €** |
 | 3 | scraping web | **gratuit** | **0 €** |
-| 4 | Claude Sonnet (à venir) | 0.02 € | ~4 € |
-| **Total V1 complet** | | **~0.025 €/lead** | **~5 €** |
+| 4 | Claude Sonnet (à venir) | 0.02 € | 4 € |
+| **Total prévu V1 complet** | | **0.07 €** | **~14 €** |
 
 Voir [COSTS_AND_LIMITS.md](./COSTS_AND_LIMITS.md) pour le détail.
 
@@ -134,54 +122,24 @@ Voir [RGPD_COMPLIANCE.md](./RGPD_COMPLIANCE.md). Base légale : intérêt légit
 
 ---
 
-## 📊 Performances réelles observées (pas théoriques)
+## 📊 Limites honnêtes (gratuit vs payant)
 
-> ⚠️ Les chiffres ci-dessous sont issus de runs réels sur 200 leads en
-> Bouches-du-Rhône (1er mai 2026), pas de promesses marketing.
-
-### Étage 1 — Découverte
-| Métrique | Hérault | Bouches-du-Rhône |
+| Métrique | L2 gratuit | Pappers payant |
 |---|---|---|
-| Leads atteints | 200/200 | 200/200 |
-| Téléphone trouvé | 84 % | 84 % |
-| Site web trouvé | 80 % | 80 % |
-| Pertinence (5 random) | 5/5 | 5/5 |
-| Coût | 0,93 € | ~1 € |
+| Taux match SIREN | 70-85 % | 92-95 % |
+| Effectif | Tranche INSEE | Idem |
+| CA exact | ❌ | ✅ |
+| Dirigeants | Principal | Tous + historique |
 
-### Étage 2 — Entreprises (data.gouv.fr)
-| Métrique | Run BdR | Limite gratuit |
+| Métrique | L3 gratuit | Dropcontact payant |
 |---|---|---|
-| Match SIREN confiant (≥60 pts) | 42 % | — |
-| Match SIREN incertain (<60 pts) | 9 % | — |
-| **SIREN total** | **51,5 %** | (Pappers payant : 92-95 %) |
-| Dirigeant trouvé | 30,5 % | (Pappers : 60-70 %) |
-| Chaînes flaguées | 10 % | — |
-| Coût | 0 € | — |
+| Taux email trouvé | 50-65 % | 80-90 % |
+| Email vérifié | ❌ (à valider via NeverBounce) | ✅ |
+| Email décideur | 15-25 % | 40 % |
 
-⚠️ **L'API data.gouv.fr couvre incomplètement les indépendants à noms exotiques**
-(châteaux, mas, résidences services). Pour les leads sans SIREN, les données L1
-(téléphone + site web + adresse) restent exploitables en cold call.
+→ **Workflow conseillé pour envoi** : exporter CSV L3 → vérifier via NeverBounce ou ZeroBounce (~5-10€/1000 vérifs) → importer dans Lemlist/Smartlead.
 
-### Étage 3 — Contacts (scraping + patterns)
-| Métrique | Run BdR |
-|---|---|
-| Email scrapé du site (vérifié) | 27,5 % |
-| Au moins 1 email (scrapé OU pattern) | 75 % |
-| Patterns nominatifs (sur dirigeant L2) | 26,5 % |
-| Sans email (pas de site web en L1) | 15 % |
-| Chaînes ignorées (volontaire) | 10 % |
-| Coût | 0 € |
-
-⚠️ **Les emails `candidats` (patterns) doivent être validés via NeverBounce ou ZeroBounce
-avant envoi** (~5-10€ pour 1000 vérifications). Ne JAMAIS envoyer sans vérification :
-bounce > 15% = domaine grillé.
-
----
-
-## 🛡️ Sécurité opérationnelle
-
-Voir [OPERATIONS.md](./OPERATIONS.md) pour les standards de pré-checks, post-checks
-et procédure de récupération en cas de crash.
+⚠️ **Ne JAMAIS** envoyer en cold email sans vérification batch préalable (bounce > 15 % = domaine grillé).
 
 ---
 

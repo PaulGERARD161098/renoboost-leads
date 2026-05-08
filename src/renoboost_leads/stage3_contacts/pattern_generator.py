@@ -35,24 +35,14 @@ def _normaliser_nom_pour_email(s: str | None) -> str | None:
 
     # Suppr accents
     accents = {
-        "à": "a",
-        "â": "a",
-        "ä": "a",
+        "à": "a", "â": "a", "ä": "a",
         "ç": "c",
-        "é": "e",
-        "è": "e",
-        "ê": "e",
-        "ë": "e",
-        "î": "i",
-        "ï": "i",
-        "ô": "o",
-        "ö": "o",
-        "ù": "u",
-        "û": "u",
-        "ü": "u",
+        "é": "e", "è": "e", "ê": "e", "ë": "e",
+        "î": "i", "ï": "i",
+        "ô": "o", "ö": "o",
+        "ù": "u", "û": "u", "ü": "u",
         "ÿ": "y",
-        "œ": "oe",
-        "æ": "ae",
+        "œ": "oe", "æ": "ae",
     }
     for a, b in accents.items():
         s = s.replace(a, b)
@@ -88,15 +78,15 @@ def generer_patterns_nominatifs(
     candidats: list[str] = []
 
     if p and n:
-        candidats.append(f"{p}.{n}@{domaine}")  # marie.dupont
-        candidats.append(f"{p[0]}.{n}@{domaine}")  # m.dupont
-        candidats.append(f"{p[0]}{n}@{domaine}")  # mdupont
-        candidats.append(f"{p}{n}@{domaine}")  # mariedupont
-        candidats.append(f"{n}.{p}@{domaine}")  # dupont.marie
+        candidats.append(f"{p}.{n}@{domaine}")           # marie.dupont
+        candidats.append(f"{p[0]}.{n}@{domaine}")         # m.dupont
+        candidats.append(f"{p[0]}{n}@{domaine}")          # mdupont
+        candidats.append(f"{p}{n}@{domaine}")             # mariedupont
+        candidats.append(f"{n}.{p}@{domaine}")            # dupont.marie
     if p:
-        candidats.append(f"{p}@{domaine}")  # marie
+        candidats.append(f"{p}@{domaine}")                # marie
     if n:
-        candidats.append(f"{n}@{domaine}")  # dupont
+        candidats.append(f"{n}@{domaine}")                # dupont
 
     # Dédup en gardant l'ordre
     vu: set[str] = set()
