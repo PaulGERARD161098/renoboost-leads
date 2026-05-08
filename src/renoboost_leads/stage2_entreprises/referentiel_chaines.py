@@ -82,7 +82,11 @@ def detecter_chaine(nom_etablissement: str) -> tuple[bool, str | None]:
     nom_lower = nom_etablissement.lower()
     for keyword, groupe in ENSEIGNES_CHAINES.items():
         # Match en mot complet (avec word boundary basique)
-        if f" {keyword} " in f" {nom_lower} " or nom_lower.startswith(keyword + " ") or nom_lower.endswith(" " + keyword):
+        if (
+            f" {keyword} " in f" {nom_lower} "
+            or nom_lower.startswith(keyword + " ")
+            or nom_lower.endswith(" " + keyword)
+        ):
             return True, groupe
     return False, None
 

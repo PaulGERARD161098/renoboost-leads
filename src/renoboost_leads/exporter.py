@@ -1,4 +1,4 @@
-"""Export CSV des leads (étages 1, 2, 3) + sauvegardes horodatées."""
+﻿"""Export CSV des leads (étages 1, 2, 3) + sauvegardes horodatées."""
 
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ def _ecrire_csv(rows: list[dict], colonnes: list[str], output_path: Path) -> Pat
 
 def export_stage1_csv(leads: list[LeadStage1], output_path: Path) -> Path:
     """CSV étage 1."""
-    rows = [l.model_dump() for l in leads]
+    rows = [lead.model_dump() for lead in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE1, output_path)
     logger.info("CSV étage 1 écrit : %s (%d leads)", p, len(leads))
     return p
@@ -117,7 +117,7 @@ def export_stage1_csv(leads: list[LeadStage1], output_path: Path) -> Path:
 
 def export_stage2_csv(leads: list[LeadStage2], output_path: Path) -> Path:
     """CSV étage 2 (= étage 1 + colonnes Pappers/data.gouv.fr)."""
-    rows = [l.model_dump() for l in leads]
+    rows = [lead.model_dump() for lead in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE2, output_path)
     logger.info("CSV étage 2 écrit : %s (%d leads)", p, len(leads))
     return p
@@ -125,7 +125,7 @@ def export_stage2_csv(leads: list[LeadStage2], output_path: Path) -> Path:
 
 def export_stage3_csv(leads: list[LeadStage3], output_path: Path) -> Path:
     """CSV étage 3 (= étage 1 + 2 + colonnes contacts)."""
-    rows = [l.model_dump() for l in leads]
+    rows = [lead.model_dump() for lead in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE3, output_path)
     logger.info("CSV étage 3 écrit : %s (%d leads)", p, len(leads))
     return p

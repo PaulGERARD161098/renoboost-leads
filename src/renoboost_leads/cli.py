@@ -31,7 +31,6 @@ from .settings import PROJECT_ROOT, get_settings
 from .stage1_decouverte.extractor import ExtracteurStage1
 from .stage1_decouverte.geo_grid import grille_pour_zone
 from .stage1_decouverte.places_client import (
-    COUT_NEARBY_SEARCH_EUR,
     COUT_TEXT_SEARCH_EUR,
     PlacesClient,
     PlacesClientConfig,
@@ -327,7 +326,10 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         if leads_l1 is None:
             csv_l1 = from_csv_path or (output_dir / "etage1_decouverte.csv")
             if not csv_l1.exists():
-                console.print(f"[red]✗ Impossible de lancer L2 : CSV L1 introuvable ({csv_l1}).[/red]")
+                console.print(
+                    f"[red]✗ Impossible de lancer L2 : CSV L1 introuvable "
+                    f"({csv_l1}).[/red]"
+                )
                 sys.exit(2)
             leads_l1 = lire_stage1_csv(csv_l1)
             logger.info("L1 chargé depuis CSV existant : %d leads", len(leads_l1))
@@ -479,7 +481,11 @@ def _executer_stage2(leads_l1, cache, output_dir, stats):
         duree_secondes=duree,
         nb_appels_api=stats_e2.get("total", 0) - stats_e2.get("chaines", 0),
         nb_succes=stats_e2.get("siren_trouve", 0),
-        nb_echecs=stats_e2.get("total", 0) - stats_e2.get("siren_trouve", 0) - stats_e2.get("chaines", 0),
+        nb_echecs=(
+            stats_e2.get("total", 0)
+            - stats_e2.get("siren_trouve", 0)
+            - stats_e2.get("chaines", 0)
+        ),
         cout_eur_estime=0.0,
         leads_collectes=len(leads_l2),
     ))
