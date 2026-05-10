@@ -1,0 +1,44 @@
+run:
+  client_name: "rossini-test-nord"
+  description: "Proto 10 leads - sites industriels / plateformes logistiques / sieges sociaux - Nord (59)"
+  campaign_date: "2026-05-08"
+
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_4_prospection: false
+
+secteurs:
+  - type: "establishment"
+    query: "site industriel"
+  - type: "establishment"
+    query: "plateforme logistique"
+  - type: "establishment"
+    query: "siege social entreprise"
+
+zone:
+  type: "departement"
+  codes: ["59"]
+  rayon_par_point_km: 10
+  pas_grille_km: 15
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  note_min: null
+  nb_avis_min: null
+  nb_avis_max: null
+  exiger_telephone: false
+  exiger_site_web: true
+  dedup_chaines: false
+
+volume:
+  cible: 10
+  max_par_secteur: 5
+
+budget:
+  max_eur: 1.0
+
+sortie:
+  format: ["csv"]
+  langue: "fr"
