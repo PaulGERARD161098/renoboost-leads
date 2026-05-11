@@ -44,6 +44,20 @@ filtres:
   exiger_site_web: false
   dedup_chaines: false                    # true = 1 seul Carrefour par enseigne
 
+# ─── Filtres entreprise (optionnels, appliqués après L2) ─────────
+# Les leads qui ne passent pas sont FLAGUÉS (pas rejetés) et exportés
+# dans un CSV séparé `etage3_contacts_hors_filtre.csv`. L3 (scraping)
+# tourne sur tous les leads pour conserver l'info contact.
+filtres_entreprise:
+  effectif_min: null                      # ex: 50 (user-friendly, nb salariés)
+  effectif_max: null                      # ex: 5000 ou null
+  tranche_effectif_inclus: []             # codes INSEE bruts ex ["21","22","31"] — prioritaire si fourni
+  naf_inclus: []                          # préfixes libres ex ["25","28"] (matche "25.62A") ou code exact ex ["25.62A"]
+  naf_exclus: []                          # ex ["56"] (restauration)
+  forme_juridique_inclus: []              # labels ou codes ex ["SAS","SARL"] ou ["5710","5499"]
+  forme_juridique_exclus: []              # ex ["EI","EIRL"]
+  multi_sites_only: false                 # true = exige nb_etablissements > 1
+
 # ─── Volume cible ─────────────────────────────────────────────────
 volume:
   cible: 200                              # Nombre de leads visés
