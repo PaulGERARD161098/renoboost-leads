@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from dotenv import find_dotenv
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,10 +17,32 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _find_env_file() -> str | None:
+    """Localise un fichier .env de façon dynamique (B7).
+
+    Stratégie :
+    1. `find_dotenv(usecwd=True)` remonte depuis le répertoire courant — couvre
+       le cas standard où le user lance la CLI depuis la racine projet ou un
+       sous-dossier, y compris en venv Windows et en install non-éditable.
+    2. Fallback : `PROJECT_ROOT / .env` si présent (compat historique).
+    3. None si rien — Settings s'initialisera depuis les variables d'env seules.
+    """
+    found = find_dotenv(usecwd=True)
+    if found:
+        return found
+    fallback = PROJECT_ROOT / ".env"
+    if fallback.exists():
+        return str(fallback)
+    return None
+
+
 class Settings(BaseSettings):
     """Variables d'environnement validées par Pydantic."""
 
     model_config = SettingsConfigDict(
+        # env_file résolu dynamiquement à chaque instanciation via __init__ ci-dessous.
+        # Le fallback statique sert uniquement aux instances construites sans
+        # passer par get_settings() (cas marginal — tests directs, scripts ad-hoc).
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
@@ -58,9 +81,7 @@ class Settings(BaseSettings):
         """Format Google : commence par AIza et fait ~39 caractères."""
         secret = v.get_secret_value()
         if secret and not secret.startswith("AIza"):
-            raise ValueError(
-                "GOOGLE_PLACES_API_KEY format inattendu (doit commencer par 'AIza')."
-            )
+            raise ValueError("GOOGLE_PLACES_API_KEY format inattendu (doit commencer par 'AIza').")
         return v
 
     # ─── Helpers ───
@@ -83,5 +104,12 @@ class Settings(BaseSettings):
 
 # Instance unique
 def get_settings() -> Settings:
-    """Renvoie une instance de Settings (lazy)."""
+    """Renvoie une instance de Settings (lazy).
+
+    Résout dynamiquement le fichier .env via `_find_env_file()` pour rester
+    robuste quand le CWD ≠ racine projet (cas Windows / installs non-éditables).
+    """
+    env_file = _find_env_file()
+    if env_file:
+        return Settings(_env_file=env_file)
     return Settings()
