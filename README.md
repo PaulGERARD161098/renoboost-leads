@@ -10,6 +10,23 @@ Outil de prospection B2B paramétrable. Pipeline en 4 étages.
 
 ---
 
+## ⚡ Démo en 30 secondes
+
+```bash
+# Aperçu sans aucune clé API ni appel réseau
+python -m renoboost_leads.cli estimate --config config/client_rossini.yaml
+
+# Test des APIs configurées (lit .env)
+python -m renoboost_leads.cli check-connections
+
+# Run complet 10 leads industriels Nord 59 — coûte < 1 €
+python -m renoboost_leads.cli run --config config/client_rossini.yaml --stages 1,2,3
+```
+
+Sortie dans `data/output/<YYYY-MM-DD>_<HHMM>_rossini-test-nord/` (CSV + logs + cache + registre RGPD).
+
+---
+
 ## 🚀 Installation
 
 ```bash
@@ -90,14 +107,31 @@ python -m renoboost_leads.cli run \
 Chaque run produit dans `data/output/<YYYY-MM-DD>_<HHMM>_<nom_run>/` :
 
 ```
-├─ etage1_decouverte.csv         (20 colonnes — Places)
-├─ etage2_entreprises.csv        (+ 17 colonnes data.gouv.fr)
-├─ etage3_contacts.csv           (+ 8 colonnes contacts)
-├─ backups/                      (versions horodatées de chaque CSV)
-├─ session.log                   (logs JSON multi-niveaux)
-├─ stats_run.json                (métriques run + coûts)
-├─ cache.sqlite                  (cache SIREN + pages scrapées)
-└─ registre_rgpd.md              (conformité RGPD)
+├─ etage1_decouverte.csv               (20 colonnes — Places)
+├─ etage2_entreprises.csv              (+ 20 colonnes data.gouv.fr)
+├─ etage3_contacts.csv                 (qualifiés + 8 colonnes contacts)
+├─ etage3_contacts_hors_filtre.csv     (leads hors `filtres_entreprise` — si actifs)
+├─ backups/                            (versions horodatées de chaque CSV)
+├─ session.log                         (logs JSON multi-niveaux)
+├─ stats_run.json                      (métriques run + coûts)
+├─ cache.sqlite                        (cache SIREN + pages scrapées)
+└─ registre_rgpd.md                    (conformité RGPD)
+```
+
+---
+
+## 🎯 Filtres entreprise (post-L2)
+
+Section optionnelle du YAML pour cibler par effectif, NAF, forme juridique, multi-sites. Les leads hors-cible sont **flagués** (pas rejetés) et exportés dans un CSV séparé pour ne pas mélanger.
+
+```yaml
+filtres_entreprise:
+  effectif_min: 50                    # ou tranche_effectif_inclus: ["21","22"]
+  naf_inclus: ["25", "28", "29"]      # préfixe libre — "25" matche "25.62A"
+  naf_exclus: ["56"]                  # exclure restauration
+  forme_juridique_inclus: ["SAS","SARL","SA"]
+  forme_juridique_exclus: ["EI","EIRL"]
+  multi_sites_only: false             # exige nb_etablissements > 1
 ```
 
 ---
