@@ -24,7 +24,7 @@ class RunInfo(BaseModel):
     @field_validator("client_name")
     @classmethod
     def _slug(cls, v: str) -> str:
-        forbidden = set("/\\:*?\"<>|")
+        forbidden = set('/\\:*?"<>|')
         if any(c in v for c in forbidden):
             raise ValueError(f"client_name contient des caractères interdits : {forbidden}")
         return v
@@ -59,6 +59,37 @@ class Filtres(BaseModel):
     dedup_chaines: bool = False
 
 
+class FiltresEntreprise(BaseModel):
+    """Filtres appliqués après l'étage 2 (données entreprise enrichies).
+
+    Comportement : les leads qui ne passent pas les filtres ne sont PAS rejetés.
+    Ils sont flagués (`hors_filtre_entreprise=True` + `raison_hors_filtre`) puis
+    exportés séparément en sortie L3 pour éviter le mélange avec les leads
+    qualifiés. L3 (scraping/patterns) est exécuté sur les deux populations.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Effectif : double interface
+    # - effectif_min/max : nombre de salariés, user-friendly (default si seul fourni)
+    # - tranche_effectif_inclus : codes INSEE bruts ex ["21","22","31"], précis
+    #   et prioritaire si fourni.
+    effectif_min: int | None = Field(default=None, ge=0)
+    effectif_max: int | None = Field(default=None, ge=0)
+    tranche_effectif_inclus: list[str] = Field(default_factory=list)
+
+    # NAF : préfixe libre. "25" matche "25.62A" ; "25.62A" ne matche que ce code.
+    naf_inclus: list[str] = Field(default_factory=list)
+    naf_exclus: list[str] = Field(default_factory=list)
+
+    # Forme juridique : labels (SAS, SARL, ...) ou codes INSEE bruts (5710, ...)
+    forme_juridique_inclus: list[str] = Field(default_factory=list)
+    forme_juridique_exclus: list[str] = Field(default_factory=list)
+
+    # Sites
+    multi_sites_only: bool = False
+
+
 class Volume(BaseModel):
     cible: int = Field(gt=0, le=10_000)
     max_par_secteur: int | None = Field(default=None, ge=1)
@@ -83,6 +114,7 @@ class CampaignConfig(BaseModel):
     secteurs: list[SecteurCible] = Field(min_length=1)
     zone: Zone
     filtres: Filtres = Filtres()
+    filtres_entreprise: FiltresEntreprise = Field(default_factory=FiltresEntreprise)
     volume: Volume
     budget: Budget
     sortie: Sortie = Sortie()
@@ -169,11 +201,18 @@ class LeadStage2(LeadStage1):
     # Date de création
     date_creation: str | None = None  # format YYYY-MM-DD
 
+    # Nombre d'établissements de l'unité légale (multi-sites)
+    nb_etablissements: int | None = None
+
     # Métadonnées de matching
     score_matching: float | None = None  # 0-100
     match_incertain: bool = False  # True si score < 60
     flag_chaine: bool = False  # True si Accor / Carrefour / etc.
     note_chaine: str | None = None  # "Lead à enrichir manuellement via siège"
+
+    # Filtres entreprise (Bloc 3) — flag posé après application des filtres YAML
+    hors_filtre_entreprise: bool = False
+    raison_hors_filtre: str | None = None
 
 
 # ════════════════════════════════════════════════════════════════

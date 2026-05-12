@@ -19,7 +19,8 @@ from typing import Any
 
 from ..common.cache import SessionCache
 from ..common.logger import get_logger
-from ..models import LeadStage1, LeadStage2
+from ..models import FiltresEntreprise, LeadStage1, LeadStage2
+from .filters import evaluer_filtres_entreprise
 from .mapper import candidat_to_l2_fields
 from .matcher import selectionner_meilleur_candidat
 from .recherche_client import RechercheEntreprisesClient
@@ -36,16 +37,20 @@ class EnricheurStage2:
         client: RechercheEntreprisesClient,
         cache: SessionCache | None = None,
         callback_save_incremental=None,
+        filtres_entreprise: FiltresEntreprise | None = None,
     ):
         """
         Args:
             client: instance du client API
             cache: cache SQLite pour éviter les re-paiements
             callback_save_incremental: fonction appelée tous les 20 leads (pour sauvegarde)
+            filtres_entreprise: filtres B3 à appliquer après enrichissement
+                (default = FiltresEntreprise() vide → aucun flag posé)
         """
         self.client = client
         self.cache = cache
         self.callback_save = callback_save_incremental
+        self.filtres_entreprise = filtres_entreprise or FiltresEntreprise()
 
     def _chercher_avec_cache(self, lead: LeadStage1) -> list[dict[str, Any]]:
         """Recherche entreprise avec cache (évite re-paiement)."""
@@ -82,16 +87,32 @@ class EnricheurStage2:
 
         return results
 
+    def _appliquer_filtres(self, lead_l2: LeadStage2) -> LeadStage2:
+        """Évalue les filtres entreprise (B3) et pose le flag hors_filtre si besoin.
+
+        On évalue toujours, y compris pour les chaînes — si filtres_entreprise
+        est vide (défaut), aucun flag n'est posé. Pour les chaînes / leads sans
+        SIREN, les filtres "données manquantes" déclencheront naturellement le
+        flag avec une raison parlante (ex: "effectif inconnu ; naf=None ...").
+        """
+        passe, raison = evaluer_filtres_entreprise(lead_l2, self.filtres_entreprise)
+        if not passe:
+            lead_l2.hors_filtre_entreprise = True
+            lead_l2.raison_hors_filtre = raison
+        return lead_l2
+
     def _enrichir_un_lead(self, lead: LeadStage1) -> LeadStage2:
         """Enrichit un lead L1 → L2."""
         # Étape 1 — Détection chaîne
         est_chaine, groupe = detecter_chaine(lead.nom)
         if est_chaine:
-            return LeadStage2(
-                **lead.model_dump(),
-                flag_chaine=True,
-                note_chaine=f"{note_chaine_standard()} Groupe identifié : {groupe}.",
-                match_incertain=True,  # Pas de SIREN local fiable
+            return self._appliquer_filtres(
+                LeadStage2(
+                    **lead.model_dump(),
+                    flag_chaine=True,
+                    note_chaine=f"{note_chaine_standard()} Groupe identifié : {groupe}.",
+                    match_incertain=True,  # Pas de SIREN local fiable
+                )
             )
 
         # Étape 2 — Recherche API
@@ -107,18 +128,22 @@ class EnricheurStage2:
 
         # Étape 4 — Mapping
         if best is None:
-            return LeadStage2(
-                **lead.model_dump(),
-                score_matching=0.0,
-                match_incertain=True,
+            return self._appliquer_filtres(
+                LeadStage2(
+                    **lead.model_dump(),
+                    score_matching=0.0,
+                    match_incertain=True,
+                )
             )
 
         l2_fields = candidat_to_l2_fields(best)
-        return LeadStage2(
-            **lead.model_dump(),
-            **l2_fields,
-            score_matching=round(score, 1),
-            match_incertain=incertain,
+        return self._appliquer_filtres(
+            LeadStage2(
+                **lead.model_dump(),
+                **l2_fields,
+                score_matching=round(score, 1),
+                match_incertain=incertain,
+            )
         )
 
     def enrichir(self, leads: list[LeadStage1]) -> list[LeadStage2]:
@@ -172,11 +197,16 @@ class EnricheurStage2:
             "  Match incertain : %d (%.0f%%)\n"
             "  Pas de SIREN trouvé : %d (%.0f%%)\n"
             "  Chaînes flaguées : %d (%.0f%%)",
-            len(leads), duree,
-            nb_match_ok, 100 * nb_match_ok / max(1, len(leads)),
-            nb_match_incertain, 100 * nb_match_incertain / max(1, len(leads)),
-            nb_no_match, 100 * nb_no_match / max(1, len(leads)),
-            nb_chaines, 100 * nb_chaines / max(1, len(leads)),
+            len(leads),
+            duree,
+            nb_match_ok,
+            100 * nb_match_ok / max(1, len(leads)),
+            nb_match_incertain,
+            100 * nb_match_incertain / max(1, len(leads)),
+            nb_no_match,
+            100 * nb_no_match / max(1, len(leads)),
+            nb_chaines,
+            100 * nb_chaines / max(1, len(leads)),
         )
 
         return leads_l2

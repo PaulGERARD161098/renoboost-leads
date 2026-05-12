@@ -1,4 +1,4 @@
-﻿"""Export CSV des leads (étages 1, 2, 3) + sauvegardes horodatées."""
+"""Export CSV des leads (étages 1, 2, 3) + sauvegardes horodatées."""
 
 from __future__ import annotations
 
@@ -55,10 +55,13 @@ COLONNES_STAGE2 = COLONNES_STAGE1 + [
     "dirigeant_qualite",
     "adresse_normalisee",
     "date_creation",
+    "nb_etablissements",
     "score_matching",
     "match_incertain",
     "flag_chaine",
     "note_chaine",
+    "hors_filtre_entreprise",
+    "raison_hors_filtre",
 ]
 
 COLONNES_STAGE3 = COLONNES_STAGE2 + [
@@ -131,6 +134,35 @@ def export_stage3_csv(leads: list[LeadStage3], output_path: Path) -> Path:
     return p
 
 
+def export_stage3_csv_separe_hors_filtre(
+    leads: list[LeadStage3], output_path: Path
+) -> tuple[Path, Path | None]:
+    """Export L3 séparant qualifiés et hors-filtre (B3 "pas de mélange").
+
+    Si aucun lead n'est flagué `hors_filtre_entreprise`, n'écrit qu'un seul
+    CSV (= comportement historique). Sinon écrit aussi
+    `<output_path.stem>_hors_filtre<suffix>` avec les leads flagués.
+
+    Returns:
+        (chemin_qualifies, chemin_hors_filtre_ou_None)
+    """
+    qualifies = [lead for lead in leads if not lead.hors_filtre_entreprise]
+    hors_filtre = [lead for lead in leads if lead.hors_filtre_entreprise]
+
+    p_main = _ecrire_csv([lead.model_dump() for lead in qualifies], COLONNES_STAGE3, output_path)
+    logger.info("CSV étage 3 (qualifiés) écrit : %s (%d leads)", p_main, len(qualifies))
+
+    if not hors_filtre:
+        return p_main, None
+
+    hf_path = output_path.with_name(f"{output_path.stem}_hors_filtre{output_path.suffix}")
+    p_hf = _ecrire_csv([lead.model_dump() for lead in hors_filtre], COLONNES_STAGE3, hf_path)
+    logger.info(
+        "CSV étage 3 (hors filtre entreprise) écrit : %s (%d leads)", p_hf, len(hors_filtre)
+    )
+    return p_main, p_hf
+
+
 # ════════════════════════════════════════════════════════════════
 # Backup horodaté
 # ════════════════════════════════════════════════════════════════
@@ -183,11 +215,11 @@ def generer_registre_rgpd(
 
 **Date** : {datetime.now().isoformat()}
 **Client / Campagne** : {client_name}
-**Étages exécutés** : {', '.join(f'L{i}' for i in etages_executes)}
+**Étages exécutés** : {", ".join(f"L{i}" for i in etages_executes)}
 **Nombre de leads finaux** : {nb_leads}
 
 ## Sources des données
-{chr(10).join(f'- {s}' for s in sources)}
+{chr(10).join(f"- {s}" for s in sources)}
 
 ## Finalité du traitement
 Prospection commerciale B2B (article 6.1.f RGPD — intérêt légitime).
@@ -231,14 +263,10 @@ def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
     if not csv_path.exists():
         parent = csv_path.parent
         if not parent.exists():
-            raise FileNotFoundError(
-                f"Dossier de session introuvable : {parent}"
-            )
+            raise FileNotFoundError(f"Dossier de session introuvable : {parent}")
         autres = sorted(f.name for f in parent.iterdir() if f.is_file())
         if not autres:
-            raise FileNotFoundError(
-                f"CSV étage 1 introuvable (dossier vide) : {csv_path}"
-            )
+            raise FileNotFoundError(f"CSV étage 1 introuvable (dossier vide) : {csv_path}")
         raise FileNotFoundError(
             f"CSV étage 1 introuvable : {csv_path}\n"
             f"Fichiers presents dans le dossier : {', '.join(autres)}"
@@ -271,10 +299,17 @@ def lire_stage1_csv(csv_path: Path) -> list[LeadStage1]:
                 data["extraction_date"] = datetime.now()
             # vide → None pour str
             for col in (
-                "adresse", "ville", "code_postal", "pays",
-                "telephone", "site_web", "type_principal",
-                "statut_business", "google_maps_url",
-                "secteur_recherche", "requete_origine",
+                "adresse",
+                "ville",
+                "code_postal",
+                "pays",
+                "telephone",
+                "site_web",
+                "type_principal",
+                "statut_business",
+                "google_maps_url",
+                "secteur_recherche",
+                "requete_origine",
             ):
                 if data.get(col) == "":
                     data[col] = None
@@ -301,25 +336,32 @@ def lire_stage2_csv(csv_path: Path) -> list[LeadStage2]:
         match_incertain_raw = row.get("match_incertain") or ""
         flag_chaine_raw = row.get("flag_chaine") or ""
         statut_actif_raw = row.get("statut_actif") or ""
+        nb_etabs_raw = row.get("nb_etablissements") or ""
+        hors_filtre_raw = row.get("hors_filtre_entreprise") or ""
 
-        leads_l2.append(LeadStage2(
-            **l1.model_dump(),
-            siren=row.get("siren") or None,
-            siret=row.get("siret") or None,
-            code_naf=row.get("code_naf") or None,
-            libelle_naf=row.get("libelle_naf") or None,
-            forme_juridique=row.get("forme_juridique") or None,
-            statut_actif=(statut_actif_raw == "VRAI") if statut_actif_raw else None,
-            tranche_effectif=row.get("tranche_effectif") or None,
-            libelle_effectif=row.get("libelle_effectif") or None,
-            dirigeant_nom=row.get("dirigeant_nom") or None,
-            dirigeant_prenom=row.get("dirigeant_prenom") or None,
-            dirigeant_qualite=row.get("dirigeant_qualite") or None,
-            adresse_normalisee=row.get("adresse_normalisee") or None,
-            date_creation=row.get("date_creation") or None,
-            score_matching=float(score) if score not in (None, "", "None") else None,
-            match_incertain=(match_incertain_raw == "VRAI"),
-            flag_chaine=(flag_chaine_raw == "VRAI"),
-            note_chaine=row.get("note_chaine") or None,
-        ))
+        leads_l2.append(
+            LeadStage2(
+                **l1.model_dump(),
+                siren=row.get("siren") or None,
+                siret=row.get("siret") or None,
+                code_naf=row.get("code_naf") or None,
+                libelle_naf=row.get("libelle_naf") or None,
+                forme_juridique=row.get("forme_juridique") or None,
+                statut_actif=(statut_actif_raw == "VRAI") if statut_actif_raw else None,
+                tranche_effectif=row.get("tranche_effectif") or None,
+                libelle_effectif=row.get("libelle_effectif") or None,
+                dirigeant_nom=row.get("dirigeant_nom") or None,
+                dirigeant_prenom=row.get("dirigeant_prenom") or None,
+                dirigeant_qualite=row.get("dirigeant_qualite") or None,
+                adresse_normalisee=row.get("adresse_normalisee") or None,
+                date_creation=row.get("date_creation") or None,
+                nb_etablissements=(int(nb_etabs_raw) if nb_etabs_raw not in ("", "None") else None),
+                score_matching=float(score) if score not in (None, "", "None") else None,
+                match_incertain=(match_incertain_raw == "VRAI"),
+                flag_chaine=(flag_chaine_raw == "VRAI"),
+                note_chaine=row.get("note_chaine") or None,
+                hors_filtre_entreprise=(hors_filtre_raw == "VRAI"),
+                raison_hors_filtre=row.get("raison_hors_filtre") or None,
+            )
+        )
     return leads_l2

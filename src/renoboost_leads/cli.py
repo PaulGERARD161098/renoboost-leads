@@ -22,6 +22,7 @@ from .exporter import (
     export_stage1_csv,
     export_stage2_csv,
     export_stage3_csv,
+    export_stage3_csv_separe_hors_filtre,
     generer_registre_rgpd,
     lire_stage1_csv,
     lire_stage2_csv,
@@ -83,6 +84,7 @@ def _trouver_dossier_existant(client_name: str) -> Path | None:
     BUG B2 fix : matching tolerant (case-insensitive, accents, espaces vs underscores).
     """
     import unicodedata
+
     base = PROJECT_ROOT / "data" / "output"
     if not base.exists():
         return None
@@ -338,14 +340,14 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
             csv_l1 = from_csv_path or (output_dir / "etage1_decouverte.csv")
             if not csv_l1.exists():
                 console.print(
-                    f"[red]✗ Impossible de lancer L2 : CSV L1 introuvable "
-                    f"({csv_l1}).[/red]"
+                    f"[red]✗ Impossible de lancer L2 : CSV L1 introuvable ({csv_l1}).[/red]"
                 )
                 sys.exit(2)
             leads_l1 = lire_stage1_csv(csv_l1)
             logger.info("L1 chargé depuis CSV existant : %d leads", len(leads_l1))
 
         leads_l2 = _executer_stage2(
+            cfg=cfg,
             leads_l1=leads_l1,
             cache=cache,
             output_dir=output_dir,
@@ -383,9 +385,12 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
 
     # ─── Finalisation : registre RGPD + stats ───
     nb_leads_finaux = (
-        len(leads_l3) if leads_l3 is not None
-        else len(leads_l2) if leads_l2 is not None
-        else len(leads_l1) if leads_l1 is not None
+        len(leads_l3)
+        if leads_l3 is not None
+        else len(leads_l2)
+        if leads_l2 is not None
+        else len(leads_l1)
+        if leads_l1 is not None
         else 0
     )
     stats.leads_finaux = nb_leads_finaux
@@ -413,6 +418,7 @@ def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
     """Exécute l'étage 1 et retourne la liste des leads L1."""
     if dry_run:
         from .models import LeadStage1
+
         leads = [
             LeadStage1(
                 place_id=f"FAKE_{i}",
@@ -445,15 +451,17 @@ def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
 
         duree = (datetime.now(timezone.utc) - t0).total_seconds()
         stats.cout_total_eur += budget.cout_actuel_eur
-        stats.etages_executes.append(StageStats(
-            nom_etage="stage1_decouverte",
-            duree_secondes=duree,
-            nb_appels_api=budget.nb_appels,
-            nb_succes=len(leads),
-            nb_echecs=0,
-            cout_eur_estime=budget.cout_actuel_eur,
-            leads_collectes=len(leads),
-        ))
+        stats.etages_executes.append(
+            StageStats(
+                nom_etage="stage1_decouverte",
+                duree_secondes=duree,
+                nb_appels_api=budget.nb_appels,
+                nb_succes=len(leads),
+                nb_echecs=0,
+                cout_eur_estime=budget.cout_actuel_eur,
+                leads_collectes=len(leads),
+            )
+        )
 
     csv_path = output_dir / "etage1_decouverte.csv"
     export_stage1_csv(leads, csv_path)
@@ -462,7 +470,7 @@ def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
     return leads
 
 
-def _executer_stage2(leads_l1, cache, output_dir, stats):
+def _executer_stage2(cfg, leads_l1, cache, output_dir, stats):
     """Exécute l'étage 2."""
     csv_path = output_dir / "etage2_entreprises.csv"
     t0 = datetime.now(timezone.utc)
@@ -476,6 +484,7 @@ def _executer_stage2(leads_l1, cache, output_dir, stats):
         client=rech_client,
         cache=cache,
         callback_save_incremental=callback_save,
+        filtres_entreprise=cfg.filtres_entreprise,
     )
 
     leads_l2 = enricheur.enrichir(leads_l1)
@@ -487,19 +496,21 @@ def _executer_stage2(leads_l1, cache, output_dir, stats):
 
     # Stats
     stats_e2 = enricheur.stats_l2(leads_l2)
-    stats.etages_executes.append(StageStats(
-        nom_etage="stage2_entreprises",
-        duree_secondes=duree,
-        nb_appels_api=stats_e2.get("total", 0) - stats_e2.get("chaines", 0),
-        nb_succes=stats_e2.get("siren_trouve", 0),
-        nb_echecs=(
-            stats_e2.get("total", 0)
-            - stats_e2.get("siren_trouve", 0)
-            - stats_e2.get("chaines", 0)
-        ),
-        cout_eur_estime=0.0,
-        leads_collectes=len(leads_l2),
-    ))
+    stats.etages_executes.append(
+        StageStats(
+            nom_etage="stage2_entreprises",
+            duree_secondes=duree,
+            nb_appels_api=stats_e2.get("total", 0) - stats_e2.get("chaines", 0),
+            nb_succes=stats_e2.get("siren_trouve", 0),
+            nb_echecs=(
+                stats_e2.get("total", 0)
+                - stats_e2.get("siren_trouve", 0)
+                - stats_e2.get("chaines", 0)
+            ),
+            cout_eur_estime=0.0,
+            leads_collectes=len(leads_l2),
+        )
+    )
 
     console.print(
         f"\n[green]✓ Étage 2 : {len(leads_l2)} leads enrichis → {csv_path.name}[/green]\n"
@@ -528,25 +539,34 @@ def _executer_stage3(leads_l2, cache, output_dir, stats):
     leads_l3 = enricheur.enrichir(leads_l2)
     duree = (datetime.now(timezone.utc) - t0).total_seconds()
 
-    export_stage3_csv(leads_l3, csv_path)
-    backup_csv(csv_path)
+    # B3 : split qualifiés / hors-filtre si au moins un lead flagué.
+    # Sinon, comportement historique (un seul CSV).
+    p_main, p_hf = export_stage3_csv_separe_hors_filtre(leads_l3, csv_path)
+    backup_csv(p_main)
+    if p_hf is not None:
+        backup_csv(p_hf)
 
     stats_e3 = enricheur.stats_l3(leads_l3)
-    stats.etages_executes.append(StageStats(
-        nom_etage="stage3_contacts",
-        duree_secondes=duree,
-        nb_appels_api=stats_e3.get("scrape_au_moins_un_email", 0),
-        nb_succes=stats_e3.get("au_moins_un_email", 0),
-        nb_echecs=stats_e3.get("total", 0) - stats_e3.get("au_moins_un_email", 0),
-        cout_eur_estime=0.0,
-        leads_collectes=len(leads_l3),
-    ))
+    stats.etages_executes.append(
+        StageStats(
+            nom_etage="stage3_contacts",
+            duree_secondes=duree,
+            nb_appels_api=stats_e3.get("scrape_au_moins_un_email", 0),
+            nb_succes=stats_e3.get("au_moins_un_email", 0),
+            nb_echecs=stats_e3.get("total", 0) - stats_e3.get("au_moins_un_email", 0),
+            cout_eur_estime=0.0,
+            leads_collectes=len(leads_l3),
+        )
+    )
 
+    nb_hors_filtre = sum(1 for lead in leads_l3 if lead.hors_filtre_entreprise)
+    msg_hf = f" — Hors filtre entreprise (CSV séparé) : {nb_hors_filtre}" if nb_hors_filtre else ""
     console.print(
         f"\n[green]✓ Étage 3 : {len(leads_l3)} leads → {csv_path.name}[/green]\n"
         f"   Scraping réussi : {stats_e3.get('scrape_pct', 0)}% — "
         f"Au moins 1 email (scrapé ou pattern) : {stats_e3.get('au_moins_un_pct', 0)}% — "
         f"Patterns nominatifs : {stats_e3.get('dirigeant_pattern_pct', 0)}%"
+        f"{msg_hf}"
     )
     return leads_l3
 

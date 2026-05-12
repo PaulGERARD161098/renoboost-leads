@@ -2,6 +2,45 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.4.0] — 2026-05-12 — Sprint 1 : robustesse + filtres entreprise
+
+> Note : version 0.3.0 sautée (tag déjà posé sur un commit antérieur de housekeeping).
+
+### Added — Bloc 3 : filtres entreprise paramétrables (`filtres_entreprise`)
+- Nouvelle section YAML avec **6 critères** combinables : `effectif_min/max` (user-friendly),
+  `tranche_effectif_inclus` (codes INSEE bruts, prioritaire), `naf_inclus`/`naf_exclus`
+  (préfixe libre), `forme_juridique_inclus`/`_exclus` (mix labels SAS/SARL et codes INSEE),
+  `multi_sites_only`.
+- Stratégie **flag-not-drop** : les leads hors filtres restent dans le pipeline et passent L3
+  (scraping/patterns), avec colonnes `hors_filtre_entreprise` + `raison_hors_filtre`.
+- Export L3 séparé : `etage3_contacts.csv` (qualifiés) + `etage3_contacts_hors_filtre.csv`
+  (flagués) — un seul CSV si aucun filtre actif (backwards-compat).
+- Nouvelle colonne L2 `nb_etablissements` (compte exact issu de SIRENE).
+
+### Fixed
+- **B5** filtre géographique strict post-Places — Google retournait des leads hors-département
+  cible. `lead_dans_zone()` rejette désormais tout CP qui n'appartient pas à `zone.codes`,
+  avec gestion explicite Corse 2A/2B via préfixes CP.
+- **B6** matching SIREN sur noms commerciaux verbeux — les noms Places enrichis d'une
+  description technique (ex "SMI mécanique et outillage de précision...") ne matchaient plus
+  la raison sociale courte INSEE. Nouveau `_nettoyer_nom_commercial()` coupe au 1er mot
+  descriptif (mécanique, outillage, services, atelier, ...) avant Levenshtein.
+- **B7** chargement `.env` dynamique via `dotenv.find_dotenv(usecwd=True)` — le chemin figé
+  `PROJECT_ROOT/.env` échouait sur installs non-éditables / CWD différent. Plus besoin
+  d'exporter manuellement les vars d'env.
+
+### Changed
+- `EnricheurStage2.__init__` accepte un paramètre optionnel `filtres_entreprise`.
+- `LeadStage2` enrichi de 3 colonnes (`nb_etablissements`, `hors_filtre_entreprise`,
+  `raison_hors_filtre`).
+- `_template.yaml` documente la nouvelle section `filtres_entreprise`.
+- README enrichi : section "Démo en 30 secondes" + bloc filtres entreprise.
+
+### Tested
+- **94 nouveaux tests** sur la branche (B5 +18, B6 +15, B7 +8, B3 +53).
+- Total : **173 tests verts**, ruff clean, compatible Python 3.10/3.11/3.12/3.13.
+
+
 ## [0.2.0] — 2026-05-01 — Livraison L2 + L3
 
 ### Added

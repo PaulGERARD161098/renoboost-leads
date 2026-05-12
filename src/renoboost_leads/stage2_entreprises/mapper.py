@@ -65,6 +65,24 @@ def extraire_adresse_normalisee(candidat: dict[str, Any]) -> str | None:
     return " ".join(parts).strip()
 
 
+def _extraire_nb_etablissements(candidat: dict[str, Any]) -> int | None:
+    """Extrait le nombre d'établissements de l'unité légale (B3 multi-sites).
+
+    L'API expose deux champs possibles : `nombre_etablissements` (officiel) et
+    parfois une liste `matching_etablissements`. On préfère l'entier officiel,
+    puis on retombe sur le len de la liste si fourni.
+    """
+    raw = candidat.get("nombre_etablissements")
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, str) and raw.isdigit():
+        return int(raw)
+    etabs = candidat.get("matching_etablissements")
+    if isinstance(etabs, list):
+        return len(etabs) or None
+    return None
+
+
 def candidat_to_l2_fields(candidat: dict[str, Any]) -> dict[str, Any]:
     """Convertit un résultat API en dict de champs L2 prêts à fusionner avec LeadStage1."""
     nom_dir, prenom_dir, qualite_dir = extraire_dirigeant_principal(candidat)
@@ -74,8 +92,7 @@ def candidat_to_l2_fields(candidat: dict[str, Any]) -> dict[str, Any]:
         "siren": candidat.get("siren"),
         "siret": _safe_get(siege, "siret") or candidat.get("siret"),
         "code_naf": (
-            _safe_get(candidat, "activite_principale")
-            or _safe_get(siege, "activite_principale")
+            _safe_get(candidat, "activite_principale") or _safe_get(siege, "activite_principale")
         ),
         "libelle_naf": (
             _safe_get(candidat, "libelle_activite_principale")
@@ -90,4 +107,5 @@ def candidat_to_l2_fields(candidat: dict[str, Any]) -> dict[str, Any]:
         "dirigeant_qualite": qualite_dir,
         "adresse_normalisee": extraire_adresse_normalisee(candidat),
         "date_creation": candidat.get("date_creation"),
+        "nb_etablissements": _extraire_nb_etablissements(candidat),
     }

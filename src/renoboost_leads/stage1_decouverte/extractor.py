@@ -17,7 +17,7 @@ from typing import Any
 from ..common.budget_guard import BudgetExceededError
 from ..common.cache import SessionCache
 from ..common.logger import get_logger
-from ..models import CampaignConfig, LeadStage1
+from ..models import CampaignConfig, LeadStage1, Zone
 from .geo_grid import grille_pour_zone
 from .mapper import place_to_lead
 from .places_client import PlacesAPIError, PlacesClient
@@ -27,21 +27,96 @@ logger = get_logger(__name__)
 
 # Types Places "natifs" : on peut utiliser Nearby Search (plus précis qu'un Text Search)
 _TYPES_PLACES_NATIFS = {
-    "restaurant", "lodging", "hospital", "supermarket", "shopping_mall",
-    "movie_theater", "bowling_alley", "car_dealer", "gym", "spa",
-    "amusement_park", "tourist_attraction", "event_venue",
+    "restaurant",
+    "lodging",
+    "hospital",
+    "supermarket",
+    "shopping_mall",
+    "movie_theater",
+    "bowling_alley",
+    "car_dealer",
+    "gym",
+    "spa",
+    "amusement_park",
+    "tourist_attraction",
+    "event_venue",
 }
+
+
+def _cp_match_departement(cp: str, code_dept: str) -> bool:
+    """Vrai si le code postal `cp` (5 chiffres) appartient au département `code_dept`.
+
+    Métropole uniquement. Cas spécial Corse :
+    - 2A (Corse-du-Sud) : CP commençant par 200 ou 201
+    - 2B (Haute-Corse) : CP commençant par 202..206
+    """
+    if code_dept == "2A":
+        return cp.startswith(("200", "201"))
+    if code_dept == "2B":
+        return cp[:3] in {"202", "203", "204", "205", "206"}
+    return cp.startswith(code_dept)
+
+
+def lead_dans_zone(lead: LeadStage1, zone: Zone) -> tuple[bool, str]:
+    """Vérifie qu'un lead Places appartient bien à la zone cible (filtre B5).
+
+    Stratégie : on compare le `code_postal` extrait par le mapper aux `codes`
+    du YAML. Si le CP est absent ou n'appartient à aucun code, on rejette
+    (Places retourne parfois des leads voisins du département cible).
+
+    Args:
+        lead: Lead issu du mapper Places.
+        zone: Configuration zone du YAML (type + codes).
+
+    Returns:
+        (accepte, raison_si_rejet) — raison vide en cas d'acceptation.
+    """
+    # Types autres que 'departement' : pas encore supportés par grille_pour_zone
+    # → on ne filtre pas ici (laisse les autres filtres faire leur travail).
+    if zone.type != "departement":
+        return True, ""
+
+    cp = lead.code_postal
+    if not cp or len(cp) != 5 or not cp.isdigit():
+        return False, f"hors_zone (cp={cp!r} invalide ou absent)"
+
+    for code in zone.codes:
+        if _cp_match_departement(cp, code):
+            return True, ""
+
+    return False, f"hors_zone (cp={cp} pas dans {zone.codes})"
 
 
 def _est_chaine(nom: str) -> str | None:
     """Détecte les enseignes connues (pour dédup_chaines)."""
     n = nom.lower()
     chaines = {
-        "carrefour", "auchan", "leclerc", "casino", "intermarche", "intermarché",
-        "lidl", "aldi", "monoprix", "franprix", "biocoop", "naturalia",
-        "ibis", "novotel", "mercure", "accor", "kyriad", "campanile",
-        "best western", "holiday inn", "marriott", "hilton",
-        "feu vert", "norauto", "midas", "speedy",
+        "carrefour",
+        "auchan",
+        "leclerc",
+        "casino",
+        "intermarche",
+        "intermarché",
+        "lidl",
+        "aldi",
+        "monoprix",
+        "franprix",
+        "biocoop",
+        "naturalia",
+        "ibis",
+        "novotel",
+        "mercure",
+        "accor",
+        "kyriad",
+        "campanile",
+        "best western",
+        "holiday inn",
+        "marriott",
+        "hilton",
+        "feu vert",
+        "norauto",
+        "midas",
+        "speedy",
     }
     for marque in chaines:
         if marque in n:
@@ -65,6 +140,11 @@ class ExtracteurStage1:
     def _passe_filtres(self, lead: LeadStage1) -> tuple[bool, str]:
         """Retourne (passe, raison_si_rejet)."""
         f = self.config.filtres
+
+        # B5 : filtre géographique strict — rejette les leads hors zone.codes
+        ok_zone, raison_zone = lead_dans_zone(lead, self.config.zone)
+        if not ok_zone:
+            return False, raison_zone
 
         # Statut
         if f.statut_requis != "tout" and lead.statut_business != f.statut_requis:
@@ -238,6 +318,14 @@ class ExtracteurStage1:
                         ok, raison = self._passe_filtres(lead)
                         if not ok:
                             nb_rejets += 1
+                            if raison.startswith("hors_zone"):
+                                logger.info(
+                                    "Rejet %s : %s (cp=%s, ville=%s)",
+                                    lead.nom,
+                                    raison,
+                                    lead.code_postal,
+                                    lead.ville,
+                                )
                             continue
 
                         leads_par_id[lead.place_id] = lead
