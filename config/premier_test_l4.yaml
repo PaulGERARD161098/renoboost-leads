@@ -1,0 +1,43 @@
+# Configuration pour le premier test L4 avec clé Anthropic.
+# 5 leads variés Nord 59 (déjà fabriqués dans data/output/2026-05-13_KEYR_premier-test/).
+#
+# Usage :
+#   1. Coller ANTHROPIC_API_KEY dans .env
+#   2. python -m renoboost_leads.cli run --config config/premier_test_l4.yaml --stages 4 \
+#        --from-csv data/output/2026-05-13_KEYR_premier-test/etage3_contacts.csv
+
+run:
+  client_name: "premier-test-l4"
+  description: "Premier vrai test L4 — 5 leads, Haiku, budget 1 €"
+  campaign_date: "2026-05-13"
+
+stages:
+  enable_stage_1_decouverte: false
+  enable_stage_2_entreprises: false
+  enable_stage_3_contacts: false
+  enable_stage_4_prospection: true
+
+secteurs:
+  - type: "restaurant"
+    query: "placeholder"
+
+zone:
+  type: "departement"
+  codes: ["59"]
+
+filtres:
+  statut_requis: "OPERATIONAL"
+
+claude_scoring:
+  modele: "claude-haiku-4-5"          # ~0.005 €/lead, sûr pour un 1er test
+  seuil_top_lead: 70
+  inclure_pitch: true
+  contexte_client: null               # null = contexte RénoBoost par défaut
+  max_tokens_sortie: 400
+
+volume:
+  cible: 10
+
+# Plafond 1 € = ~200 leads Haiku possibles ; 5 leads = ~0.025 €
+budget:
+  max_eur: 1.0
