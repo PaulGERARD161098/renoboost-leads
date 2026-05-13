@@ -54,3 +54,7 @@ ignore = ["S101"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+markers = [
+    "integration: tests d'intégration qui hit une vraie API (skippés si la clé manque)",
+]
+addopts = "-m 'not integration'"
