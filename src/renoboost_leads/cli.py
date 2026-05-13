@@ -49,6 +49,7 @@ from .stage4_prospection.cache import CacheStage4
 from .stage4_prospection.client import ClaudeClient, ClaudeClientConfig
 from .stage4_prospection.dry_run import ClaudeClientDryRun
 from .stage4_prospection.enricher import EnricheurStage4
+from .veille_immatriculations.cli_veille import veille_group
 
 console = Console()
 
@@ -749,6 +750,10 @@ def resume(session_id: str, stages: str, config_path: Path) -> None:
         from_csv_path=csv_l1,
         dry_run=False,
     )
+
+
+# Sous-groupe veille (immatriculations VE flotte — AAA Data)
+cli.add_command(veille_group)
 
 
 if __name__ == "__main__":
