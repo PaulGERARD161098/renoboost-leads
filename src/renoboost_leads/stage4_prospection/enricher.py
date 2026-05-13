@@ -74,7 +74,13 @@ class EnricheurStage4:
             scoring_erreur=erreur,
         )
 
-    def _enrichir_un_lead(self, lead: LeadStage3) -> LeadStage4:
+    def enrichir_un_lead(self, lead: LeadStage3) -> LeadStage4:
+        """Enrichit un seul lead L3 → L4 (cache lookup + appel client si miss).
+
+        Méthode publique pour permettre un streaming externe (ex: UI Streamlit
+        qui veut afficher une progress bar). Pour l'enrichissement batch
+        standard, utiliser `enrichir(leads)`.
+        """
         # 1) Cache lookup
         if self.cache:
             cached = self.cache.get(lead.place_id, self._cache_key)
@@ -179,7 +185,7 @@ class EnricheurStage4:
                 continue
 
             try:
-                l4 = self._enrichir_un_lead(lead)
+                l4 = self.enrichir_un_lead(lead)
             except BudgetExceededError as e:
                 logger.error("L4 stoppé par budget guard : %s", e)
                 budget_atteint = True

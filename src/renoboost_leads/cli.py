@@ -47,6 +47,7 @@ from .stage3_contacts.enricher import EnricheurStage3
 from .stage3_contacts.scraper import ScraperContact
 from .stage4_prospection.cache import CacheStage4
 from .stage4_prospection.client import ClaudeClient, ClaudeClientConfig
+from .stage4_prospection.dry_run import ClaudeClientDryRun
 from .stage4_prospection.enricher import EnricheurStage4
 
 console = Console()
@@ -414,10 +415,10 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
             leads_l3 = lire_stage3_csv(csv_l3)
             logger.info("L3 chargé depuis CSV existant : %d leads", len(leads_l3))
 
-        if not settings.has_anthropic():
+        if not dry_run and not settings.has_anthropic():
             console.print(
                 "[red]✗ ANTHROPIC_API_KEY manquante.[/red] "
-                "Ajoute-la dans .env pour lancer l'étage 4."
+                "Ajoute-la dans .env, ou relance avec --dry-run pour simuler L4."
             )
             sys.exit(2)
 
@@ -427,10 +428,17 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
             leads_l3=leads_l3,
             output_dir=output_dir,
             stats=stats,
+            dry_run=dry_run,
         )
-        sources_rgpd.append(
-            "Anthropic Claude API — scoring qualitatif (sous-traitant — voir RGPD_COMPLIANCE.md)"
-        )
+        if dry_run:
+            sources_rgpd.append(
+                "Étage 4 simulé (dry-run) — aucune donnée envoyée à Anthropic"
+            )
+        else:
+            sources_rgpd.append(
+                "Anthropic Claude API — scoring qualitatif "
+                "(sous-traitant — voir RGPD_COMPLIANCE.md)"
+            )
 
     # ─── Finalisation : registre RGPD + stats ───
     nb_leads_finaux = (
@@ -622,28 +630,41 @@ def _executer_stage3(leads_l2, cache, output_dir, stats):
     return leads_l3
 
 
-def _executer_stage4(cfg, settings, leads_l3, output_dir, stats):
-    """Exécute l'étage 4 (scoring Claude + pitch)."""
+def _executer_stage4(cfg, settings, leads_l3, output_dir, stats, dry_run: bool = False):
+    """Exécute l'étage 4 (scoring Claude + pitch).
+
+    Si `dry_run=True`, on utilise un client factice (`ClaudeClientDryRun`)
+    qui simule des scores sans appeler l'API. Permet de valider le flux
+    bout-en-bout sans clé.
+    """
     csv_path = output_dir / "etage4_prospection.csv"
     t0 = datetime.now(timezone.utc)
 
     def callback_save(leads_partial):
         export_stage4_csv(leads_partial, csv_path)
 
-    # Budget guard partagé avec le run global (récupère ce qui a été consommé)
-    budget = BudgetGuard(plafond_eur=max(0.01, cfg.budget.max_eur - stats.cout_total_eur))
-    limiter = RateLimiter(settings.max_requests_per_minute)
-    api_key = settings.anthropic_api_key.get_secret_value()
-
-    claude_client = ClaudeClient(
-        ClaudeClientConfig(
-            api_key=api_key,
+    if dry_run:
+        console.print("[yellow]⚠  L4 en mode dry-run (aucun appel à Anthropic).[/yellow]")
+        claude_client = ClaudeClientDryRun(
             modele=cfg.claude_scoring.modele,
-            max_tokens_sortie=cfg.claude_scoring.max_tokens_sortie,
-            rate_limiter=limiter,
-            budget=budget,
+            inclure_pitch=cfg.claude_scoring.inclure_pitch,
         )
-    )
+    else:
+        # Budget guard partagé avec le run global (récupère ce qui a été consommé)
+        budget = BudgetGuard(
+            plafond_eur=max(0.01, cfg.budget.max_eur - stats.cout_total_eur)
+        )
+        limiter = RateLimiter(settings.max_requests_per_minute)
+        api_key = settings.anthropic_api_key.get_secret_value()
+        claude_client = ClaudeClient(
+            ClaudeClientConfig(
+                api_key=api_key,
+                modele=cfg.claude_scoring.modele,
+                max_tokens_sortie=cfg.claude_scoring.max_tokens_sortie,
+                rate_limiter=limiter,
+                budget=budget,
+            )
+        )
     cache_l4 = CacheStage4(output_dir / "cache_l4.sqlite")
     enricher = EnricheurStage4(
         client=claude_client,

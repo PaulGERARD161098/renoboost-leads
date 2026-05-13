@@ -247,7 +247,7 @@ elif csv_l3.exists():
                 leads_l4: list = []
                 for i, lead in enumerate(leads_l3, start=1):
                     try:
-                        leads_l4.append(enricher._enrichir_un_lead(lead))
+                        leads_l4.append(enricher.enrichir_un_lead(lead))
                     except Exception as e:  # noqa: BLE001
                         status.error(f"Erreur sur {lead.nom} : {e}")
                         break
