@@ -37,7 +37,9 @@ from ..stage4_prospection.dry_run import ClaudeClientDryRun
 from ..stage4_prospection.enricher import EnricheurStage4
 from .adaptateur_lead_l2 import lignaaa_vers_lead_stage1
 from .etat_historique import EtatHistoriqueVE
+from .exporter_veille import export_veille_csv
 from .filtre_ve_flotte import filtrer_lignes_aaa
+from .mailer import ConfigSMTP, ResumeVeille, envoyer_resume_veille
 from .models import LigneAAA, VeilleConfig
 from .parser_aaa import lire_csv_aaa
 
@@ -76,6 +78,9 @@ class VeilleRunConfig:
     anthropic_api_key: str | None = None
     dry_run_l4: bool = False  # True = mock Claude, pas d'appel API
     rate_limit_per_min: int = 60
+    # Email post-run (None = pas d'envoi). Seuls les top_leads sont mis en avant
+    # dans le résumé ; le CSV joint contient TOUS les leads.
+    smtp_config: ConfigSMTP | None = None
 
 
 def _lead_stage4_vers_lead_veille(
@@ -229,6 +234,10 @@ def executer_cycle_veille(
     resultat.leads = leads_veille
     resultat.nb_top_leads = sum(1 for lv in leads_veille if lv.top_lead)
 
+    # 9. Export CSV final (avant l'envoi mail pour pouvoir l'attacher)
+    csv_final = output_dir / "veille_leads.csv"
+    export_veille_csv(leads_veille, csv_final)
+
     duree = time.monotonic() - t0
     logger.info(
         "Veille terminée : %d top leads / %d VE flotte (%d nouveaux, %d déjà vus) "
@@ -240,4 +249,47 @@ def executer_cycle_veille(
         duree,
         resultat.cout_l4_eur,
     )
+
+    # 10. Envoi email post-run (si SMTP configuré)
+    if config.smtp_config is not None:
+        try:
+            _envoyer_resume(resultat, csv_final, config.smtp_config)
+            logger.info("Résumé veille envoyé à %d destinataire(s)",
+                        len(config.smtp_config.destinataires))
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Envoi email post-run échoué : %s", e)
+
     return resultat
+
+
+def _envoyer_resume(
+    resultat: ResultatVeille, csv_final: Path, smtp_config: ConfigSMTP
+) -> None:
+    """Construit ResumeVeille à partir du ResultatVeille et envoie."""
+    extraits = [
+        {
+            "nom": lv.nom or "?",
+            "siren": lv.siren or "?",
+            "score": str(lv.score_interet) if lv.score_interet is not None else "—",
+            "raison": (lv.raison_score or "")[:120],
+            "pitch": (lv.pitch_propose or "")[:200],
+        }
+        for lv in sorted(
+            resultat.leads,
+            key=lambda lv: lv.score_interet or 0,
+            reverse=True,
+        )
+        if lv.top_lead
+    ]
+    resume = ResumeVeille(
+        date_run=resultat.date_run,
+        nb_lignes_brutes=resultat.nb_lignes_brutes,
+        nb_ve_flotte=resultat.nb_ve_flotte,
+        nb_nouveaux=resultat.nb_nouveaux,
+        nb_deja_vus=resultat.nb_deja_vus,
+        nb_top_leads=resultat.nb_top_leads,
+        cout_l4_eur=resultat.cout_l4_eur,
+        chemin_csv=csv_final,
+        extraits_top=extraits,
+    )
+    envoyer_resume_veille(smtp_config, resume)

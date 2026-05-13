@@ -75,6 +75,15 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")
     log_format: Literal["json", "text"] = Field(default="json")
 
+    # ─── Veille — SMTP (notification email post-run) ───
+    smtp_host: str | None = Field(default=None)
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: str | None = Field(default=None)
+    smtp_password: SecretStr | None = Field(default=None)
+    smtp_from: str | None = Field(default=None)
+    smtp_destinataires: str = Field(default="")  # CSV séparé par virgules
+    smtp_use_tls: bool = Field(default=True)
+
     @field_validator("google_places_api_key")
     @classmethod
     def _validate_google_key_format(cls, v: SecretStr) -> SecretStr:
@@ -97,6 +106,22 @@ class Settings(BaseSettings):
         return self.anthropic_api_key is not None and bool(
             self.anthropic_api_key.get_secret_value()
         )
+
+    def has_smtp(self) -> bool:
+        """SMTP utilisable (host + user + password + from + au moins 1 dest)."""
+        return all(
+            [
+                self.smtp_host,
+                self.smtp_user,
+                self.smtp_password and self.smtp_password.get_secret_value(),
+                self.smtp_from,
+                self.smtp_destinataires.strip(),
+            ]
+        )
+
+    def smtp_destinataires_list(self) -> list[str]:
+        """Renvoie la liste de destinataires nettoyée."""
+        return [d.strip() for d in self.smtp_destinataires.split(",") if d.strip()]
 
     def has_google_places(self) -> bool:
         return bool(self.google_places_api_key.get_secret_value())

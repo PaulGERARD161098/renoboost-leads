@@ -12,7 +12,7 @@ from ..common.logger import setup_logger
 from ..config_loader import load_campaign_config
 from ..models import ClaudeScoring, FiltresEntreprise
 from ..settings import PROJECT_ROOT, get_settings
-from .exporter_veille import export_veille_csv
+from .mailer import ConfigSMTP
 from .models import VeilleConfig
 from .pipeline_veille import VeilleRunConfig, executer_cycle_veille
 
@@ -60,12 +60,18 @@ def veille_group() -> None:
     is_flag=True,
     help="Simulation L4 (ClaudeClientDryRun) — pas d'appel Anthropic, scores factices.",
 )
+@click.option(
+    "--no-email",
+    is_flag=True,
+    help="Désactive l'envoi email post-run même si SMTP est configuré dans .env.",
+)
 def veille_run(
     fichier_aaa: Path,
     config_path: Path | None,
     source: str,
     budget_eur: float,
     dry_run: bool,
+    no_email: bool,
 ) -> None:
     """Lance un cycle de veille sur un CSV AAA Data."""
     settings = get_settings()
@@ -97,6 +103,18 @@ def veille_run(
 
     setup_logger(output_dir=output_dir, level=settings.log_level)
 
+    smtp_config: ConfigSMTP | None = None
+    if settings.has_smtp() and not no_email:
+        smtp_config = ConfigSMTP(
+            host=settings.smtp_host,
+            port=settings.smtp_port,
+            user=settings.smtp_user,
+            password=settings.smtp_password.get_secret_value(),
+            expediteur=settings.smtp_from,
+            destinataires=settings.smtp_destinataires_list(),
+            use_tls=settings.smtp_use_tls,
+        )
+
     run_config = VeilleRunConfig(
         source_veille=source,
         veille_config=VeilleConfig(),
@@ -107,6 +125,7 @@ def veille_run(
             settings.anthropic_api_key.get_secret_value() if settings.has_anthropic() else None
         ),
         dry_run_l4=dry_run,
+        smtp_config=smtp_config,
     )
 
     console.print(
@@ -119,9 +138,7 @@ def veille_run(
         output_dir=output_dir,
         config=run_config,
     )
-
-    csv_final = output_dir / "veille_leads.csv"
-    export_veille_csv(resultat.leads, csv_final)
+    csv_final = output_dir / "veille_leads.csv"  # déjà écrit par le pipeline
 
     console.print(
         f"\n[green]✓ Veille terminée[/green]\n"
