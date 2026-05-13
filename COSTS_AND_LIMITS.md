@@ -34,11 +34,25 @@
 
 ### Étage 4 — Anthropic Claude API
 
-| Modèle | Coût/lead (~500 tokens entrée + 200 sortie) |
-|---|---|
-| Haiku 4.5 | 0.005 € |
-| Sonnet 4.6 (recommandé) | 0.02 € |
-| Opus 4.7 | 0.10 € |
+Tarifs mai 2026 (USD → EUR au taux 0.93) :
+
+| Modèle | Prix input ($/MTok) | Prix output ($/MTok) | Coût/lead (~500 in + 200 out) |
+|---|---|---|---|
+| Haiku 4.5 (défaut) | 0.80 | 4.00 | **~0.005 €** |
+| Sonnet 4.6 | 3.00 | 15.00 | **~0.02 €** |
+
+→ Le modèle est paramétré dans `config/<client>.yaml` :
+
+```yaml
+claude_scoring:
+  modele: "claude-haiku-4-5"      # ou "claude-sonnet-4-6"
+  seuil_top_lead: 70
+  inclure_pitch: true             # false = -30% tokens out
+```
+
+**Cache L4** : un score reste valide tant que `prompt_version`, `modele`,
+`contexte_client` et `inclure_pitch` ne changent pas. Un re-run identique
+coûte 0 € (cache hit).
 
 ## Estimations par taille de run
 

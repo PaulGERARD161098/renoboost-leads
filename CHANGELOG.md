@@ -2,6 +2,53 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.5.0] — 2026-05-13 — Sprint 2 : L4 (scoring Claude) + UI Streamlit
+
+### Added — Étage 4 : scoring d'intérêt + pitch via Claude
+- Nouveau module `stage4_prospection/` avec :
+  - `prompt_template.py` : prompt versionné (`PROMPT_VERSION="v1"`) + contexte
+    `CONTEXTE_CLIENT_DEFAUT` (RénoBoost), override via `contexte_client` YAML/UI.
+  - `client.py` : wrapper SDK Anthropic (retry + budget guard + parsing JSON strict +
+    calcul coût € à partir des tokens).
+  - `cache.py` : cache SQLite séparé (`cache_l4.sqlite`) avec invalidation auto sur
+    changement (`prompt_version`, `modele`, `contexte_client`, `inclure_pitch`).
+  - `enricher.py` : orchestrateur L3 → L4 avec sauvegarde incrémentale tous les 20 leads,
+    gestion d'erreur granulaire (parse / API / budget) sans perte de lead.
+- Nouvelle section YAML `claude_scoring` (modèle, seuil top_lead, inclure_pitch,
+  contexte_client custom, max_tokens_sortie).
+- 6 nouvelles colonnes L4 : `score_interet` (0-100), `raison_score`, `pitch_propose`,
+  `top_lead`, `scoring_modele`, `scoring_erreur`.
+- CLI : `--stages 4` câblé dans `run`, fonction `_executer_stage4`,
+  `export_stage4_csv` / `lire_stage4_csv` + `lire_stage3_csv` (reprise L4 sur CSV L3).
+- Modèle par défaut **Haiku 4.5** (~0.005 €/lead), **Sonnet 4.6** disponible en YAML
+  (~0.02 €/lead).
+
+### Added — Interface Streamlit
+- `app.py` : visualisation des sessions `data/output/`, affichage L3 / L4 avec
+  colonnes triées (score, top_lead, raison, pitch), métriques rapides
+  (total / top / score moyen / erreurs), download CSV.
+- Bouton **Activer L4** sur les sessions L3 sans L4 : sélection modèle, seuil,
+  pitch on/off, contexte custom, plafond budget, progress bar live, écriture
+  `etage4_prospection.csv` + cache.
+- Lecture clé `ANTHROPIC_API_KEY` : `st.secrets` → `.env` → saisie sidebar
+  (non persistée). Nouveau extra `pip install -e ".[ui]"`.
+
+### Changed
+- `CampaignConfig` : nouveau champ `claude_scoring: ClaudeScoring` (défaut Haiku).
+- `LeadStage4` étend `LeadStage3` (héritage progressif maintenu).
+- `check-connections` : statut Claude détaillé (clé présente + modèle par défaut).
+- `estimate` : coût L4 calculé en fonction du modèle (Haiku ou Sonnet).
+- README + COSTS_AND_LIMITS + OPERATIONS + RGPD : section L4 dédiée
+  (incluant statut sous-traitant Anthropic + référence DPA + SCC).
+
+### Tested
+- **51 nouveaux tests L4** : prompt rendering, cache + invalidation (modèle / contexte /
+  pitch), parsing JSON (pur, fenced codeblock, invalide), bornes 0-100,
+  budget guard, calcul coût Haiku vs Sonnet, flux enricher complet (cache hit,
+  parse_error, budget_exhausted, callback incrémental).
+- Total : **224 tests verts**, ruff clean.
+
+
 ## [0.4.0] — 2026-05-12 — Sprint 1 : robustesse + filtres entreprise
 
 > Note : version 0.3.0 sautée (tag déjà posé sur un commit antérieur de housekeeping).

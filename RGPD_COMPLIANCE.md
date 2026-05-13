@@ -8,6 +8,7 @@ L'outil collecte exclusivement des **données professionnelles publiquement acce
 - Données issues de Google Places (établissements publics)
 - Données issues de Pappers (open data légal — registre du commerce)
 - Données issues de Dropcontact (RGPD-compliant FR)
+- Scoring via Anthropic Claude (sous-traitant — voir section dédiée)
 
 ## Ce qui est autorisé
 
@@ -54,3 +55,37 @@ Lancer trimestriellement :
 ```bash
 python -m renoboost_leads.cli cleanup --older-than 3y
 ```
+
+## Étage 4 — sous-traitance Anthropic (Claude)
+
+L'étage 4 envoie pour chaque lead un prompt contenant des **données publiques B2B**
+(nom commercial, NAF, effectif, dirigeant identifié, emails publics scrapés) à l'API
+Anthropic pour obtenir un score d'intérêt et un pitch.
+
+### Statut sous-traitant
+
+- **Responsable de traitement** : utilisateur RénoBoost Leads (toi).
+- **Sous-traitant** : Anthropic PBC (siège San Francisco, US).
+- **Base légale** : article 28 RGPD (sous-traitance).
+- **Localisation traitement** : centres de données US (et UE selon routage Anthropic).
+- **Transferts internationaux** : couverts par les **Standard Contractual Clauses (SCC)**
+  signées entre le client et Anthropic dans l'**Anthropic DPA** (Data Processing Agreement,
+  https://www.anthropic.com/legal/dpa).
+
+### Engagements Anthropic vérifiés
+
+- ❌ Les données envoyées via l'API ne sont **pas utilisées pour entraîner** les modèles
+  (paramètre par défaut — voir privacy.anthropic.com).
+- 🗑 Rétention par défaut : ~30 jours pour la modération de contenu, puis suppression.
+- 🔒 Chiffrement en transit (TLS) et au repos.
+
+### Actions requises avant utilisation en production
+
+1. **Accepter le DPA Anthropic** depuis la console (https://console.anthropic.com).
+2. Tenir à jour le **registre des traitements** côté responsable (article 30).
+3. Documenter dans la **politique de confidentialité client** la mention :
+   _"Vos données professionnelles peuvent être traitées par Anthropic PBC (sous-traitant
+   technique, US) dans le cadre de l'évaluation qualitative de prospects, sous régime
+   RGPD article 6.1.f (intérêt légitime) et SCC pour le transfert international."_
+4. Pour les clients soumis à exigences souveraines fortes (santé, défense), **désactiver
+   L4** (`--stages 1,2,3`) et faire le scoring manuel.

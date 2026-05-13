@@ -6,7 +6,7 @@ Outil de prospection B2B paramétrable. Pipeline en 4 étages.
 1. **Étage 1 — Découverte** : établissements via Google Places API (~0.05€/lead)
 2. **Étage 2 — Entreprises** : SIREN / NAF / dirigeants via API data.gouv.fr (**gratuit**)
 3. **Étage 3 — Contacts** : emails via scraping mentions légales + patterns (**gratuit**)
-4. **Étage 4 — Prospection** : scoring + hooks via Claude (à venir, ~0.02€/lead)
+4. **Étage 4 — Prospection** : scoring d'intérêt + pitch via Claude (Haiku ~0.005€/lead, Sonnet ~0.02€/lead)
 
 ---
 
@@ -82,6 +82,30 @@ python -m renoboost_leads.cli run --config config/client_ombrieres.yaml --stages
 python -m renoboost_leads.cli run --config config/client_ombrieres.yaml --stages 1,2,3
 ```
 
+### Étage 4 — Scoring Claude sur un CSV L3 existant
+
+```bash
+# Requiert ANTHROPIC_API_KEY dans .env
+python -m renoboost_leads.cli run --config config/client_ombrieres.yaml --stages 4
+```
+
+Le scoring produit pour chaque lead : `score_interet` (0-100), `raison_score`,
+`pitch_propose` (2-3 lignes) et `top_lead` (booléen au-delà du seuil).
+
+Cache automatique : un re-run avec mêmes paramètres (`modele`, `contexte_client`,
+`inclure_pitch`) est gratuit.
+
+### Interface Streamlit (visualisation + déclenchement L4)
+
+```bash
+pip install -e ".[ui]"
+streamlit run app.py
+```
+
+L'app lit les sessions dans `data/output/`, affiche les leads L3 / L4,
+et permet de lancer L4 depuis l'UI (lecture clé `ANTHROPIC_API_KEY`
+depuis `st.secrets` ou `.env`).
+
 ### Reprendre une session interrompue
 
 ```bash
@@ -143,8 +167,9 @@ filtres_entreprise:
 | 1 | Google Places | 0.05 € | ~10 € |
 | 2 | data.gouv.fr | **gratuit** | **0 €** |
 | 3 | scraping web | **gratuit** | **0 €** |
-| 4 | Claude Sonnet (à venir) | 0.02 € | 4 € |
-| **Total prévu V1 complet** | | **0.07 €** | **~14 €** |
+| 4 | Claude Haiku 4.5 (défaut) | 0.005 € | 1 € |
+| 4 | Claude Sonnet 4.6 (option) | 0.02 € | 4 € |
+| **Pipeline complet (Haiku)** | | **~0.055 €** | **~11 €** |
 
 Voir [COSTS_AND_LIMITS.md](./COSTS_AND_LIMITS.md) pour le détail.
 

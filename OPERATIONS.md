@@ -85,6 +85,20 @@ python -m renoboost_leads.cli estimate --config config\<fichier>.yaml
 
 → Vérifier que le coût estimé est sous le plafond souhaité.
 
+### Pré-check #7 — Étage 4 (si activé)
+
+Si `--stages 4` est demandé :
+
+1. `ANTHROPIC_API_KEY` présente dans `.env` (`check-connections` doit l'afficher ✓).
+2. Modèle choisi dans `config/<client>.yaml` :
+   - `claude-haiku-4-5` (~0.005 €/lead) → run de masse, validation rapide
+   - `claude-sonnet-4-6` (~0.02 €/lead) → qualité supérieure, runs ciblés
+3. Le **cache L4** (`cache_l4.sqlite`) est indépendant du cache L1/L2/L3.
+   - Une seconde exécution avec **mêmes paramètres** (modèle, contexte, `inclure_pitch`)
+     est gratuite (cache hit).
+   - Tout changement de l'un de ces paramètres invalide automatiquement le cache.
+4. `seuil_top_lead` : 70 par défaut. À ajuster par client (50-80 selon strictness).
+
 ---
 
 ## 🔄 Pendant un run
@@ -106,8 +120,13 @@ $session = (Get-ChildItem data\output\ -Directory | Sort-Object Name -Descending
 dir $session
 ```
 
-→ Tu dois voir les CSV attendus (étage1, étage2, étage3 selon le run) à la racine
-du dossier, **PAS uniquement dans `backups/`**.
+→ Tu dois voir les CSV attendus (étage1, étage2, étage3, étage4 selon le run) à la
+racine du dossier, **PAS uniquement dans `backups/`**.
+
+Pour L4 spécifiquement, vérifier dans `etage4_prospection.csv` :
+- Distribution des `score_interet` : pas tous à la même valeur (modèle figé = erreur).
+- Colonne `scoring_erreur` : devrait être vide ou très marginale (< 5%).
+- Au moins ~10-30% de leads marqués `top_lead=VRAI` (ajuste `seuil_top_lead` sinon).
 
 ### Post-check #2 — Si CSV manquants à la racine mais présents dans `backups/`
 
