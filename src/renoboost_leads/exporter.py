@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .common.logger import get_logger
-from .models import LeadStage1, LeadStage2, LeadStage3, RunStats
+from .models import LeadStage1, LeadStage2, LeadStage3, LeadStage4, RunStats
 
 logger = get_logger(__name__)
 
@@ -75,6 +75,15 @@ COLONNES_STAGE3 = COLONNES_STAGE2 + [
     "contient_dirigeant_pattern",
 ]
 
+COLONNES_STAGE4 = COLONNES_STAGE3 + [
+    "score_interet",
+    "raison_score",
+    "pitch_propose",
+    "top_lead",
+    "scoring_modele",
+    "scoring_erreur",
+]
+
 
 # ════════════════════════════════════════════════════════════════
 # Helpers de sérialisation
@@ -131,6 +140,14 @@ def export_stage3_csv(leads: list[LeadStage3], output_path: Path) -> Path:
     rows = [lead.model_dump() for lead in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE3, output_path)
     logger.info("CSV étage 3 écrit : %s (%d leads)", p, len(leads))
+    return p
+
+
+def export_stage4_csv(leads: list[LeadStage4], output_path: Path) -> Path:
+    """CSV étage 4 (= étage 1+2+3 + scoring/pitch Claude)."""
+    rows = [lead.model_dump() for lead in leads]
+    p = _ecrire_csv(rows, COLONNES_STAGE4, output_path)
+    logger.info("CSV étage 4 écrit : %s (%d leads)", p, len(leads))
     return p
 
 
@@ -365,3 +382,74 @@ def lire_stage2_csv(csv_path: Path) -> list[LeadStage2]:
             )
         )
     return leads_l2
+
+
+def lire_stage3_csv(csv_path: Path) -> list[LeadStage3]:
+    """Re-charge un CSV L3 vers des LeadStage3 (utile pour relancer L4)."""
+    leads_l2 = lire_stage2_csv(csv_path)
+
+    with csv_path.open("r", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+
+    leads_l3: list[LeadStage3] = []
+    for l2, row in zip(leads_l2, rows, strict=False):
+        emails_v_raw = row.get("emails_verifies") or ""
+        emails_c_raw = row.get("emails_candidats") or ""
+        emails_v = [e for e in emails_v_raw.split("|") if e]
+        emails_c = [e for e in emails_c_raw.split("|") if e]
+        nb_v_raw = row.get("nb_emails_verifies") or "0"
+        nb_c_raw = row.get("nb_emails_candidats") or "0"
+        dirig_raw = row.get("contient_dirigeant_pattern") or ""
+        source = row.get("source_globale") or "aucun_email"
+        if source not in (
+            "scraping_uniquement",
+            "patterns_uniquement",
+            "scraping_et_patterns",
+            "aucun_email",
+            "chaine_non_traitee",
+        ):
+            source = "aucun_email"
+
+        leads_l3.append(
+            LeadStage3(
+                **l2.model_dump(),
+                emails_verifies=emails_v,
+                emails_candidats=emails_c,
+                domaine_extrait=row.get("domaine_extrait") or None,
+                page_source_emails=row.get("page_source_emails") or None,
+                nb_emails_verifies=int(nb_v_raw) if nb_v_raw not in ("", "None") else 0,
+                nb_emails_candidats=int(nb_c_raw) if nb_c_raw not in ("", "None") else 0,
+                source_globale=source,
+                contient_dirigeant_pattern=(dirig_raw == "VRAI"),
+            )
+        )
+    return leads_l3
+
+
+def lire_stage4_csv(csv_path: Path) -> list[LeadStage4]:
+    """Re-charge un CSV L4 vers des LeadStage4."""
+    leads_l3 = lire_stage3_csv(csv_path)
+
+    with csv_path.open("r", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+
+    leads_l4: list[LeadStage4] = []
+    for l3, row in zip(leads_l3, rows, strict=False):
+        score_raw = row.get("score_interet") or ""
+        top_raw = row.get("top_lead") or ""
+        leads_l4.append(
+            LeadStage4(
+                **l3.model_dump(),
+                score_interet=(
+                    int(score_raw) if score_raw not in ("", "None") else None
+                ),
+                raison_score=row.get("raison_score") or None,
+                pitch_propose=row.get("pitch_propose") or None,
+                top_lead=(top_raw == "VRAI"),
+                scoring_modele=row.get("scoring_modele") or None,
+                scoring_erreur=row.get("scoring_erreur") or None,
+            )
+        )
+    return leads_l4
