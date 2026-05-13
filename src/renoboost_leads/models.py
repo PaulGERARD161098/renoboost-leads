@@ -104,6 +104,30 @@ class Sortie(BaseModel):
     langue: Literal["fr", "en"] = "fr"
 
 
+class ClaudeScoring(BaseModel):
+    """Configuration de l'étage 4 (scoring + pitch via Claude)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Modèle Claude à utiliser. Défaut Haiku 4.5 (~0.005 €/lead).
+    # Sonnet 4.6 (~0.02 €/lead) à activer pour qualité supérieure.
+    modele: Literal["claude-haiku-4-5", "claude-sonnet-4-6"] = "claude-haiku-4-5"
+
+    # Seuil au-delà duquel un lead est marqué `top_lead=True`.
+    seuil_top_lead: int = Field(default=70, ge=0, le=100)
+
+    # Inclure (ou non) la génération du pitch_propose.
+    # Si False, on économise ~30% de tokens de sortie.
+    inclure_pitch: bool = True
+
+    # Contexte client à injecter dans le prompt (description offre + ICP).
+    # None → CONTEXTE_CLIENT_DEFAUT (RénoBoost).
+    contexte_client: str | None = None
+
+    # Plafond max de tokens de sortie par lead.
+    max_tokens_sortie: int = Field(default=400, ge=50, le=4096)
+
+
 class CampaignConfig(BaseModel):
     """Représente le contenu d'un fichier `config/<client>.yaml`."""
 
@@ -115,6 +139,7 @@ class CampaignConfig(BaseModel):
     zone: Zone
     filtres: Filtres = Filtres()
     filtres_entreprise: FiltresEntreprise = Field(default_factory=FiltresEntreprise)
+    claude_scoring: ClaudeScoring = Field(default_factory=ClaudeScoring)
     volume: Volume
     budget: Budget
     sortie: Sortie = Sortie()
@@ -242,6 +267,32 @@ class LeadStage3(LeadStage2):
         "chaine_non_traitee",
     ] = "aucun_email"
     contient_dirigeant_pattern: bool = False  # True si patterns nominatifs générés
+
+
+# ════════════════════════════════════════════════════════════════
+# ÉTAGE 4 — Scoring d'intérêt + pitch proposé (Claude)
+# ════════════════════════════════════════════════════════════════
+
+
+class LeadStage4(LeadStage3):
+    """LeadStage3 + scoring qualitatif Claude.
+
+    `score_interet`     : 0-100 (perception de l'intérêt commercial)
+    `raison_score`      : 1 phrase de justification (en français)
+    `pitch_propose`     : 2-3 lignes d'accroche (français), `None` si `inclure_pitch=False`
+                          ou si la génération a échoué.
+    `top_lead`          : True si `score_interet >= seuil_top_lead`.
+    `scoring_modele`    : modèle utilisé (`claude-haiku-4-5` / `claude-sonnet-4-6`).
+    `scoring_erreur`    : raison textuelle si scoring impossible (sinon None).
+                          Le lead est alors préservé sans `top_lead` (= False).
+    """
+
+    score_interet: int | None = None
+    raison_score: str | None = None
+    pitch_propose: str | None = None
+    top_lead: bool = False
+    scoring_modele: str | None = None
+    scoring_erreur: str | None = None
 
 
 # ════════════════════════════════════════════════════════════════
