@@ -95,6 +95,18 @@ Le scoring produit pour chaque lead : `score_interet` (0-100), `raison_score`,
 Cache automatique : un re-run avec mêmes paramètres (`modele`, `contexte_client`,
 `inclure_pitch`) est gratuit.
 
+#### Valider le flux L4 sans clé Anthropic (dry-run)
+
+```bash
+python -m renoboost_leads.cli run \
+  --config config/client_rossini.yaml \
+  --stages 4 --dry-run
+```
+
+Les scores et pitchs sont simulés (préfixés `[DRY-RUN]`), aucun appel réseau,
+le CSV `etage4_prospection.csv` est écrit normalement. Pratique pour tester
+l'UI Streamlit et le câblage CLI avant d'engager du budget.
+
 ### Interface Streamlit (visualisation + déclenchement L4)
 
 ```bash

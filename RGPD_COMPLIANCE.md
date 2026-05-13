@@ -45,16 +45,31 @@ Responsable de traitement : [TON ENTREPRISE] — DPO : [email]
 ## Droit à l'effacement
 
 Si une personne demande la suppression de ses données :
-1. Identifier le lead par email/SIREN dans les CSV
-2. Lancer `python -m renoboost_leads.cli forget --email <email>`
-3. Documenter la demande dans `data/effacements_log.csv`
+1. Identifier le lead par email / SIREN / nom dans les CSV concernés
+   (les CSV vivent dans `data/output/<session>/`).
+2. Supprimer la ligne dans tous les `etage*.csv` du dossier de session
+   (`etage1_decouverte.csv`, `etage2_entreprises.csv`, `etage3_contacts.csv`,
+   `etage4_prospection.csv`) et dans les backups horodatés associés
+   (`backups/`).
+3. Purger les entrées du cache si nécessaire :
+   ```bash
+   sqlite3 data/output/<session>/cache.sqlite \
+     "DELETE FROM place_results WHERE place_id = '<place_id>';"
+   sqlite3 data/output/<session>/cache_l4.sqlite \
+     "DELETE FROM stage4_results WHERE place_id = '<place_id>';"
+   ```
+4. Documenter la demande dans `data/effacements_log.csv` (date, identifiant
+   lead, motif, traitement effectué).
 
-## Suppression automatique
+> Une commande `cli forget --email <email>` est envisagée pour automatiser
+> ces étapes — pas encore implémentée à ce jour. À traiter manuellement.
 
-Lancer trimestriellement :
-```bash
-python -m renoboost_leads.cli cleanup --older-than 3y
-```
+## Suppression automatique des sessions anciennes
+
+Trimestriellement, archiver / supprimer les sessions `data/output/<session>/`
+plus anciennes que la durée de conservation (3 ans recommandés CNIL en
+prospection B2B). Pas d'automatisation côté CLI à ce jour : à faire via
+script système (cron / Task Scheduler).
 
 ## Étage 4 — sous-traitance Anthropic (Claude)
 

@@ -42,11 +42,32 @@ Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer
   (incluant statut sous-traitant Anthropic + référence DPA + SCC).
 
 ### Tested
-- **51 nouveaux tests L4** : prompt rendering, cache + invalidation (modèle / contexte /
+- **62 nouveaux tests L4** : prompt rendering, cache + invalidation (modèle / contexte /
   pitch), parsing JSON (pur, fenced codeblock, invalide), bornes 0-100,
   budget guard, calcul coût Haiku vs Sonnet, flux enricher complet (cache hit,
-  parse_error, budget_exhausted, callback incrémental).
-- Total : **224 tests verts**, ruff clean.
+  parse_error, budget_exhausted, callback incrémental), client dry-run
+  (déterministe, scores 30-95, cache compatible).
+- Nouveau test d'intégration optionnel `tests/test_stage4_integration.py`
+  (marker `integration`) qui hit la vraie API si `ANTHROPIC_API_KEY` est
+  présente, skip sinon.
+- CI étendue à `app.py` (ruff + smoke ast).
+- Total : **235 tests verts** (hors intégration), ruff clean.
+
+### Added — Mode dry-run L4
+- `ClaudeClientDryRun` (`stage4_prospection/dry_run.py`) : mock du client SDK
+  qui retourne des scores déterministes 30-95 dérivés du hash du prompt,
+  sans appel réseau ni clé.
+- `--dry-run` étendu pour couvrir `--stages 4` : `_executer_stage4` accepte
+  un drapeau dry-run et injecte automatiquement le mock. Permet de valider
+  le flow complet (CLI + cache + exporter + UI) sans engager de budget.
+
+### Changed
+- `EnricheurStage4._enrichir_un_lead` renommé public `enrichir_un_lead`
+  (l'app Streamlit n'utilise plus de méthode `_privée`).
+- `.env.example` : `CLAUDE_MODEL` aligné sur Haiku 4.5 (cohérent avec le code).
+- `RGPD_COMPLIANCE.md` : procédure manuelle d'effacement documentée (les
+  commandes `cli forget` / `cli cleanup` mentionnées précédemment ne sont
+  pas implémentées — note explicite ajoutée).
 
 
 ## [0.4.0] — 2026-05-12 — Sprint 1 : robustesse + filtres entreprise
