@@ -58,6 +58,17 @@ filtres_entreprise:
   forme_juridique_exclus: []              # ex ["EI","EIRL"]
   multi_sites_only: false                 # true = exige nb_etablissements > 1
 
+# ─── Étage 4 — Scoring Claude (optionnel) ─────────────────────────
+# Évalue chaque lead L3 face à un contexte commercial, produit un
+# score 0-100, une raison et (optionnel) un pitch personnalisé.
+# Requiert ANTHROPIC_API_KEY dans .env.
+claude_scoring:
+  modele: "claude-haiku-4-5"              # claude-haiku-4-5 (~0.005 €/lead) | claude-sonnet-4-6 (~0.02 €/lead)
+  seuil_top_lead: 70                      # score >= seuil → top_lead=VRAI
+  inclure_pitch: true                     # false = pas de pitch_propose, ~30% de tokens en moins
+  contexte_client: null                   # null = contexte RénoBoost par défaut ; sinon string libre
+  max_tokens_sortie: 400                  # plafond tokens sortie par lead
+
 # ─── Volume cible ─────────────────────────────────────────────────
 volume:
   cible: 200                              # Nombre de leads visés

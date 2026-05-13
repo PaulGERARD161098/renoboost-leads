@@ -23,9 +23,11 @@ from .exporter import (
     export_stage2_csv,
     export_stage3_csv,
     export_stage3_csv_separe_hors_filtre,
+    export_stage4_csv,
     generer_registre_rgpd,
     lire_stage1_csv,
     lire_stage2_csv,
+    lire_stage3_csv,
 )
 from .models import CampaignConfig, RunStats, StageStats
 from .settings import PROJECT_ROOT, get_settings
@@ -43,6 +45,10 @@ from .stage2_entreprises.recherche_client import (
 )
 from .stage3_contacts.enricher import EnricheurStage3
 from .stage3_contacts.scraper import ScraperContact
+from .stage4_prospection.cache import CacheStage4
+from .stage4_prospection.client import ClaudeClient, ClaudeClientConfig
+from .stage4_prospection.dry_run import ClaudeClientDryRun
+from .stage4_prospection.enricher import EnricheurStage4
 
 console = Console()
 
@@ -172,13 +178,21 @@ def check_connections() -> None:
         "Module de scraping opérationnel (testé site par site)",
     )
 
-    # Anthropic (étage 4) — non implémenté en L2/L3
-    table.add_row(
-        "Anthropic Claude (étage 4)",
-        "[green]✓[/green]" if settings.has_anthropic() else "[yellow]—[/yellow]",
-        "[dim]non implémenté[/dim]",
-        "" if settings.has_anthropic() else "Clé optionnelle (sera utilisée en L4)",
-    )
+    # Anthropic (étage 4)
+    if settings.has_anthropic():
+        table.add_row(
+            "Anthropic Claude (étage 4)",
+            "[green]✓[/green]",
+            "[dim]clé présente[/dim]",
+            f"Modèle par défaut config : {settings.claude_model}",
+        )
+    else:
+        table.add_row(
+            "Anthropic Claude (étage 4)",
+            "[yellow]—[/yellow]",
+            "—",
+            "Clé absente (requise pour --stages 4)",
+        )
 
     console.print(table)
 
@@ -222,8 +236,13 @@ def estimate(config_path: Path) -> None:
     table.add_row("[green]Coût étage 3 (scraping)[/green]", "[green]0,00 € (gratuit)[/green]")
 
     if cfg.stages.enable_stage_4_prospection:
-        cout_e4 = cfg.volume.cible * 0.02
-        table.add_row("Coût étage 4 (Claude)", f"~{cout_e4:.2f} €")
+        # Tarif indicatif : Haiku ~0.005 €/lead, Sonnet ~0.02 €/lead
+        cout_par_lead = 0.005 if cfg.claude_scoring.modele == "claude-haiku-4-5" else 0.02
+        cout_e4 = cfg.volume.cible * cout_par_lead
+        table.add_row(
+            f"Coût étage 4 ({cfg.claude_scoring.modele})",
+            f"~{cout_e4:.2f} €",
+        )
 
     console.print(table)
 
@@ -264,12 +283,11 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         console.print(f"[red]✗ Format --stages invalide : '{stages}'.[/red]")
         sys.exit(2)
 
-    if any(s not in (1, 2, 3) for s in stages_demandes):
+    if any(s not in (1, 2, 3, 4) for s in stages_demandes):
         console.print(
-            "[yellow]⚠  Seuls les étages 1, 2, 3 sont implémentés. "
-            "L'étage 4 sera ajouté en livraison L4.[/yellow]"
+            "[yellow]⚠  Étages valides : 1, 2, 3, 4. Étages inconnus ignorés.[/yellow]"
         )
-        stages_demandes = [s for s in stages_demandes if s in (1, 2, 3)]
+        stages_demandes = [s for s in stages_demandes if s in (1, 2, 3, 4)]
 
     if not stages_demandes:
         console.print("[red]✗ Aucun étage valide demandé.[/red]")
@@ -383,9 +401,50 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         )
         sources_rgpd.append("Génération de patterns d'emails (logique algorithmique)")
 
+    # ─── Étage 4 ───
+    leads_l4 = None
+    if 4 in stages_demandes:
+        if leads_l3 is None:
+            csv_l3 = output_dir / "etage3_contacts.csv"
+            if not csv_l3.exists():
+                console.print(
+                    f"[red]✗ Impossible de lancer L4 : CSV L3 introuvable ({csv_l3}).[/red]\n"
+                    "   Lance d'abord --stages 3."
+                )
+                sys.exit(2)
+            leads_l3 = lire_stage3_csv(csv_l3)
+            logger.info("L3 chargé depuis CSV existant : %d leads", len(leads_l3))
+
+        if not dry_run and not settings.has_anthropic():
+            console.print(
+                "[red]✗ ANTHROPIC_API_KEY manquante.[/red] "
+                "Ajoute-la dans .env, ou relance avec --dry-run pour simuler L4."
+            )
+            sys.exit(2)
+
+        leads_l4 = _executer_stage4(
+            cfg=cfg,
+            settings=settings,
+            leads_l3=leads_l3,
+            output_dir=output_dir,
+            stats=stats,
+            dry_run=dry_run,
+        )
+        if dry_run:
+            sources_rgpd.append(
+                "Étage 4 simulé (dry-run) — aucune donnée envoyée à Anthropic"
+            )
+        else:
+            sources_rgpd.append(
+                "Anthropic Claude API — scoring qualitatif "
+                "(sous-traitant — voir RGPD_COMPLIANCE.md)"
+            )
+
     # ─── Finalisation : registre RGPD + stats ───
     nb_leads_finaux = (
-        len(leads_l3)
+        len(leads_l4)
+        if leads_l4 is not None
+        else len(leads_l3)
         if leads_l3 is not None
         else len(leads_l2)
         if leads_l2 is not None
@@ -569,6 +628,84 @@ def _executer_stage3(leads_l2, cache, output_dir, stats):
         f"{msg_hf}"
     )
     return leads_l3
+
+
+def _executer_stage4(cfg, settings, leads_l3, output_dir, stats, dry_run: bool = False):
+    """Exécute l'étage 4 (scoring Claude + pitch).
+
+    Si `dry_run=True`, on utilise un client factice (`ClaudeClientDryRun`)
+    qui simule des scores sans appeler l'API. Permet de valider le flux
+    bout-en-bout sans clé.
+    """
+    csv_path = output_dir / "etage4_prospection.csv"
+    t0 = datetime.now(timezone.utc)
+
+    def callback_save(leads_partial):
+        export_stage4_csv(leads_partial, csv_path)
+
+    if dry_run:
+        console.print("[yellow]⚠  L4 en mode dry-run (aucun appel à Anthropic).[/yellow]")
+        claude_client = ClaudeClientDryRun(
+            modele=cfg.claude_scoring.modele,
+            inclure_pitch=cfg.claude_scoring.inclure_pitch,
+        )
+    else:
+        # Budget guard partagé avec le run global (récupère ce qui a été consommé)
+        budget = BudgetGuard(
+            plafond_eur=max(0.01, cfg.budget.max_eur - stats.cout_total_eur)
+        )
+        limiter = RateLimiter(settings.max_requests_per_minute)
+        api_key = settings.anthropic_api_key.get_secret_value()
+        claude_client = ClaudeClient(
+            ClaudeClientConfig(
+                api_key=api_key,
+                modele=cfg.claude_scoring.modele,
+                max_tokens_sortie=cfg.claude_scoring.max_tokens_sortie,
+                rate_limiter=limiter,
+                budget=budget,
+            )
+        )
+    cache_l4 = CacheStage4(output_dir / "cache_l4.sqlite")
+    enricher = EnricheurStage4(
+        client=claude_client,
+        config=cfg.claude_scoring,
+        cache=cache_l4,
+        callback_save_incremental=callback_save,
+    )
+
+    try:
+        leads_l4 = enricher.enrichir(leads_l3)
+    except BudgetExceededError as e:
+        console.print(f"[red]✗ Budget L4 dépassé : {e}[/red]")
+        leads_l4 = []
+
+    duree = (datetime.now(timezone.utc) - t0).total_seconds()
+    export_stage4_csv(leads_l4, csv_path)
+    backup_csv(csv_path)
+
+    stats_e4 = enricher.stats_l4(leads_l4)
+    stats.cout_total_eur += enricher.cout_total_eur
+    stats.etages_executes.append(
+        StageStats(
+            nom_etage="stage4_prospection",
+            duree_secondes=duree,
+            nb_appels_api=enricher.cache_misses,
+            nb_succes=stats_e4.get("scored", 0),
+            nb_echecs=stats_e4.get("erreurs", 0),
+            cout_eur_estime=enricher.cout_total_eur,
+            leads_collectes=len(leads_l4),
+        )
+    )
+
+    console.print(
+        f"\n[green]✓ Étage 4 : {len(leads_l4)} leads → {csv_path.name}[/green]\n"
+        f"   Top leads (score ≥ {cfg.claude_scoring.seuil_top_lead}) : "
+        f"{stats_e4.get('top_leads', 0)} ({stats_e4.get('top_pct', 0)}%) — "
+        f"Score moyen : {stats_e4.get('score_moyen', 0)} — "
+        f"Coût : {enricher.cout_total_eur:.4f} € — "
+        f"Cache : {enricher.cache_hits} hits / {enricher.cache_misses} miss"
+    )
+    return leads_l4
 
 
 # ─── resume ───

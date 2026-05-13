@@ -1,6 +1,6 @@
 [project]
 name = "renoboost-leads"
-version = "0.4.0"
+version = "0.5.0"
 description = "Outil de prospection B2B paramétrable — extraction Google Places + enrichissement entreprises (data.gouv.fr) + scraping contacts + scoring Claude"
 authors = [{name = "Paul - RénoBoost", email = "paul@renoboost.fr"}]
 requires-python = ">=3.10"
@@ -29,6 +29,9 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.7.0",
 ]
+ui = [
+    "streamlit>=1.30.0",
+]
 
 [project.scripts]
 renoboost-leads = "renoboost_leads.cli:cli"
@@ -51,3 +54,7 @@ ignore = ["S101"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+markers = [
+    "integration: tests d'intégration qui hit une vraie API (skippés si la clé manque)",
+]
+addopts = "-m 'not integration'"
