@@ -113,13 +113,52 @@ Le mail contient :
 **Branchage cron** non fait en Phase A — à activer une fois le flux validé
 manuellement sur quelques fichiers réels.
 
+## Parser CSV générique (auto-détection)
+
+Si le fichier source n'est pas garanti format AAA (export client maison, autre source),
+utilise `parser_generique.py` qui :
+- Détecte automatiquement l'**encodage** (utf-8 / utf-8-sig / latin-1 / cp1252)
+- Détecte automatiquement le **séparateur** (`;` `,` `|` `\t`)
+- Propose un **mapping intelligent** des colonnes vers les champs internes (matching
+  insensible à la casse / accents / espaces)
+- Liste les **champs obligatoires manquants** et les colonnes inconnues
+
+Utilisable directement depuis l'UI Streamlit (onglet **📥 Nouveau run**) avec
+mapping interactif des colonnes incertaines.
+
+## Notification email automatique
+
+Une fois `SMTP_*` configurés dans `.env`, l'email est envoyé **automatiquement
+post-run** par la CLI et par le cron GitHub Actions. Désactivable avec `--no-email`.
+
+## Cron quotidien (GitHub Actions)
+
+Le workflow `.github/workflows/veille_quotidienne.yml` lance la veille tous les
+matins (lun-ven, 07:30 UTC).
+
+**Setup une seule fois** :
+1. Place le fichier AAA du jour dans `data/veille_inbox/aaa_jour.csv` (ou autre
+   chemin configurable, manuellement ou via SFTP push)
+2. Configure les **secrets GitHub** dans Settings → Secrets and variables → Actions :
+   - `ANTHROPIC_API_KEY`
+   - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`,
+     `SMTP_DESTINATAIRES`
+3. Active le workflow (par défaut activé après merge)
+
+**Déclenchement manuel** : Actions → Veille quotidienne → **Run workflow**
+(possibilité d'override le fichier d'entrée + dry-run).
+
+Les artefacts (CSV final + logs) sont uploadés sur l'exécution GitHub Actions
+(rétention 30 jours).
+
 ## Roadmap
 
 | Phase | Statut | Contenu |
 |---|---|---|
-| A — Squelette + tests | ✓ | Parser, filtre, état, adaptateur, pipeline, mailer, CLI, tests |
-| B — Validation manuelle | en attente d'échantillon | Adapter le parser au format réel AAA + qualité du tri |
-| C — Automatisation | à venir | Connecteur SFTP, cron quotidien, notification email, intégration Streamlit |
+| A — Squelette + tests | ✅ | Parser, filtre, état, adaptateur, pipeline, mailer, CLI, tests |
+| B — Validation manuelle | en attente d'échantillon AAA | Adapter le parser au format réel + qualité du tri |
+| C — Automatisation | ✅ | Mailer branché auto + cron GitHub Actions + UI Streamlit upload |
+| D — Connecteur SFTP push | à venir | Auto-pull du fichier AAA depuis SFTP avant lancement |
 
 ## RGPD
 
