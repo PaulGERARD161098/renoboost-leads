@@ -8,8 +8,10 @@
 # === DONNÉES SENSIBLES ===
 data/output/
 data/cache/
+data/veille/
 *.csv
 !data/reference/*.csv
+!tests/fixtures_aaa/*.csv
 *.sqlite
 *.db
 
