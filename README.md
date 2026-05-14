@@ -107,6 +107,19 @@ Les scores et pitchs sont simulés (préfixés `[DRY-RUN]`), aucun appel réseau
 le CSV `etage4_prospection.csv` est écrit normalement. Pratique pour tester
 l'UI Streamlit et le câblage CLI avant d'engager du budget.
 
+### Veille immatriculations VE flotte (AAA Data)
+
+Module dédié pour ingérer le flux quotidien AAA Data des immatriculations VE
+entreprise et le brancher sur le pipeline RénoBoost. Voir [VEILLE.md](./VEILLE.md).
+
+```bash
+# Dry-run (pas de clé Anthropic nécessaire)
+python -m renoboost_leads.cli veille run --fichier exemple_aaa.csv --dry-run
+
+# Mode normal
+python -m renoboost_leads.cli veille run --fichier exemple_aaa.csv --budget 2.0
+```
+
 ### Interface Streamlit (visualisation + déclenchement L4)
 
 ```bash

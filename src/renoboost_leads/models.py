@@ -296,6 +296,38 @@ class LeadStage4(LeadStage3):
 
 
 # ════════════════════════════════════════════════════════════════
+# VEILLE — Lead issu d'une source de veille externe (AAA Data, etc.)
+# ════════════════════════════════════════════════════════════════
+
+
+class LeadVeille(LeadStage4):
+    """LeadStage4 + colonnes spécifiques veille immatriculations VE.
+
+    Pose le contexte commercial : ce lead vient d'une immatriculation
+    récente d'un véhicule électrique en flotte entreprise — signal fort
+    de démarche transition énergétique.
+
+    `deja_eu_ve` : flag (pas d'exclusion) — True si ce SIREN a déjà été
+                   observé en VE auparavant. False = première acquisition.
+    """
+
+    # Source de veille (`aaa_data`, `bonus_eco`, etc.)
+    source_veille: str | None = None
+    date_run_veille: str | None = None  # YYYY-MM-DD du fichier source
+
+    # Données VE issues du fichier AAA
+    date_immatriculation_ve: str | None = None  # YYYY-MM-DD
+    marque_ve: str | None = None
+    modele_ve: str | None = None
+    energie_ve: str | None = None  # EL / HE / HH / EH / H2
+    type_vehicule_ve: str | None = None  # VP / VU / PL...
+
+    # Flag historique (n'EXCLUT pas le lead — informationnel)
+    deja_eu_ve: bool = False
+    premiere_date_ve: str | None = None  # plus ancienne immat VE connue pour ce SIREN
+
+
+# ════════════════════════════════════════════════════════════════
 # Stats & résultats du run
 # ════════════════════════════════════════════════════════════════
 
