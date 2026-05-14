@@ -2,6 +2,66 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.6.0] — 2026-05-14 — Sprint 3 : L3.5 Dropcontact + export CRM + Streamlit Cloud
+
+### Added — Étage 3.5 : enrichissement contacts vérifiés (Dropcontact)
+- Nouveau module `stage3_5_enrichment/` :
+  - `client.py` : wrapper Dropcontact (POST batch + polling avec timeout, retry
+    tenacity, budget guard, hooks injectables pour tests sans monkeypatch).
+  - `cache.py` : SQLite (`cache_l3_5.sqlite`) avec invalidation sur
+    `(provider, language, siren, schema_version)`.
+  - `enricher.py` : orchestrateur L3 → L3.5 — **filtre intelligent** (ne traite
+    que les leads `hors_filtre_entreprise=False` avec dirigeant/site + SIREN),
+    découpe en batchs (50 par défaut), erreurs granulaires (api_error,
+    budget_exhausted, unexpected) sans perte de lead.
+  - `dry_run.py` : client factice qui synthétise email/tel/LinkedIn plausibles
+    sans appel réseau (pour `--dry-run` et tests).
+- Nouvelle section YAML `enrichissement_l3_5` (provider, language, siren,
+  batch_size, polling, cout_par_lead_eur).
+- Flag `enable_stage_3_5_enrichment` dans `StagesFlags`.
+- 11 nouvelles colonnes L3.5 : `email_dropcontact`,
+  `qualification_email_dropcontact`, `telephone_direct_dropcontact`,
+  `linkedin_dirigeant_dropcontact`, `linkedin_entreprise_dropcontact`,
+  `civilite_dirigeant_dropcontact`, `prenom_dirigeant_dropcontact`,
+  `nom_dirigeant_dropcontact`, `enrichi_dropcontact`,
+  `enrichissement_erreur`, `cout_enrichissement_eur`.
+- CLI : `--stages 3.5` câblé dans `run`, `_executer_stage3_5`,
+  `export_stage3_5_csv` / `lire_stage3_5_csv`. L4 lit prioritairement L3.5
+  (puis L3) pour ne pas perdre l'enrichissement.
+
+### Added — Export CSV exportable (CRM-ready)
+- `COLONNES_EXPORT_CRM` : vue curatée (24 colonnes) — nom, SIREN, NAF,
+  effectif, ville, dirigeant, email vérifié, tel direct, LinkedIn, score, pitch.
+- `export_csv_crm()` accepte n'importe quelle famille de leads (L3/L3.5/L4).
+- Nouvelle commande CLI `export --session-id <id> [--source auto|l4|l3.5|l3]
+  [--top-only] [--avec-email-uniquement] [--output <path>]`.
+- UI Streamlit (onglet Sessions) : 3 boutons côte-à-côte — CSV L4 complet,
+  CSV exportable CRM, Top leads exportables.
+
+### Added — Déploiement Streamlit Cloud
+- `requirements.txt` racine (lu par Streamlit Cloud, miroir des deps
+  `pyproject.toml` + `streamlit` + install éditable du package).
+- `.streamlit/config.toml` : thème vert, headless, upload max 50 Mo.
+- `.streamlit/secrets.toml.example` : template à coller dans App settings →
+  Secrets (Streamlit Cloud).
+- `_bridge_streamlit_secrets_to_env()` dans `app.py` : recopie `st.secrets`
+  vers `os.environ` au démarrage pour que `Settings` (pydantic-settings) les
+  voie comme un `.env`. Aucune modif de code pour passer local → cloud.
+- `STREAMLIT_CLOUD.md` : procédure déploiement + limites (stockage éphémère,
+  pas de cron, CPU partagé) + test local du bridge.
+
+### Tests
+- 31 nouveaux tests : `test_stage3_5_client.py` (8), `test_stage3_5_enricher.py`
+  (17 — filtre, cache, batch, dry-run, erreurs, callback, stats),
+  `test_export_csv_crm.py` (6 — round-trip CSV + commande CLI).
+- Total : **328 tests verts** (vs 297 sur 0.5.0). Ruff clean.
+
+### Changed
+- `LeadStage4` hérite désormais de `LeadStage35` (nouveau) au lieu de
+  `LeadStage3`. Backward-compatible : tous les champs L3.5 ont des défauts.
+- `lire_stage4_csv` passe par `lire_stage3_5_csv` → les anciens CSV L4 (sans
+  colonnes Dropcontact) restent lisibles, les nouveaux hydratent L3.5.
+
 ## [0.5.0] — 2026-05-13 — Sprint 2 : L4 (scoring Claude) + UI Streamlit
 
 ### Added — Étage 4 : scoring d'intérêt + pitch via Claude

@@ -34,6 +34,7 @@ class StagesFlags(BaseModel):
     enable_stage_1_decouverte: bool = True
     enable_stage_2_entreprises: bool = False
     enable_stage_3_contacts: bool = False
+    enable_stage_3_5_enrichment: bool = False
     enable_stage_4_prospection: bool = False
 
 
@@ -104,6 +105,44 @@ class Sortie(BaseModel):
     langue: Literal["fr", "en"] = "fr"
 
 
+class EnrichissementL35(BaseModel):
+    """Configuration de l'étage 3.5 (enrichissement Dropcontact).
+
+    Étage optionnel placé entre L3 (scraping/patterns) et L4 (scoring Claude).
+    Appelle l'API Dropcontact pour enrichir les leads avec :
+    - Email vérifié du dirigeant (qualification SMTP côté Dropcontact)
+    - Téléphone direct (si disponible)
+    - URL LinkedIn dirigeant
+    - Civilité / prénom / nom normalisés
+
+    Coût indicatif : ~0.5 €/lead enrichi (plan Starter Dropcontact).
+    Filtre intelligent : seuls les leads passant les filtres entreprise
+    (`hors_filtre_entreprise=False`) sont envoyés à l'API.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Provider (extensible : kaspr, hunter, ... plus tard)
+    provider: Literal["dropcontact"] = "dropcontact"
+
+    # Langue pour le prompt Dropcontact ("fr" / "en")
+    language: Literal["fr", "en"] = "fr"
+
+    # Demande la vérification SIREN par Dropcontact (recommandé pour FR)
+    siren: bool = True
+
+    # Taille max d'un lot envoyé à l'API (Dropcontact recommande ≤ 250)
+    batch_size: int = Field(default=50, ge=1, le=250)
+
+    # Polling : délai d'attente initial puis intervalle entre 2 polls (secondes)
+    poll_initial_delay_s: float = Field(default=10.0, ge=1.0, le=120.0)
+    poll_interval_s: float = Field(default=10.0, ge=1.0, le=60.0)
+    poll_timeout_s: float = Field(default=600.0, ge=30.0, le=3600.0)
+
+    # Coût indicatif par lead enrichi (€). Sert au budget guard et aux stats.
+    cout_par_lead_eur: float = Field(default=0.50, ge=0.0, le=10.0)
+
+
 class ClaudeScoring(BaseModel):
     """Configuration de l'étage 4 (scoring + pitch via Claude)."""
 
@@ -139,6 +178,7 @@ class CampaignConfig(BaseModel):
     zone: Zone
     filtres: Filtres = Filtres()
     filtres_entreprise: FiltresEntreprise = Field(default_factory=FiltresEntreprise)
+    enrichissement_l3_5: EnrichissementL35 = Field(default_factory=EnrichissementL35)
     claude_scoring: ClaudeScoring = Field(default_factory=ClaudeScoring)
     volume: Volume
     budget: Budget
@@ -270,11 +310,49 @@ class LeadStage3(LeadStage2):
 
 
 # ════════════════════════════════════════════════════════════════
+# ÉTAGE 3.5 — Enrichissement contacts vérifiés (Dropcontact)
+# ════════════════════════════════════════════════════════════════
+
+
+class LeadStage35(LeadStage3):
+    """LeadStage3 + données enrichies via API Dropcontact (étage optionnel).
+
+    L3.5 ne supprime jamais un lead : tous les champs ci-dessous sont
+    optionnels. Si le lead n'a pas été envoyé à Dropcontact (filtré ou
+    étage désactivé) ou si l'API n'a pas trouvé d'info, les champs
+    restent à `None` / `[]` et le lead poursuit le pipeline normalement.
+    """
+
+    # Email vérifié par Dropcontact (qualification = correct/incorrect/risky)
+    email_dropcontact: str | None = None
+    qualification_email_dropcontact: str | None = None  # ex: "correct", "risky"
+
+    # Téléphone direct (souvent ligne fixe entreprise, parfois mobile dirigeant)
+    telephone_direct_dropcontact: str | None = None
+
+    # Profil LinkedIn dirigeant
+    linkedin_dirigeant_dropcontact: str | None = None
+
+    # Profil LinkedIn entreprise
+    linkedin_entreprise_dropcontact: str | None = None
+
+    # Identité dirigeant normalisée par Dropcontact
+    civilite_dirigeant_dropcontact: str | None = None  # M / Mme
+    prenom_dirigeant_dropcontact: str | None = None
+    nom_dirigeant_dropcontact: str | None = None
+
+    # Métadonnées
+    enrichi_dropcontact: bool = False  # True si lead envoyé à l'API (succès ou pas)
+    enrichissement_erreur: str | None = None  # raison textuelle si KO
+    cout_enrichissement_eur: float = 0.0
+
+
+# ════════════════════════════════════════════════════════════════
 # ÉTAGE 4 — Scoring d'intérêt + pitch proposé (Claude)
 # ════════════════════════════════════════════════════════════════
 
 
-class LeadStage4(LeadStage3):
+class LeadStage4(LeadStage35):
     """LeadStage3 + scoring qualitatif Claude.
 
     `score_interet`     : 0-100 (perception de l'intérêt commercial)

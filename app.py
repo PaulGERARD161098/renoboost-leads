@@ -21,24 +21,61 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from renoboost_leads.common.budget_guard import BudgetGuard
-from renoboost_leads.common.rate_limiter import RateLimiter
-from renoboost_leads.exporter import (
+
+def _bridge_streamlit_secrets_to_env() -> None:
+    """Sur Streamlit Cloud, expose `st.secrets` à `os.environ` pour Settings.
+
+    Settings (pydantic-settings) lit depuis l'environnement / .env. Sur Cloud,
+    on n'a ni l'un ni l'autre — uniquement `st.secrets`. Ce bridge copie chaque
+    clé secret vers `os.environ` *avant* la première instanciation de Settings.
+
+    No-op en local (pas de secrets file → `st.secrets` lève KeyError) — le
+    .env standard prend le relais.
+    """
+    try:
+        secrets_dict = dict(st.secrets)  # type: ignore[arg-type]
+    except (FileNotFoundError, st.runtime.secrets.StreamlitSecretNotFoundError):
+        return
+    except Exception:  # noqa: BLE001 — pas de secrets, on ignore proprement
+        return
+    for key, value in secrets_dict.items():
+        # Ne jamais écraser une variable déjà définie dans l'env (priorité au shell)
+        if value is None or key in os.environ:
+            continue
+        os.environ[key] = str(value)
+
+
+_bridge_streamlit_secrets_to_env()
+
+
+# noqa: E402 — les imports ci-dessous viennent APRÈS le bridge des secrets
+# Streamlit (volontaire), pour que Settings voie les variables au bon moment.
+from renoboost_leads.common.budget_guard import BudgetGuard  # noqa: E402
+from renoboost_leads.common.rate_limiter import RateLimiter  # noqa: E402
+from renoboost_leads.exporter import (  # noqa: E402
+    export_csv_crm,
     export_stage4_csv,
     lire_stage3_csv,
     lire_stage4_csv,
 )
-from renoboost_leads.models import ClaudeScoring
-from renoboost_leads.settings import PROJECT_ROOT, get_settings
-from renoboost_leads.stage4_prospection.cache import CacheStage4
-from renoboost_leads.stage4_prospection.client import ClaudeClient, ClaudeClientConfig
-from renoboost_leads.stage4_prospection.enricher import EnricheurStage4
-from renoboost_leads.stage4_prospection.prompt_template import CONTEXTE_CLIENT_DEFAUT
-from renoboost_leads.veille_immatriculations.exporter_veille import COLONNES_VEILLE
-from renoboost_leads.veille_immatriculations.parser_generique import (
+from renoboost_leads.models import ClaudeScoring  # noqa: E402
+from renoboost_leads.settings import PROJECT_ROOT, get_settings  # noqa: E402
+from renoboost_leads.stage4_prospection.cache import CacheStage4  # noqa: E402
+from renoboost_leads.stage4_prospection.client import (  # noqa: E402
+    ClaudeClient,
+    ClaudeClientConfig,
+)
+from renoboost_leads.stage4_prospection.enricher import EnricheurStage4  # noqa: E402
+from renoboost_leads.stage4_prospection.prompt_template import (  # noqa: E402
+    CONTEXTE_CLIENT_DEFAUT,
+)
+from renoboost_leads.veille_immatriculations.exporter_veille import (  # noqa: E402
+    COLONNES_VEILLE,
+)
+from renoboost_leads.veille_immatriculations.parser_generique import (  # noqa: E402
     detecter_format_csv,
 )
-from renoboost_leads.veille_immatriculations.pipeline_veille import (
+from renoboost_leads.veille_immatriculations.pipeline_veille import (  # noqa: E402
     VeilleRunConfig,
     executer_cycle_veille,
 )
@@ -412,12 +449,41 @@ with tab_sessions:
                 c for c in df.columns if c not in cols_prio
             ]
             st.dataframe(df[cols_show], use_container_width=True, height=500)
-            st.download_button(
-                "📤 Télécharger CSV L4",
-                csv_l4.read_bytes(),
-                file_name=csv_l4.name,
-                mime="text/csv",
-            )
+
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                st.download_button(
+                    "📤 CSV L4 complet",
+                    csv_l4.read_bytes(),
+                    file_name=csv_l4.name,
+                    mime="text/csv",
+                )
+            with col_b:
+                # Export CRM-friendly (toutes les leads)
+                export_path = session_dir / "leads_exportables.csv"
+                export_csv_crm(leads_l4, export_path)
+                st.download_button(
+                    "📦 CSV exportable (CRM)",
+                    export_path.read_bytes(),
+                    file_name=export_path.name,
+                    mime="text/csv",
+                    help="Colonnes utiles pour démarchage : nom, dirigeant, "
+                    "email vérifié, téléphone direct, LinkedIn, score, pitch.",
+                )
+            with col_c:
+                # Export top leads uniquement
+                top_leads = [lead for lead in leads_l4 if lead.top_lead]
+                if top_leads:
+                    top_path = session_dir / "leads_exportables_top.csv"
+                    export_csv_crm(top_leads, top_path)
+                    st.download_button(
+                        f"⭐ Top leads ({len(top_leads)})",
+                        top_path.read_bytes(),
+                        file_name=top_path.name,
+                        mime="text/csv",
+                    )
+                else:
+                    st.caption("Aucun top lead (score ≥ seuil) dans cette session.")
 
         elif csv_l3.exists():
             st.info("CSV L3 trouvé. L4 non encore exécuté pour cette session.")
