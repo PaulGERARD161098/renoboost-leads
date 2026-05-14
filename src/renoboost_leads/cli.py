@@ -18,16 +18,20 @@ from .common.rate_limiter import RateLimiter
 from .config_loader import load_campaign_config
 from .exporter import (
     backup_csv,
+    export_csv_crm,
     export_run_stats,
     export_stage1_csv,
     export_stage2_csv,
+    export_stage3_5_csv,
     export_stage3_csv,
     export_stage3_csv_separe_hors_filtre,
     export_stage4_csv,
     generer_registre_rgpd,
     lire_stage1_csv,
     lire_stage2_csv,
+    lire_stage3_5_csv,
     lire_stage3_csv,
+    lire_stage4_csv,
 )
 from .models import CampaignConfig, RunStats, StageStats
 from .settings import PROJECT_ROOT, get_settings
@@ -43,6 +47,10 @@ from .stage2_entreprises.recherche_client import (
     RechercheClientConfig,
     RechercheEntreprisesClient,
 )
+from .stage3_5_enrichment.cache import CacheStage35
+from .stage3_5_enrichment.client import DropcontactClient, DropcontactClientConfig
+from .stage3_5_enrichment.dry_run import DropcontactClientDryRun
+from .stage3_5_enrichment.enricher import EnricheurStage35
 from .stage3_contacts.enricher import EnricheurStage3
 from .stage3_contacts.scraper import ScraperContact
 from .stage4_prospection.cache import CacheStage4
@@ -277,18 +285,24 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
     """Lance un run de prospection."""
     cfg = _load_config_or_exit(config_path)
 
-    # Parse les étages demandés
+    # Parse les étages demandés (accepte int "1/2/3/4" et float "3.5")
     try:
-        stages_demandes = sorted({int(s.strip()) for s in stages.split(",") if s.strip()})
+        stages_demandes = sorted(
+            {
+                float(s.strip()) if "." in s else int(s.strip())
+                for s in stages.split(",")
+                if s.strip()
+            }
+        )
     except ValueError:
         console.print(f"[red]✗ Format --stages invalide : '{stages}'.[/red]")
         sys.exit(2)
 
-    if any(s not in (1, 2, 3, 4) for s in stages_demandes):
+    if any(s not in (1, 2, 3, 3.5, 4) for s in stages_demandes):
         console.print(
-            "[yellow]⚠  Étages valides : 1, 2, 3, 4. Étages inconnus ignorés.[/yellow]"
+            "[yellow]⚠  Étages valides : 1, 2, 3, 3.5, 4. Étages inconnus ignorés.[/yellow]"
         )
-        stages_demandes = [s for s in stages_demandes if s in (1, 2, 3, 4)]
+        stages_demandes = [s for s in stages_demandes if s in (1, 2, 3, 3.5, 4)]
 
     if not stages_demandes:
         console.print("[red]✗ Aucun étage valide demandé.[/red]")
@@ -402,19 +416,68 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         )
         sources_rgpd.append("Génération de patterns d'emails (logique algorithmique)")
 
-    # ─── Étage 4 ───
-    leads_l4 = None
-    if 4 in stages_demandes:
+    # ─── Étage 3.5 (enrichissement Dropcontact, optionnel) ───
+    leads_l35 = None
+    if 3.5 in stages_demandes:
         if leads_l3 is None:
+            # Charger L3 depuis le CSV
             csv_l3 = output_dir / "etage3_contacts.csv"
             if not csv_l3.exists():
                 console.print(
-                    f"[red]✗ Impossible de lancer L4 : CSV L3 introuvable ({csv_l3}).[/red]\n"
+                    f"[red]✗ Impossible de lancer L3.5 : CSV L3 introuvable ({csv_l3}).[/red]\n"
                     "   Lance d'abord --stages 3."
                 )
                 sys.exit(2)
             leads_l3 = lire_stage3_csv(csv_l3)
             logger.info("L3 chargé depuis CSV existant : %d leads", len(leads_l3))
+
+        if not dry_run and not settings.has_dropcontact():
+            console.print(
+                "[red]✗ DROPCONTACT_API_KEY manquante.[/red] "
+                "Ajoute-la dans .env, ou relance avec --dry-run pour simuler L3.5."
+            )
+            sys.exit(2)
+
+        leads_l35 = _executer_stage3_5(
+            cfg=cfg,
+            settings=settings,
+            leads_l3=leads_l3,
+            output_dir=output_dir,
+            stats=stats,
+            dry_run=dry_run,
+        )
+        if dry_run:
+            sources_rgpd.append(
+                "Étage 3.5 simulé (dry-run) — aucune donnée envoyée à Dropcontact"
+            )
+        else:
+            sources_rgpd.append(
+                "Dropcontact API — enrichissement contacts B2B "
+                "(sous-traitant RGPD — voir RGPD_COMPLIANCE.md)"
+            )
+
+    # ─── Étage 4 ───
+    leads_l4 = None
+    if 4 in stages_demandes:
+        # Source L3.5 prioritaire si on l'a, sinon L3 (avec ou sans depuis CSV).
+        leads_pour_l4 = leads_l35 if leads_l35 is not None else leads_l3
+        if leads_pour_l4 is None:
+            # Si un CSV L3.5 existe sur disque, on le préfère (pas perdre l'enrichissement)
+            csv_l35 = output_dir / "etage3_5_enrichissement.csv"
+            csv_l3 = output_dir / "etage3_contacts.csv"
+            if csv_l35.exists():
+                leads_pour_l4 = lire_stage3_5_csv(csv_l35)
+                logger.info("L3.5 chargé depuis CSV existant : %d leads", len(leads_pour_l4))
+            elif csv_l3.exists():
+                leads_pour_l4 = lire_stage3_csv(csv_l3)
+                logger.info("L3 chargé depuis CSV existant : %d leads", len(leads_pour_l4))
+            else:
+                console.print(
+                    f"[red]✗ Impossible de lancer L4 : CSV L3 introuvable ({csv_l3}).[/red]\n"
+                    "   Lance d'abord --stages 3."
+                )
+                sys.exit(2)
+        leads_l3 = leads_pour_l4  # alias pour la suite (legacy)
 
         if not dry_run and not settings.has_anthropic():
             console.print(
@@ -445,6 +508,8 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
     nb_leads_finaux = (
         len(leads_l4)
         if leads_l4 is not None
+        else len(leads_l35)
+        if leads_l35 is not None
         else len(leads_l3)
         if leads_l3 is not None
         else len(leads_l2)
@@ -631,6 +696,88 @@ def _executer_stage3(leads_l2, cache, output_dir, stats):
     return leads_l3
 
 
+def _executer_stage3_5(cfg, settings, leads_l3, output_dir, stats, dry_run: bool = False):
+    """Exécute l'étage 3.5 (enrichissement Dropcontact).
+
+    Si `dry_run=True`, on utilise `DropcontactClientDryRun` (zéro appel HTTP).
+    """
+    csv_path = output_dir / "etage3_5_enrichissement.csv"
+    t0 = datetime.now(timezone.utc)
+
+    def callback_save(leads_partial):
+        export_stage3_5_csv(leads_partial, csv_path)
+
+    if dry_run:
+        console.print("[yellow]⚠  L3.5 en mode dry-run (aucun appel à Dropcontact).[/yellow]")
+        client = DropcontactClientDryRun(
+            cout_par_lead_eur=cfg.enrichissement_l3_5.cout_par_lead_eur,
+        )
+    else:
+        budget = BudgetGuard(
+            plafond_eur=max(0.01, cfg.budget.max_eur - stats.cout_total_eur)
+        )
+        limiter = RateLimiter(settings.max_requests_per_minute)
+        api_key = settings.dropcontact_api_key.get_secret_value()
+        client = DropcontactClient(
+            DropcontactClientConfig(
+                api_key=api_key,
+                language=cfg.enrichissement_l3_5.language,
+                siren=cfg.enrichissement_l3_5.siren,
+                poll_initial_delay_s=cfg.enrichissement_l3_5.poll_initial_delay_s,
+                poll_interval_s=cfg.enrichissement_l3_5.poll_interval_s,
+                poll_timeout_s=cfg.enrichissement_l3_5.poll_timeout_s,
+                cout_par_lead_eur=cfg.enrichissement_l3_5.cout_par_lead_eur,
+                rate_limiter=limiter,
+                budget=budget,
+            )
+        )
+
+    cache_l35 = CacheStage35(output_dir / "cache_l3_5.sqlite")
+    enricher = EnricheurStage35(
+        client=client,
+        config=cfg.enrichissement_l3_5,
+        cache=cache_l35,
+        callback_save_incremental=callback_save,
+    )
+
+    try:
+        leads_l35 = enricher.enrichir(leads_l3)
+    except BudgetExceededError as e:
+        console.print(f"[red]✗ Budget L3.5 dépassé : {e}[/red]")
+        leads_l35 = leads_l3  # On préserve les leads d'origine
+
+    duree = (datetime.now(timezone.utc) - t0).total_seconds()
+    export_stage3_5_csv(leads_l35, csv_path)
+    backup_csv(csv_path)
+
+    stats_e35 = enricher.stats_l35(leads_l35)
+    stats.cout_total_eur += enricher.cout_total_eur
+    stats.etages_executes.append(
+        StageStats(
+            nom_etage="stage3_5_enrichment",
+            duree_secondes=duree,
+            nb_appels_api=enricher.cache_misses,
+            nb_succes=stats_e35.get("enrichis", 0),
+            nb_echecs=stats_e35.get("erreurs", 0),
+            cout_eur_estime=enricher.cout_total_eur,
+            leads_collectes=len(leads_l35),
+        )
+    )
+
+    console.print(
+        f"\n[green]✓ Étage 3.5 : {len(leads_l35)} leads → {csv_path.name}[/green]\n"
+        f"   Filtrés (hors filtre / inéligibles) : {stats_e35.get('filtres_out', 0)} — "
+        f"Envoyés API : {stats_e35.get('envoyes_api', 0)} — "
+        f"Enrichis : {stats_e35.get('enrichis', 0)} — "
+        f"Erreurs : {stats_e35.get('erreurs', 0)}\n"
+        f"   Email Dropcontact : {stats_e35.get('avec_email_pct', 0)}% — "
+        f"Tel direct : {stats_e35.get('avec_phone_pct', 0)}% — "
+        f"LinkedIn : {stats_e35.get('avec_linkedin_pct', 0)}% — "
+        f"Coût : {enricher.cout_total_eur:.2f} €"
+    )
+    return leads_l35
+
+
 def _executer_stage4(cfg, settings, leads_l3, output_dir, stats, dry_run: bool = False):
     """Exécute l'étage 4 (scoring Claude + pitch).
 
@@ -749,6 +896,107 @@ def resume(session_id: str, stages: str, config_path: Path) -> None:
         stages=stages,
         from_csv_path=csv_l1,
         dry_run=False,
+    )
+
+
+# ─── export ───
+@cli.command()
+@click.option(
+    "--session-id",
+    "session_id",
+    required=True,
+    help="ID de la session à exporter (nom du dossier dans data/output/).",
+)
+@click.option(
+    "--source",
+    type=click.Choice(["auto", "l4", "l3.5", "l3"]),
+    default="auto",
+    help="CSV source à utiliser. 'auto' choisit le plus avancé disponible.",
+)
+@click.option(
+    "--top-only",
+    is_flag=True,
+    help="N'exporter que les leads `top_lead=True` (utile après L4).",
+)
+@click.option(
+    "--avec-email-uniquement",
+    is_flag=True,
+    help="N'exporter que les leads avec au moins un email (vérifié, pattern, ou Dropcontact).",
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Chemin du CSV exportable. Défaut : <session>/leads_exportables.csv.",
+)
+def export(
+    session_id: str,
+    source: str,
+    top_only: bool,
+    avec_email_uniquement: bool,
+    output_path: Path | None,
+) -> None:
+    """Génère un CSV exportable (colonnes utiles pour démarchage / import CRM)."""
+    output_dir = PROJECT_ROOT / "data" / "output" / session_id
+    if not output_dir.exists():
+        console.print(f"[red]✗ Session introuvable : {output_dir}[/red]")
+        sys.exit(2)
+
+    csv_l4 = output_dir / "etage4_prospection.csv"
+    csv_l35 = output_dir / "etage3_5_enrichissement.csv"
+    csv_l3 = output_dir / "etage3_contacts.csv"
+
+    if source == "auto":
+        if csv_l4.exists():
+            chosen, loader = csv_l4, lire_stage4_csv
+        elif csv_l35.exists():
+            chosen, loader = csv_l35, lire_stage3_5_csv
+        elif csv_l3.exists():
+            chosen, loader = csv_l3, lire_stage3_csv
+        else:
+            console.print(f"[red]✗ Aucun CSV exploitable dans {output_dir}.[/red]")
+            sys.exit(2)
+    elif source == "l4":
+        chosen, loader = csv_l4, lire_stage4_csv
+    elif source == "l3.5":
+        chosen, loader = csv_l35, lire_stage3_5_csv
+    else:  # l3
+        chosen, loader = csv_l3, lire_stage3_csv
+
+    if not chosen.exists():
+        console.print(f"[red]✗ CSV source introuvable : {chosen}[/red]")
+        sys.exit(2)
+
+    leads = loader(chosen)
+    nb_total = len(leads)
+
+    if top_only:
+        leads = [lead for lead in leads if getattr(lead, "top_lead", False)]
+    if avec_email_uniquement:
+        leads = [
+            lead
+            for lead in leads
+            if getattr(lead, "email_dropcontact", None)
+            or getattr(lead, "emails_verifies", None)
+            or getattr(lead, "emails_candidats", None)
+        ]
+
+    if output_path is None:
+        suffix_parts = []
+        if top_only:
+            suffix_parts.append("top")
+        if avec_email_uniquement:
+            suffix_parts.append("avec_email")
+        suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
+        output_path = output_dir / f"leads_exportables{suffix}.csv"
+
+    p = export_csv_crm(leads, output_path)
+    console.print(
+        f"[green]✓ Export généré : {p}[/green]\n"
+        f"   Source : {chosen.name} — Leads : {len(leads)} / {nb_total} "
+        f"({'top_only' if top_only else 'tous'}"
+        f"{', avec email' if avec_email_uniquement else ''})"
     )
 
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .common.logger import get_logger
-from .models import LeadStage1, LeadStage2, LeadStage3, LeadStage4, RunStats
+from .models import LeadStage1, LeadStage2, LeadStage3, LeadStage4, LeadStage35, RunStats
 
 logger = get_logger(__name__)
 
@@ -75,13 +75,55 @@ COLONNES_STAGE3 = COLONNES_STAGE2 + [
     "contient_dirigeant_pattern",
 ]
 
-COLONNES_STAGE4 = COLONNES_STAGE3 + [
+COLONNES_STAGE3_5 = COLONNES_STAGE3 + [
+    "email_dropcontact",
+    "qualification_email_dropcontact",
+    "telephone_direct_dropcontact",
+    "linkedin_dirigeant_dropcontact",
+    "linkedin_entreprise_dropcontact",
+    "civilite_dirigeant_dropcontact",
+    "prenom_dirigeant_dropcontact",
+    "nom_dirigeant_dropcontact",
+    "enrichi_dropcontact",
+    "enrichissement_erreur",
+    "cout_enrichissement_eur",
+]
+
+COLONNES_STAGE4 = COLONNES_STAGE3_5 + [
     "score_interet",
     "raison_score",
     "pitch_propose",
     "top_lead",
     "scoring_modele",
     "scoring_erreur",
+]
+
+# Vue "exportable" pour CRM / démarchage : colonnes utiles sans bruit interne.
+COLONNES_EXPORT_CRM = [
+    "nom",
+    "siren",
+    "code_naf",
+    "libelle_naf",
+    "tranche_effectif",
+    "ville",
+    "code_postal",
+    "site_web",
+    "telephone",
+    "telephone_direct_dropcontact",
+    "civilite_dirigeant_dropcontact",
+    "prenom_dirigeant_dropcontact",
+    "nom_dirigeant_dropcontact",
+    "email_dropcontact",
+    "qualification_email_dropcontact",
+    "linkedin_dirigeant_dropcontact",
+    "linkedin_entreprise_dropcontact",
+    "emails_verifies",
+    "emails_candidats",
+    "score_interet",
+    "raison_score",
+    "pitch_propose",
+    "top_lead",
+    "google_maps_url",
 ]
 
 
@@ -140,6 +182,26 @@ def export_stage3_csv(leads: list[LeadStage3], output_path: Path) -> Path:
     rows = [lead.model_dump() for lead in leads]
     p = _ecrire_csv(rows, COLONNES_STAGE3, output_path)
     logger.info("CSV étage 3 écrit : %s (%d leads)", p, len(leads))
+    return p
+
+
+def export_stage3_5_csv(leads: list[LeadStage35], output_path: Path) -> Path:
+    """CSV étage 3.5 (= étage 1+2+3 + enrichissement Dropcontact)."""
+    rows = [lead.model_dump() for lead in leads]
+    p = _ecrire_csv(rows, COLONNES_STAGE3_5, output_path)
+    logger.info("CSV étage 3.5 écrit : %s (%d leads)", p, len(leads))
+    return p
+
+
+def export_csv_crm(leads: list, output_path: Path) -> Path:
+    """Export 'exportable' : colonnes utiles pour démarchage / import CRM.
+
+    Accepte n'importe quelle famille de leads (L3 / L3.5 / L4). Les colonnes
+    manquantes deviennent des cases vides.
+    """
+    rows = [lead.model_dump() for lead in leads]
+    p = _ecrire_csv(rows, COLONNES_EXPORT_CRM, output_path)
+    logger.info("CSV exportable CRM écrit : %s (%d leads)", p, len(leads))
     return p
 
 
@@ -427,21 +489,61 @@ def lire_stage3_csv(csv_path: Path) -> list[LeadStage3]:
     return leads_l3
 
 
-def lire_stage4_csv(csv_path: Path) -> list[LeadStage4]:
-    """Re-charge un CSV L4 vers des LeadStage4."""
+def lire_stage3_5_csv(csv_path: Path) -> list[LeadStage35]:
+    """Re-charge un CSV L3.5 vers des LeadStage35.
+
+    Tolère un CSV L3 standard (colonnes Dropcontact absentes → champs None).
+    """
     leads_l3 = lire_stage3_csv(csv_path)
 
     with csv_path.open("r", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         rows = list(reader)
 
-    leads_l4: list[LeadStage4] = []
+    leads_l35: list[LeadStage35] = []
     for l3, row in zip(leads_l3, rows, strict=False):
+        enrichi_raw = row.get("enrichi_dropcontact") or ""
+        cout_raw = row.get("cout_enrichissement_eur") or "0"
+        try:
+            cout = float(cout_raw) if cout_raw not in ("", "None") else 0.0
+        except ValueError:
+            cout = 0.0
+        leads_l35.append(
+            LeadStage35(
+                **l3.model_dump(),
+                email_dropcontact=row.get("email_dropcontact") or None,
+                qualification_email_dropcontact=(
+                    row.get("qualification_email_dropcontact") or None
+                ),
+                telephone_direct_dropcontact=row.get("telephone_direct_dropcontact") or None,
+                linkedin_dirigeant_dropcontact=row.get("linkedin_dirigeant_dropcontact") or None,
+                linkedin_entreprise_dropcontact=row.get("linkedin_entreprise_dropcontact") or None,
+                civilite_dirigeant_dropcontact=row.get("civilite_dirigeant_dropcontact") or None,
+                prenom_dirigeant_dropcontact=row.get("prenom_dirigeant_dropcontact") or None,
+                nom_dirigeant_dropcontact=row.get("nom_dirigeant_dropcontact") or None,
+                enrichi_dropcontact=(enrichi_raw == "VRAI"),
+                enrichissement_erreur=row.get("enrichissement_erreur") or None,
+                cout_enrichissement_eur=cout,
+            )
+        )
+    return leads_l35
+
+
+def lire_stage4_csv(csv_path: Path) -> list[LeadStage4]:
+    """Re-charge un CSV L4 vers des LeadStage4 (inclut colonnes L3.5)."""
+    leads_l35 = lire_stage3_5_csv(csv_path)
+
+    with csv_path.open("r", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+
+    leads_l4: list[LeadStage4] = []
+    for l35, row in zip(leads_l35, rows, strict=False):
         score_raw = row.get("score_interet") or ""
         top_raw = row.get("top_lead") or ""
         leads_l4.append(
             LeadStage4(
-                **l3.model_dump(),
+                **l35.model_dump(),
                 score_interet=(
                     int(score_raw) if score_raw not in ("", "None") else None
                 ),

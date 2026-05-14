@@ -1,0 +1,20 @@
+# Configuration Streamlit (locale + Streamlit Cloud).
+# Voir https://docs.streamlit.io/library/advanced-features/configuration
+
+[server]
+# Port par défaut. Streamlit Cloud surcharge automatiquement.
+port = 8501
+# Pas de browser auto en headless (cloud).
+headless = true
+# Limite raisonnable pour upload CSV AAA Data (~50 Mo max).
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#16a34a"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f8fafc"
+textColor = "#0f172a"
+font = "sans serif"
