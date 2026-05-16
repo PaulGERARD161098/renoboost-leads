@@ -11,6 +11,8 @@ from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
+from .cli_rgpd import cleanup as rgpd_cleanup
+from .cli_rgpd import forget as rgpd_forget
 from .common.budget_guard import BudgetExceededError, BudgetGuard
 from .common.cache import SessionCache
 from .common.logger import setup_logger
@@ -998,6 +1000,138 @@ def export(
         f"({'top_only' if top_only else 'tous'}"
         f"{', avec email' if avec_email_uniquement else ''})"
     )
+
+
+def _format_octets(n: int) -> str:
+    for unit in ("o", "Ko", "Mo", "Go"):
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} To"
+
+
+@cli.command(name="forget")
+@click.option("--email", default=None, help="Email à effacer (multi-colonnes).")
+@click.option("--siren", default=None, help="SIREN à effacer.")
+@click.option("--place-id", default=None, help="place_id Google à effacer.")
+@click.option("--motif", default="demande RGPD", help="Motif inscrit au registre.")
+@click.option(
+    "--data-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Racine `data/` (défaut : PROJECT_ROOT/data).",
+)
+@click.option("--dry-run", is_flag=True, help="Compte sans rien effacer.")
+def forget_cmd(
+    email: str | None,
+    siren: str | None,
+    place_id: str | None,
+    motif: str,
+    data_dir: Path | None,
+    dry_run: bool,
+) -> None:
+    """Droit à l'effacement RGPD — purge un lead de toutes les sessions."""
+    if not any([email, siren, place_id]):
+        console.print("[red]✗ Au moins un critère requis : --email, --siren, --place-id[/red]")
+        sys.exit(2)
+
+    data_dir = data_dir or (PROJECT_ROOT / "data")
+    rapport = rgpd_forget(
+        data_dir,
+        email=email,
+        siren=siren,
+        place_id=place_id,
+        motif=motif,
+        dry_run=dry_run,
+    )
+
+    badge = "[yellow]DRY-RUN[/yellow]" if dry_run else "[green]EFFACÉ[/green]"
+    console.print(
+        f"\n{badge} — {rapport.total_lignes} lignes / "
+        f"{rapport.sessions_touchees} sessions touchées\n"
+    )
+
+    table = Table(title="Détail par session")
+    table.add_column("Session")
+    table.add_column("Lignes", justify="right")
+    table.add_column("Cache", justify="right")
+    table.add_column("CSV modifiés")
+    for s in rapport.sessions:
+        if s.lignes_effacees == 0:
+            continue
+        table.add_row(
+            s.session_path.name,
+            str(s.lignes_effacees),
+            str(s.place_ids_effaces_cache),
+            ", ".join(s.csvs_modifies),
+        )
+    if rapport.total_lignes > 0:
+        console.print(table)
+    if not dry_run and rapport.total_lignes > 0:
+        console.print(f"\n[dim]→ Inscrit dans {data_dir / 'effacements_log.csv'}[/dim]")
+
+
+@cli.command(name="cleanup")
+@click.option(
+    "--older-than-days",
+    type=int,
+    default=365 * 3,
+    show_default=True,
+    help="Seuil d'ancienneté en jours (défaut : 3 ans).",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["dry-run", "archive", "delete"]),
+    default="dry-run",
+    show_default=True,
+    help="dry-run = liste seulement ; archive = tar.gz puis supprime ; delete = supprime.",
+)
+@click.option(
+    "--data-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Racine `data/` (défaut : PROJECT_ROOT/data).",
+)
+def cleanup_cmd(older_than_days: int, mode: str, data_dir: Path | None) -> None:
+    """Purge les sessions plus anciennes que N jours. Dry-run par défaut."""
+    data_dir = data_dir or (PROJECT_ROOT / "data")
+    rapport = rgpd_cleanup(data_dir, older_than_days=older_than_days, mode=mode)
+
+    badge = {
+        "dry-run": "[yellow]DRY-RUN[/yellow]",
+        "archive": "[cyan]ARCHIVÉ[/cyan]",
+        "delete": "[red]SUPPRIMÉ[/red]",
+    }[mode]
+    console.print(
+        f"\n{badge} — seuil {older_than_days} j — "
+        f"{len(rapport.candidates)} session(s) concernée(s)\n"
+    )
+
+    if not rapport.candidates:
+        console.print("[green]Rien à purger.[/green]")
+        return
+
+    table = Table(title="Sessions candidates")
+    table.add_column("Session")
+    table.add_column("Date")
+    table.add_column("Taille", justify="right")
+    for c in rapport.candidates:
+        table.add_row(
+            c.session_path.name,
+            c.date_session.strftime("%Y-%m-%d"),
+            _format_octets(c.taille_octets),
+        )
+    console.print(table)
+
+    if mode == "dry-run":
+        console.print(
+            "\n[dim]Pour appliquer : --mode archive (garde tar.gz) ou --mode delete.[/dim]"
+        )
+    else:
+        console.print(
+            f"\n{rapport.actions_effectuees} action(s) effectuée(s) — "
+            f"{_format_octets(rapport.octets_liberes)} libérés."
+        )
 
 
 # Sous-groupe veille (immatriculations VE flotte — AAA Data)
