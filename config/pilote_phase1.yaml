@@ -1,0 +1,105 @@
+# ════════════════════════════════════════════════════════════════
+# Pilote Phase 1 — validation pipeline RénoBoost end-to-end (dry-run)
+# ════════════════════════════════════════════════════════════════
+# Cible : bureaux PME 10-49 salariés, Nord (59)
+# Volume : ~30 leads
+# Mode : dry-run (L3.5 + L4 simulés, aucun appel API payant L3.5/L4).
+#        L1 (Google Places) et L2 (data.gouv.fr) tournent en réel —
+#        c'est là qu'on valide la qualité des leads en haut du tunnel.
+#
+# Usage :
+#   python -m renoboost_leads.cli estimate --config config/pilote_phase1.yaml
+#   python -m renoboost_leads.cli run --config config/pilote_phase1.yaml \
+#       --stages 1,2,3,3.5,4 --dry-run
+# ════════════════════════════════════════════════════════════════
+
+run:
+  client_name: "pilote-phase1-bureaux-pme-59"
+  description: "Pilote validation pipeline — bureaux PME 10-49 sal., Nord 59, dry-run L3.5/L4"
+  campaign_date: "2026-05-15"
+
+# Tous les étages activés pour valider le flux complet.
+# L3.5 + L4 utilisent leurs clients dry-run (zéro coût) via --dry-run.
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_3_5_enrichment: true
+  enable_stage_4_prospection: true
+
+# ─── Secteurs : tertiaire / services PME ─────────────────────────
+# On vise des activités où on trouve effectivement des bureaux PME 10-49 sal.
+# avec un dirigeant identifiable et un site web → terrain favorable pour
+# valider tout le pipeline (L1 → L2 → L3 → L3.5 → L4).
+secteurs:
+  - type: "accounting"
+    query: "cabinet d'expertise comptable"
+  - type: "lawyer"
+    query: "cabinet d'avocats"
+  - type: "real_estate_agency"
+    query: "agence immobilière entreprise"
+  - type: "point_of_interest"
+    query: "agence de communication"
+  - type: "point_of_interest"
+    query: "bureau d'études techniques"
+
+zone:
+  type: "departement"
+  codes: ["59"]
+  rayon_par_point_km: 10
+  pas_grille_km: 15
+
+# ─── Filtres L1 (Google Places) ───
+filtres:
+  statut_requis: "OPERATIONAL"
+  exiger_site_web: true              # essentiel pour L3 (scraping) + L3.5 (domaine)
+  dedup_chaines: true
+
+# ─── Filtres L2 (data.gouv.fr) : c'est ICI qu'on cible la PME 10-49 ───
+# Tranches INSEE :
+#   11 = 10-19 salariés
+#   12 = 20-49 salariés
+filtres_entreprise:
+  tranche_effectif_inclus: ["11", "12"]
+  # NAF tertiaire / services aux entreprises :
+  #   69 = activités juridiques et comptables
+  #   70 = activités des sièges sociaux ; conseil de gestion
+  #   71 = architecture, ingénierie, contrôle technique
+  #   73 = publicité et études de marché
+  #   74 = autres activités spécialisées, scientifiques et techniques
+  naf_inclus: ["69", "70", "71", "73", "74"]
+  # On exclut explicitement la restauration et le commerce de détail
+  # (au cas où une query texte aurait ramené un faux positif).
+  naf_exclus: ["56", "47"]
+  forme_juridique_exclus: ["EI", "EIRL"]  # focus sur structures
+
+# ─── Étage 3.5 Dropcontact (dry-run) ───
+# Le client dry-run synthétise email/tel/LinkedIn plausibles sans appel
+# réseau. C'est suffisant pour valider le flux + voir le rendu CSV.
+enrichissement_l3_5:
+  provider: "dropcontact"
+  language: "fr"
+  siren: true
+  batch_size: 50
+  cout_par_lead_eur: 0.50           # informatif uniquement en dry-run
+
+# ─── Étage 4 Claude (dry-run en --dry-run) ───
+claude_scoring:
+  modele: "claude-haiku-4-5"
+  seuil_top_lead: 70
+  inclure_pitch: true
+  contexte_client: null              # null = contexte RénoBoost par défaut
+  max_tokens_sortie: 400
+
+volume:
+  cible: 30
+  max_par_secteur: 8                 # diversifie sur les 5 secteurs
+
+# Budget large : en dry-run L3.5/L4 = 0€, seul L1 (Google Places) consomme
+# (~0.025€ par Text Search). 30 leads → ~2-5€ max côté L1.
+budget:
+  max_eur: 10.0
+
+sortie:
+  format: ["csv"]
+  langue: "fr"
