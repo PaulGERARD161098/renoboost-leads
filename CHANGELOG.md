@@ -2,6 +2,34 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [Unreleased] — dette technique RGPD
+
+### Added — commandes CLI RGPD
+- **`cli forget --email/--siren/--place-id [--motif] [--dry-run]`** : automatise
+  le droit à l'effacement. Balaie toutes les sessions `data/output/<session>/`,
+  efface les lignes matchant dans tous les `etage*.csv` (qualifiés + hors-filtre
+  + L3.5 + L4) et leurs `backups/`, purge les caches SQLite (`cache.sqlite`,
+  `cache_l3_5.sqlite`, `cache_l4.sqlite`) sur les `place_id` concernés, inscrit
+  la demande dans `data/effacements_log.csv` (date ISO 8601, type, valeur,
+  sessions touchées, lignes effacées, motif).
+- **`cli cleanup --older-than-days N --mode {dry-run,archive,delete}`** :
+  purge automatique des sessions plus anciennes que N jours (défaut 3 ans
+  CNIL). Mode `dry-run` par défaut pour éviter toute perte accidentelle ;
+  `archive` crée un `tar.gz` dans `data/archives/<session>.tar.gz` avant
+  suppression ; `delete` supprime directement.
+- Nouveau module pur `cli_rgpd.py` (testable sans Click).
+
+### Tested
+- 16 nouveaux tests (`test_cli_forget.py` ×9, `test_cli_cleanup.py` ×7) :
+  matching email/SIREN/place_id, multi-CSV + backups, purge caches SQLite,
+  log RGPD, dry-run, modes archive/delete, validation entrées.
+- Total : **344 tests verts** (vs 328). Ruff clean.
+
+### Changed — docs
+- `RGPD_COMPLIANCE.md` : sections "Droit à l'effacement" et "Suppression
+  automatique" réécrites — la procédure manuelle est remplacée par la
+  commande CLI dédiée.
+
 ## [0.6.0] — 2026-05-14 — Sprint 3 : L3.5 Dropcontact + export CRM + Streamlit Cloud
 
 ### Added — Étage 3.5 : enrichissement contacts vérifiés (Dropcontact)
