@@ -2,9 +2,19 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
-## [Unreleased] — dette technique RGPD
+## [Unreleased] — dettes techniques
 
-### Added — commandes CLI RGPD
+### Added — smoke test L4 prêt-à-l'emploi (dette #3)
+- `scripts/generate_l3_fixture.py` : génère une fixture L3 de 5 leads variés
+  (cabinet médical, PME méca, BE énergie, restaurant, hôtel chaîne) à l'endroit
+  attendu par `scripts/premier_test_l4.sh`. Gratuit, déterministe, fixture
+  validée par `lire_stage3_csv`.
+- `scripts/premier_test_l4.sh` : ajout d'une étape `2/5 Fixture L3` qui appelle
+  le générateur si le CSV est absent. Le script passe de 4 à 5 étapes, marche
+  désormais **du premier coup** sans pré-run L1→L3 (avant : plantait si la
+  fixture n'existait pas localement).
+
+### Added — commandes CLI RGPD (dette #2)
 - **`cli forget --email/--siren/--place-id [--motif] [--dry-run]`** : automatise
   le droit à l'effacement. Balaie toutes les sessions `data/output/<session>/`,
   efface les lignes matchant dans tous les `etage*.csv` (qualifiés + hors-filtre

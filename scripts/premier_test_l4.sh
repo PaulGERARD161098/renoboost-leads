@@ -6,9 +6,10 @@
 #
 # Effectue :
 #   1. check-connections (vérifie que la clé est lue)
-#   2. tests d'intégration (~0.01 €)
-#   3. run L4 sur 5 leads variés (~0.025 €)
-#   4. affichage de la sortie pour inspection visuelle
+#   2. génère la fixture L3 si absente (gratuit, leads inventés)
+#   3. tests d'intégration (~0.01 €)
+#   4. run L4 sur 5 leads variés (~0.025 €)
+#   5. affichage de la sortie pour inspection visuelle
 #
 # Coût total attendu : < 0.05 €.
 
@@ -16,8 +17,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+FIXTURE="data/output/2026-05-13_KEYR_premier-test/etage3_contacts.csv"
+
 echo "═══════════════════════════════════════════════════════════"
-echo "1/4 — Vérification de la clé"
+echo "1/5 — Vérification de la clé"
 echo "═══════════════════════════════════════════════════════════"
 python -m renoboost_leads.cli check-connections | grep -A0 -B0 "Anthropic" || true
 echo
@@ -31,23 +34,34 @@ import sys; sys.exit(0 if get_settings().has_anthropic() else 1)" 2>/dev/null; t
 fi
 
 echo "═══════════════════════════════════════════════════════════"
-echo "2/4 — Tests d'intégration (1 appel Haiku + pipeline 3 leads)"
+echo "2/5 — Fixture L3 (génère si absente)"
+echo "═══════════════════════════════════════════════════════════"
+if [ -f "$FIXTURE" ]; then
+    echo "✓ Fixture déjà présente : $FIXTURE"
+else
+    echo "  Fixture absente → génération automatique de 5 leads bidons"
+    python scripts/generate_l3_fixture.py
+fi
+echo
+
+echo "═══════════════════════════════════════════════════════════"
+echo "3/5 — Tests d'intégration (1 appel Haiku + pipeline 3 leads)"
 echo "═══════════════════════════════════════════════════════════"
 ANTHROPIC_API_KEY="$(grep '^ANTHROPIC_API_KEY=' .env | cut -d= -f2-)" \
     pytest tests/test_stage4_integration.py -v -m integration
 echo
 
 echo "═══════════════════════════════════════════════════════════"
-echo "3/4 — Premier vrai run L4 (5 leads variés)"
+echo "4/5 — Premier vrai run L4 (5 leads variés)"
 echo "═══════════════════════════════════════════════════════════"
 python -m renoboost_leads.cli run \
     --config config/premier_test_l4.yaml \
     --stages 4 \
-    --from-csv data/output/2026-05-13_KEYR_premier-test/etage3_contacts.csv
+    --from-csv "$FIXTURE"
 echo
 
 echo "═══════════════════════════════════════════════════════════"
-echo "4/4 — Inspection des scores"
+echo "5/5 — Inspection des scores"
 echo "═══════════════════════════════════════════════════════════"
 python <<'PY'
 from pathlib import Path
