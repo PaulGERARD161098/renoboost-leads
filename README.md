@@ -149,6 +149,25 @@ python -m renoboost_leads.cli run \
   --from-csv data/output/<session>/etage1_decouverte.csv
 ```
 
+### Conformité RGPD — effacement et purge
+
+```bash
+# Aperçu (recommandé d'abord)
+python -m renoboost_leads.cli forget --email contact@exemple.fr --dry-run
+
+# Effacement réel d'un lead — par email, SIREN ou place_id
+python -m renoboost_leads.cli forget --email contact@exemple.fr --motif "demande client"
+python -m renoboost_leads.cli forget --siren 123456789
+python -m renoboost_leads.cli forget --place-id ChIJxxxxx
+
+# Purge des sessions > 3 ans (défaut, dry-run par défaut)
+python -m renoboost_leads.cli cleanup
+python -m renoboost_leads.cli cleanup --older-than-days 90 --mode archive
+python -m renoboost_leads.cli cleanup --mode delete
+```
+
+Voir [RGPD_COMPLIANCE.md](./RGPD_COMPLIANCE.md) pour le détail.
+
 ---
 
 ## 📁 Sortie
