@@ -73,14 +73,27 @@ class BudgetGuard:
 
     @staticmethod
     def estimer_cout_eur(
-        modele: str, tokens_input: int, tokens_output: int
+        modele: str,
+        tokens_input: int,
+        tokens_output: int,
+        cache_creation_tokens: int = 0,
+        cache_read_tokens: int = 0,
     ) -> float:
+        """Calcule le coût en € en tenant compte du prompt caching.
+
+        Tarifs Anthropic prompt caching :
+          - cache write (ephemeral 5 min) : input × 1.25
+          - cache read                    : input × 0.10
+          - input non-caché              : input × 1.00
+        """
         tarifs = TARIFS_USD_PER_MTOK.get(modele)
         if tarifs is None:
             return 0.0
         cout_usd = (
             tokens_input / 1_000_000 * tarifs["input"]
             + tokens_output / 1_000_000 * tarifs["output"]
+            + cache_creation_tokens / 1_000_000 * tarifs["input"] * 1.25
+            + cache_read_tokens / 1_000_000 * tarifs["input"] * 0.10
         )
         return round(cout_usd * USD_TO_EUR, 6)
 

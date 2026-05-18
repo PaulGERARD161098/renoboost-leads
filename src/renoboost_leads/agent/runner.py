@@ -45,6 +45,8 @@ class CycleResult:
     cout_eur: float = 0.0
     tokens_input: int = 0
     tokens_output: int = 0
+    tokens_cache_creation: int = 0
+    tokens_cache_read: int = 0
     stop_reason: str = ""
     erreur: str | None = None
 
@@ -57,15 +59,45 @@ class CycleResult:
             "cout_eur": self.cout_eur,
             "tokens_input": self.tokens_input,
             "tokens_output": self.tokens_output,
+            "tokens_cache_creation": self.tokens_cache_creation,
+            "tokens_cache_read": self.tokens_cache_read,
             "stop_reason": self.stop_reason,
             "erreur": self.erreur,
         }
 
 
-def _system_prompt(journal: Journal) -> str:
+def _system_blocks(journal: Journal) -> list[dict]:
+    """Renvoie le prompt système en blocs avec cache_control sur le base.
+
+    Le contenu base (rôle + règles) est stable d'un cycle à l'autre →
+    cache ephemeral (5 min). Le journal récent change → bloc séparé,
+    non-caché.
+    """
     base = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
     ctx = journal.context_pour_agent(n=5)
-    return f"{base}\n\n## Journal récent\n\n{ctx}"
+    return [
+        {
+            "type": "text",
+            "text": base,
+            "cache_control": {"type": "ephemeral"},
+        },
+        {
+            "type": "text",
+            "text": f"\n\n## Journal récent\n\n{ctx}",
+        },
+    ]
+
+
+def _tools_with_cache(schemas: list[dict]) -> list[dict]:
+    """Ajoute cache_control sur le dernier outil pour cacher tout le tableau.
+
+    Les outils ne changent pas d'un cycle à l'autre — gros gain de tokens.
+    """
+    if not schemas:
+        return schemas
+    out = [dict(s) for s in schemas]
+    out[-1] = {**out[-1], "cache_control": {"type": "ephemeral"}}
+    return out
 
 
 def _execute_tool(name: str, args: dict, dispatch: dict) -> Any:
@@ -111,8 +143,8 @@ def run_cycle(
     cycle_id = uuid.uuid4().hex[:6]
     result = CycleResult(cycle_id=cycle_id, texte_final="")
 
-    system = _system_prompt(j)
-    schemas = all_schemas()
+    system = _system_blocks(j)
+    schemas = _tools_with_cache(all_schemas())
     dispatch = all_dispatch()
 
     messages: list[dict] = [{"role": "user", "content": instruction}]
@@ -130,8 +162,16 @@ def run_cycle(
         usage = response.usage
         result.tokens_input += usage.input_tokens
         result.tokens_output += usage.output_tokens
+        cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        result.tokens_cache_creation += cache_creation
+        result.tokens_cache_read += cache_read
         cout = BudgetGuard.estimer_cout_eur(
-            modele, usage.input_tokens, usage.output_tokens
+            modele,
+            usage.input_tokens,
+            usage.output_tokens,
+            cache_creation_tokens=cache_creation,
+            cache_read_tokens=cache_read,
         )
         result.cout_eur = round(result.cout_eur + cout, 6)
         b.consommer(cout)
