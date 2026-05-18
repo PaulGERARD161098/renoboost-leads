@@ -145,3 +145,123 @@ def test_outil_enregistre_dans_registry() -> None:
     schemas = all_schemas()
     assert any(s["name"] == "generate_report" for s in schemas)
     assert "generate_report" in all_dispatch()
+
+
+def test_fallback_ancien_nom_stats(fake_root: Path) -> None:
+    """Compat ascendante : sessions historiques avec stats_run.json."""
+    d = fake_root / "old"
+    d.mkdir()
+    _ecrire_csv(
+        d / "etage3_contacts.csv",
+        [{"nom": "X", "siren": "1", "dirigeant_nom": "Y", "email_principal": "a@b.fr"}],
+    )
+    # Ancien nom de fichier
+    (d / "stats_run.json").write_text(
+        json.dumps({"campaign": "ancien-run", "debut": "2026-04-01"}),
+        encoding="utf-8",
+    )
+    res = rep.generate_report("old")
+    assert "error" not in res
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "ancien-run" in html
+
+
+def test_inclut_config_snapshot_si_present(fake_root: Path) -> None:
+    """Si config_snapshot.yaml présent, ses infos apparaissent dans le HTML."""
+    d = _session_l3(fake_root, "s_cfg", n=5)
+    (d / "config_snapshot.yaml").write_text(
+        """
+zone:
+  type: departement
+  codes: ["59", "62"]
+  rayon_par_point_km: 10
+secteurs:
+  - type: establishment
+    query: site industriel
+  - type: establishment
+    query: plateforme logistique
+volume:
+  cible: 10
+budget:
+  max_eur: 1.0
+filtres:
+  statut_requis: OPERATIONAL
+  exiger_site_web: true
+""",
+        encoding="utf-8",
+    )
+    res = rep.generate_report("s_cfg")
+    assert res["config_inclus"] is True
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "Paramètres de la recherche" in html
+    assert "site industriel" in html
+    assert "plateforme logistique" in html
+    assert "site web requis" in html
+    assert "departement" in html
+    assert "59" in html
+
+
+def test_config_path_explicite(fake_root: Path, tmp_path: Path) -> None:
+    """Override config_path explicite (priorité sur snapshot)."""
+    _session_l3(fake_root, "s_ovr", n=3)
+    cfg = tmp_path / "mon_cfg.yaml"
+    cfg.write_text(
+        "secteurs:\n  - type: x\n    query: comptable\n", encoding="utf-8"
+    )
+    res = rep.generate_report("s_ovr", config_path=str(cfg))
+    assert res["config_inclus"] is True
+    html = (fake_root / "s_ovr" / "rapport.html").read_text(encoding="utf-8")
+    assert "comptable" in html
+
+
+def test_config_yaml_corrompu_n_explose_pas(fake_root: Path) -> None:
+    d = _session_l3(fake_root, "s_bad", n=3)
+    (d / "config_snapshot.yaml").write_text("[: invalide : :", encoding="utf-8")
+    res = rep.generate_report("s_bad")
+    assert "error" not in res
+    assert res["config_inclus"] is False
+
+
+def test_kpi_run_si_stats_completes(fake_root: Path) -> None:
+    d = _session_l3(fake_root, "s_kpi", n=5)
+    (d / "run_stats.json").write_text(
+        json.dumps(
+            {
+                "campaign": "test",
+                "debut": "2026-05-18T10:00:00",
+                "fin": "2026-05-18T10:08:30",
+                "duree_totale_secondes": 510,
+                "cout_total_eur": 0.4321,
+                "leads_finaux": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+    res = rep.generate_report("s_kpi")
+    assert "error" not in res
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "0.43" in html  # cout
+    assert "8.5 min" in html  # durée arrondie
+    assert ">9<" in html  # leads_finaux
+
+
+def test_chart_svg_inline(fake_root: Path) -> None:
+    """Les SVG des distributions sont bien dans le HTML."""
+    d = _session_l3(fake_root, "s_chart", n=10)
+    res = rep.generate_report("s_chart")
+    assert "error" not in res
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    # Au moins un SVG (effectifs ou NAF)
+    assert "<svg" in html
+    # SVG inline, pas de référence externe
+    assert "<script" not in html
+    assert "src=" not in html
+
+
+def test_bar_chart_vide_renvoie_chaine_vide() -> None:
+    assert rep._bar_chart_svg({}) == ""
+
+
+def test_bar_chart_tronque_labels_longs() -> None:
+    svg = rep._bar_chart_svg({"a" * 50: 10})
+    assert "…" in svg
