@@ -11,9 +11,9 @@ Convention :
 
 from __future__ import annotations
 
+from . import cold_mail, notify, pipeline, quality, sessions
 from . import config as cfg_tools
 from . import leads as leads_tools
-from . import notify, pipeline, quality, sessions
 
 
 def all_schemas() -> list[dict]:
@@ -25,12 +25,21 @@ def all_schemas() -> list[dict]:
         *cfg_tools.SCHEMAS,
         *leads_tools.SCHEMAS,
         *notify.SCHEMAS,
+        *cold_mail.SCHEMAS,
     ]
 
 
 def all_dispatch() -> dict:
     """Concat des dispatchers pour le runner."""
     d: dict = {}
-    for mod in (sessions, pipeline, quality, cfg_tools, leads_tools, notify):
+    for mod in (
+        sessions,
+        pipeline,
+        quality,
+        cfg_tools,
+        leads_tools,
+        notify,
+        cold_mail,
+    ):
         d.update(mod.DISPATCH)
     return d

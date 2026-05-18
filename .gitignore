@@ -12,6 +12,7 @@ data/output/
 data/cache/
 data/veille/
 data/agent/
+data/cold_mail/
 *.csv
 !data/reference/*.csv
 !tests/fixtures_aaa/*.csv

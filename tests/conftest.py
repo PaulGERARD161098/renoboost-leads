@@ -18,6 +18,7 @@ def _isoler_chemins_agent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
     from renoboost_leads.agent import budget as agent_budget
     from renoboost_leads.agent import journal as agent_journal
     from renoboost_leads.agent import metrics as agent_metrics
+    from renoboost_leads.instantly import staging as cm_staging
 
     monkeypatch.setattr(
         agent_journal, "JOURNAL_DEFAULT_PATH", tmp_path / "journal.md"
@@ -27,4 +28,7 @@ def _isoler_chemins_agent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
     )
     monkeypatch.setattr(
         agent_metrics, "METRICS_DEFAULT_PATH", tmp_path / "metrics.json"
+    )
+    monkeypatch.setattr(
+        cm_staging, "STAGING_DIR_DEFAULT", tmp_path / "staging"
     )
