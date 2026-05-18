@@ -14,6 +14,7 @@ Pas de base, pas de vecteur — un humain doit pouvoir le lire en 30 secondes.
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,15 @@ from pathlib import Path
 from ..settings import PROJECT_ROOT
 
 JOURNAL_DEFAULT_PATH = PROJECT_ROOT / "data" / "agent" / "journal.md"
+
+# Au-delà de ce seuil (octets), `append` archive le fichier complet sous
+# `journal-archive-YYYYMM.md` et redémarre vide. Évite que le journal
+# gonfle indéfiniment et coûte des tokens à chaque cycle.
+DEFAULT_ROTATE_BYTES = 200_000  # ~200 KB
+
+# Plafond bytes du contexte injecté au LLM. Si la concat des N entrées
+# récentes dépasse, on tronque par le début (on garde le plus récent).
+DEFAULT_CONTEXT_MAX_BYTES = 10_000  # ~10 KB ~ 2.5k tokens
 
 
 @dataclass
@@ -46,15 +56,53 @@ class JournalEntry:
 
 
 class Journal:
-    """Wrapper append-only autour du fichier markdown."""
+    """Wrapper append-only autour du fichier markdown.
 
-    def __init__(self, path: Path | None = None) -> None:
+    Rotation : si le fichier dépasse `rotate_bytes`, il est archivé sous
+    `<basename>-archive-YYYYMM.md` (dans le même dossier) avant d'être
+    redémarré vide. Les archives ne sont jamais relues — elles servent
+    d'historique pour humain ou compliance.
+    """
+
+    def __init__(
+        self,
+        path: Path | None = None,
+        *,
+        rotate_bytes: int = DEFAULT_ROTATE_BYTES,
+        context_max_bytes: int = DEFAULT_CONTEXT_MAX_BYTES,
+    ) -> None:
         self.path = path or JOURNAL_DEFAULT_PATH
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.rotate_bytes = int(rotate_bytes)
+        self.context_max_bytes = int(context_max_bytes)
+
+    def _rotate_si_besoin(self) -> Path | None:
+        """Si fichier > seuil, déplace vers archive et renvoie le chemin."""
+        if not self.path.exists():
+            return None
+        if self.path.stat().st_size <= self.rotate_bytes:
+            return None
+        suffixe = datetime.now(timezone.utc).strftime("%Y%m")
+        archive = self.path.with_name(f"{self.path.stem}-archive-{suffixe}.md")
+        # Si une archive existe déjà ce mois-ci, on append à la fin
+        if archive.exists():
+            with archive.open("ab") as fa, self.path.open("rb") as fc:
+                fa.write(b"\n")
+                shutil.copyfileobj(fc, fa)
+            self.path.unlink()
+        else:
+            shutil.move(str(self.path), str(archive))
+        return archive
 
     def append(self, entry: JournalEntry) -> None:
+        self._rotate_si_besoin()
+        # Le fichier peut ne plus exister après rotation — recréer dans 'a'.
         with self.path.open("a", encoding="utf-8") as f:
-            if self.path.stat().st_size > 0:
+            try:
+                taille = self.path.stat().st_size
+            except FileNotFoundError:
+                taille = 0
+            if taille > 0:
                 f.write("\n")
             f.write(entry.to_markdown())
 
@@ -76,8 +124,23 @@ class Journal:
         return normalises[-n:]
 
     def context_pour_agent(self, n: int = 5) -> str:
-        """Concatène les n dernières entrées en bloc markdown injectable au prompt."""
+        """Concatène les n dernières entrées, tronquées à `context_max_bytes`.
+
+        Si la concat dépasse le plafond, on enlève les plus vieilles entrées
+        jusqu'à passer sous — on garde toujours la plus récente, quitte à
+        retourner une seule entrée.
+        """
         entries = self.read_recent(n)
         if not entries:
             return "_(journal vide — premier cycle de l'agent)_"
-        return "\n\n".join(entries)
+        # On garde toujours la dernière, puis on rajoute en remontant tant
+        # qu'on reste sous le plafond.
+        retenues = [entries[-1]]
+        taille = len(retenues[0].encode("utf-8"))
+        for e in reversed(entries[:-1]):
+            t = len(e.encode("utf-8")) + 2  # séparateur \n\n
+            if taille + t > self.context_max_bytes:
+                break
+            retenues.insert(0, e)
+            taille += t
+        return "\n\n".join(retenues)
