@@ -152,7 +152,7 @@ with st.sidebar:
 
     st.divider()
     py = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
-    st.caption(f"Version : 0.7.0  •  Python {py}")
+    st.caption(f"Version : 0.8.0  •  Python {py}")
     st.caption(f"Projet : `{PROJECT_ROOT.name}`")
 
 

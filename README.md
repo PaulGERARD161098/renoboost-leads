@@ -74,7 +74,39 @@ Disponible aussi dans Streamlit (onglet **🤖 Copilote**). Configurable
 via `config/agent.yaml` (modèle, cap budget, niveau autonomie).
 
 **Phase A** : pas d'envoi cold mail, pas d'écriture de config sans validation
-humaine. **Phase B** = intégration Instantly pour cold mailing (à venir).
+humaine. **Phase B** : intégration Instantly pour cold mailing N2 (drafte
++ validation manuelle avant envoi).
+
+### Phase B — Cold mailing Instantly avec staging N2
+
+L'agent drafte les emails, **toi tu valides**, puis seulement les items
+'valide' sont poussés dans Instantly. Aucun envoi sans clic humain.
+
+```bash
+# 1. L'agent drafte (via chat ou run)
+python -m renoboost_leads.cli agent run \
+    "stage 10 cold mails pour la session <sid> en secteur compta"
+
+# 2. Toi tu valides item par item (CLI ou Streamlit onglet Copilote)
+python -m renoboost_leads.cli cold-mail list
+python -m renoboost_leads.cli cold-mail show <staging_id>
+python -m renoboost_leads.cli cold-mail validate \
+    --staging-id <stg> --lead-id <siren>
+python -m renoboost_leads.cli cold-mail refuse \
+    --staging-id <stg> --lead-id <siren>
+
+# 3. Envoi des validés vers Instantly
+python -m renoboost_leads.cli cold-mail send --staging-id <stg>
+
+# 4. Suivi
+python -m renoboost_leads.cli cold-mail metrics --campaign-id <id>
+```
+
+Configuration : `INSTANTLY_API_KEY` dans `.env`, `INSTANTLY_DRY_RUN=false`
+quand prêt. Tant que pas configuré, tout est simulé (dry-run automatique).
+
+Secteurs disponibles : `compta`, `avocats`, `immo`, `com`, `be` (5 templates
+3-step sous `templates/sequences/`).
 
 ## 🎯 Utilisation
 
