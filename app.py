@@ -184,7 +184,6 @@ with tab_recherche:
         "dans l'onglet **📁 Sessions** pour télécharger le rapport HTML."
     )
 
-    from renoboost_leads.agent.tools.pipeline import run_pipeline
     from renoboost_leads.agent.tools.workflow import clone_config
 
     # Liste des configs disponibles comme template (utilise les client_*.yaml)
@@ -290,33 +289,139 @@ with tab_recherche:
                 )
                 st.code(contenu, language="yaml")
 
-            with st.spinner(
-                f"Recherche en cours ({stages_choisis}, peut prendre "
-                "3-8 min pour 10 leads)…"
-            ):
-                pipe_res = run_pipeline(
-                    cfg_res["path"],
-                    stages=stages_choisis,
-                    timeout_s=1200,
-                )
+            # ─── Exécution streamée du pipeline ──────────────────────
+            # subprocess.Popen + lecture ligne par ligne pour donner
+            # un feedback live à l'utilisateur (au lieu d'un spinner
+            # figé pendant 3-8 min). Garde aussi le WebSocket Streamlit
+            # actif, ce qui aide sur Streamlit Cloud (timeout reverse-
+            # proxy ~5 min en cas d'inactivité).
+            import os as _os
+            import subprocess as _sp
+            import sys as _sys
+            import time as _time
 
-            if pipe_res.get("ok"):
+            cfg_full = PROJECT_ROOT / cfg_res["path"]
+            cmd = [
+                _sys.executable,
+                "-m",
+                "renoboost_leads.cli",
+                "run",
+                "--config",
+                str(cfg_full),
+                "--stages",
+                stages_choisis,
+            ]
+
+            st.markdown("### 🔄 Recherche en cours")
+            status_box = st.empty()
+            metric_cols = st.columns(3)
+            duree_box = metric_cols[0].empty()
+            stage_box = metric_cols[1].empty()
+            lignes_box = metric_cols[2].empty()
+            log_container = st.empty()
+
+            logs_buffer: list[str] = []
+            current_stage = "Initialisation"
+            TIMEOUT_S = 1800  # 30 min — marge confortable
+            start = _time.time()
+
+            env = _os.environ.copy()
+            # Force l'unbuffering Python sinon les logs CLI n'arrivent
+            # qu'à la fin (buffering 4kB par défaut sur pipe).
+            env["PYTHONUNBUFFERED"] = "1"
+
+            try:
+                # S603 ignoré : cmd ne contient que sys.executable + literals
+                # + chemins issus de clone_config (déjà chroot/sanitized).
+                proc = _sp.Popen(  # noqa: S603
+                    cmd,
+                    stdout=_sp.PIPE,
+                    stderr=_sp.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    cwd=str(PROJECT_ROOT),
+                    encoding="utf-8",
+                    env=env,
+                )
+            except OSError as e:
+                st.error(f"Impossible de lancer le subprocess : {e}")
+                st.stop()
+
+            rc: int | None = None
+            try:
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                    logs_buffer.append(line)
+
+                    # Détection grossière de l'étage courant dans les logs
+                    low = line.lower()
+                    if "étage 1" in low or "etage1" in low or "stage 1" in low:
+                        current_stage = "L1 — Google Places"
+                    elif "étage 2" in low or "etage2" in low or "stage 2" in low:
+                        current_stage = "L2 — Sirene"
+                    elif "étage 3.5" in low or "etage3_5" in low:
+                        current_stage = "L3.5 — Dropcontact"
+                    elif "étage 3" in low or "etage3" in low or "stage 3" in low:
+                        current_stage = "L3 — Scraping"
+                    elif "étage 4" in low or "etage4" in low:
+                        current_stage = "L4 — Prospection"
+
+                    elapsed = int(_time.time() - start)
+                    mn, sec = divmod(elapsed, 60)
+                    status_box.info(
+                        f"⏱ **{mn}min {sec:02d}s** · {current_stage}"
+                    )
+                    duree_box.metric("Durée", f"{mn}:{sec:02d}")
+                    stage_box.metric(
+                        "Étage", current_stage.split(" — ")[0]
+                    )
+                    lignes_box.metric("Logs", len(logs_buffer))
+                    log_container.code(
+                        "\n".join(logs_buffer[-30:]), language="text"
+                    )
+
+                    if _time.time() - start > TIMEOUT_S:
+                        proc.kill()
+                        st.error(
+                            f"⏱ Timeout après {TIMEOUT_S}s — process tué."
+                        )
+                        break
+            finally:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except _sp.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                rc = proc.returncode
+
+            total = int(_time.time() - start)
+            mn, sec = divmod(total, 60)
+            status_box.empty()
+
+            if rc == 0:
                 st.success(
-                    "✓ Recherche terminée. Onglet **📁 Sessions** pour "
-                    "télécharger le rapport HTML."
+                    f"✓ Recherche terminée en **{mn}min {sec:02d}s**. "
+                    "Onglet **📁 Sessions** pour télécharger le rapport HTML."
                 )
                 st.balloons()
-                with st.expander("Logs (queue stdout)"):
-                    st.code(pipe_res.get("stdout_tail", "") or "(vide)")
             else:
                 st.error(
-                    f"Échec du pipeline (code retour : "
-                    f"{pipe_res.get('returncode')})"
+                    f"Échec du pipeline (code retour {rc}) après "
+                    f"{mn}min {sec:02d}s."
                 )
-                with st.expander("Logs stderr"):
-                    st.code(pipe_res.get("stderr_tail", "") or "(vide)")
-                with st.expander("Logs stdout"):
-                    st.code(pipe_res.get("stdout_tail", "") or "(vide)")
+
+            with st.expander(
+                f"Logs complets ({len(logs_buffer)} lignes)"
+            ):
+                st.code(
+                    "\n".join(logs_buffer[-200:]) or "(aucun log)",
+                    language="text",
+                )
 
 
 # ───────────────────────────────────────────────────────────────────
