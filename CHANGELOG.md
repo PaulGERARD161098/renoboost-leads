@@ -2,6 +2,61 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.7.0] — 2026-05-18 — Agent Copilote Phase A
+
+### Added — agent IA autonome de pilotage prospection
+Premier socle d'un agent qui prend des instructions en langage naturel
+("liste les sessions", "diagnostique la dernière", "priorise les leads")
+et appelle les bons outils via Claude tool-use.
+
+- **7 outils exposés au LLM** (`src/renoboost_leads/agent/tools/`) :
+  - `list_sessions(limit)` : énumère `data/output/`, plus récentes d'abord,
+    détecte les étages disponibles (1, 2, 3, 3_hors_filtre, 3.5, 4).
+  - `read_session(session_id, stage, sample_size)` : stats + N premiers leads.
+  - `run_pipeline(config_path, stages, dry_run)` : wrap subprocess `cli run`.
+  - `diagnose_quality(session_id)` : % SIREN matché, dirigeant, email,
+    distribution effectif/NAF, anomalies, **verdict Phase 1 pilote**
+    (SIREN>80%, dirigeant>50%, email>40%).
+  - `read_config(path)` / `propose_config_edit(path, contenu_cible, motif)` :
+    lecture YAML sous `config/` (chroot strict), éditions = diff unifié
+    sans écriture (garde-fou Phase A).
+  - `prioritize_leads(session_id, top_n)` : scoring chaud/tiède/froid
+    auto-sélection L4 > L3.5 > L3 + distribution + médiane.
+  - `alert_human(subject, body, urgency)` : email SMTP via Settings
+    existant. 3 niveaux (info / attention / urgent).
+- **Runner Claude tool-use** (`agent/runner.py`) : boucle complète avec
+  budget €/jour persistant (`agent/budget.py`), journal markdown append-only
+  (`agent/journal.py`), prompt système (`prompts/system.md`), config YAML
+  (`config/agent.yaml`).
+- **CLI** : sous-groupe `renoboost-leads agent {run, chat, journal, budget}`.
+  - `agent run "instruction"` : one-shot.
+  - `agent chat` : REPL.
+  - `agent journal -n 10` : lecture journal.
+  - `agent budget` : état €/jour.
+- **UI Streamlit** : 5e onglet 🤖 Copilote avec métriques budget, zone
+  instruction, affichage tours/coût/tokens, journal récent.
+
+### Garde-fous Phase A
+- Budget cap €/jour persistant (reset minuit UTC, par défaut 5 €).
+- Niveau d'autonomie N2 — pas d'écriture config sans validation user,
+  pas d'envoi cold mail (Phase B = Instantly, à venir).
+- Chroot `config/` strict pour `read_config` (rejette `..` et chemins
+  absolus hors zone).
+- Cap `max_outils_par_cycle` pour éviter boucles infinies.
+- Toutes les erreurs d'outil sont passées au LLM (pas de raise) pour
+  qu'il puisse réagir intelligemment.
+
+### Tested
+- **+76 tests** (journal, budget, config, 5 outils, runner mocké).
+- Total : **404 tests verts** (vs 328 sur main). Ruff clean, Python 3.10-3.12.
+- Runner testé sans hit Anthropic (client mocké, fake responses).
+
+### Notes Phase B
+Phase B (à coder ensuite) = intégration **Instantly** pour cold mailing
+en mode N2 (drafte campagnes, validation email humain avant envoi).
+Décision actée : Instantly retenu vs Lemlist (37 €/mois, automatisation
+native plus avancée).
+
 ## [Unreleased] — dettes techniques
 
 ### Added — smoke test L4 prêt-à-l'emploi (dette #3)

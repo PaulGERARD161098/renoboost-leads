@@ -50,6 +50,32 @@ python -m renoboost_leads.cli check-connections
 
 ---
 
+## 🤖 Copilote — agent IA de pilotage (Phase A)
+
+L'agent Claude pilote la prospection en langage naturel. Il a 7 outils
+(lister/lire sessions, lancer pipeline, diagnostiquer qualité, lire/proposer
+config, prioriser leads, alerter humain) et un budget €/jour persistant
+(défaut 5 €/jour, cap dur).
+
+```bash
+# Cycle one-shot
+python -m renoboost_leads.cli agent run "liste les sessions récentes"
+python -m renoboost_leads.cli agent run "diagnostique la session 20260518-..."
+
+# REPL interactif
+python -m renoboost_leads.cli agent chat
+
+# État budget + journal
+python -m renoboost_leads.cli agent budget
+python -m renoboost_leads.cli agent journal -n 10
+```
+
+Disponible aussi dans Streamlit (onglet **🤖 Copilote**). Configurable
+via `config/agent.yaml` (modèle, cap budget, niveau autonomie).
+
+**Phase A** : pas d'envoi cold mail, pas d'écriture de config sans validation
+humaine. **Phase B** = intégration Instantly pour cold mailing (à venir).
+
 ## 🎯 Utilisation
 
 ### Estimer le coût
