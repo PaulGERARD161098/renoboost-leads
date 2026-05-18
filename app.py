@@ -152,7 +152,7 @@ with st.sidebar:
 
     st.divider()
     py = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
-    st.caption(f"Version : 0.8.0  •  Python {py}")
+    st.caption(f"Version : 0.9.0  •  Python {py}")
     st.caption(f"Projet : `{PROJECT_ROOT.name}`")
 
 
@@ -436,6 +436,44 @@ with tab_sessions:
 
         csv_l4 = session_dir / "etage4_prospection.csv"
         csv_l3 = session_dir / "etage3_contacts.csv"
+
+        # ── Rapport HTML (livrable client, dispo dès L3) ──
+        if csv_l3.exists():
+            from renoboost_leads.agent.tools.report import generate_report
+
+            colr1, colr2 = st.columns([1, 3])
+            with colr1:
+                max_leads = st.number_input(
+                    "Max leads dans le rapport",
+                    min_value=1, max_value=200, value=50, step=10,
+                    key=f"rep_max_{session_dir.name}",
+                )
+            with colr2:
+                if st.button(
+                    "📄 Générer le rapport HTML",
+                    key=f"rep_btn_{session_dir.name}",
+                    help="Livrable client autonome (CSS inline). "
+                    "Ctrl+P dans le navigateur pour exporter en PDF.",
+                ):
+                    res = generate_report(session_dir.name, max_leads=int(max_leads))
+                    if "error" in res:
+                        st.error(res["error"])
+                    else:
+                        st.success(
+                            f"✓ Rapport généré ({res['bytes_written'] // 1024} KB, "
+                            f"{res['leads_inclus']} leads, "
+                            f"verdict pilote : "
+                            f"{'GO' if res['verdict_go_phase2'] else 'NO-GO'})"
+                        )
+                rapport_path = session_dir / "rapport.html"
+                if rapport_path.exists():
+                    st.download_button(
+                        "⬇ Télécharger le rapport HTML",
+                        rapport_path.read_bytes(),
+                        file_name=f"rapport_{session_dir.name}.html",
+                        mime="text/html",
+                        key=f"rep_dl_{session_dir.name}",
+                    )
 
         if csv_l4.exists():
             st.success("CSV L4 trouvé")
