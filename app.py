@@ -160,8 +160,8 @@ with st.sidebar:
 # Onglets
 # ═══════════════════════════════════════════════════════════════════
 
-tab_veille, tab_nouveau, tab_sessions, tab_stats = st.tabs(
-    ["📊 Veille du jour", "📥 Nouveau run", "📁 Sessions", "📈 Stats"]
+tab_veille, tab_nouveau, tab_sessions, tab_stats, tab_copilote = st.tabs(
+    ["📊 Veille du jour", "📥 Nouveau run", "📁 Sessions", "📈 Stats", "🤖 Copilote"]
 )
 
 
@@ -557,6 +557,89 @@ with tab_stats:
                 st.bar_chart(top_marques)
     else:
         st.info("Pas encore de run veille — les statistiques s'afficheront ici.")
+
+
+# ───────────────────────────────────────────────────────────────────
+# ONGLET 5 : Copilote (agent IA Phase A)
+# ───────────────────────────────────────────────────────────────────
+
+with tab_copilote:
+    st.header("🤖 Copilote RénoBoost")
+    st.caption(
+        "Agent IA qui pilote la prospection : lance des runs, diagnostique "
+        "la qualité, priorise les leads, alerte par email. Phase A — "
+        "lecture seule sur les configs, pas de cold mailing (Phase B)."
+    )
+
+    from renoboost_leads.agent.budget import BudgetGuard
+    from renoboost_leads.agent.config import load_agent_config
+    from renoboost_leads.agent.journal import Journal
+
+    agent_cfg = load_agent_config()
+    guard = BudgetGuard(
+        cap_eur_par_jour=agent_cfg.budget_eur_par_jour,
+        path=agent_cfg.budget_path_abs(),
+    )
+    journal_agent = Journal(path=agent_cfg.journal_path_abs())
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Budget cap", f"{guard.cap:.2f} €/jour")
+    c2.metric("Consommé aujourd'hui", f"{guard.cumul_eur:.4f} €")
+    c3.metric("Reste", f"{guard.reste_eur:.4f} €")
+
+    api_key_dispo = _read_anthropic_key() is not None
+    if not api_key_dispo:
+        st.warning(
+            "ANTHROPIC_API_KEY absente : configure-la dans `.env` (local) ou "
+            "Streamlit secrets (cloud) pour activer l'agent."
+        )
+
+    instruction = st.text_area(
+        "Instruction",
+        placeholder=(
+            "Ex : 'liste les sessions récentes', 'diagnostique la dernière "
+            "session pilote', 'priorise les leads de la session 20260518-...'"
+        ),
+        height=80,
+        key="copilote_instruction",
+    )
+
+    if st.button("🚀 Lancer un cycle", disabled=not api_key_dispo or not instruction.strip()):
+        from renoboost_leads.agent.runner import run_cycle
+
+        with st.spinner("L'agent travaille…"):
+            try:
+                if "ANTHROPIC_API_KEY" not in os.environ and api_key_dispo:
+                    os.environ["ANTHROPIC_API_KEY"] = _read_anthropic_key() or ""
+                result = run_cycle(instruction.strip())
+            except Exception as e:  # noqa: BLE001
+                st.error(f"{type(e).__name__} : {e}")
+                result = None
+
+        if result is not None:
+            st.success("Cycle terminé.")
+            if result.outils_appeles:
+                noms = " → ".join(o["name"] for o in result.outils_appeles)
+                st.caption(f"Outils : {noms}")
+            st.markdown("**Réponse de l'agent**")
+            st.markdown(result.texte_final or "_(rien)_")
+            cc1, cc2, cc3, cc4 = st.columns(4)
+            cc1.metric("Tours", result.tours)
+            cc2.metric("Coût", f"{result.cout_eur:.4f} €")
+            cc3.metric("Tokens in", result.tokens_input)
+            cc4.metric("Tokens out", result.tokens_output)
+            if result.erreur:
+                st.warning(result.erreur)
+
+    st.divider()
+    with st.expander("📓 Journal récent (10 dernières entrées)"):
+        entries = journal_agent.read_recent(n=10)
+        if not entries:
+            st.info("Journal vide — l'agent n'a pas encore tourné.")
+        else:
+            for e in reversed(entries):
+                st.markdown(e)
+                st.divider()
 
 
 st.caption(
