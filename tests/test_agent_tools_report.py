@@ -265,3 +265,67 @@ def test_bar_chart_vide_renvoie_chaine_vide() -> None:
 def test_bar_chart_tronque_labels_longs() -> None:
     svg = rep._bar_chart_svg({"a" * 50: 10})
     assert "…" in svg
+
+
+def test_xss_autoescape_actif(fake_root: Path) -> None:
+    """Les noms d'entreprises malveillants doivent être échappés."""
+    d = fake_root / "s_xss"
+    d.mkdir()
+    rows = [
+        {
+            "nom": "<script>alert('xss')</script>",
+            "ville": "Lille",
+            "siren": "100000",
+            "dirigeant_nom": "Mr \"OR 1=1\"",
+            "email_principal": "<b>not</b>@x.fr",
+            "telephone": "",
+            "site_web": "",
+            "tranche_effectif": "",
+        }
+    ]
+    _ecrire_csv(d / "etage3_contacts.csv", rows)
+    (d / "run_stats.json").write_text(
+        '{"campaign": "<img src=x onerror=alert(1)>", "debut": "2026-01-01"}',
+        encoding="utf-8",
+    )
+    res = rep.generate_report("s_xss")
+    assert "error" not in res
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    # Les balises malicieuses doivent être échappées
+    assert "<script>alert" not in html
+    assert "&lt;script&gt;" in html
+    assert "<img src=x onerror" not in html
+    assert "&lt;img" in html
+    # Les SVG bâtis par nous restent (chart_naf/chart_effectifs sont |safe)
+    # — mais ici il n'y a qu'une seule entrée donc pas de chart significatif
+
+
+def test_l3_absent_liste_fichiers_presents(fake_root: Path) -> None:
+    """L'erreur L3 absent doit lister ce qui est présent pour debug."""
+    d = fake_root / "s_debug"
+    d.mkdir()
+    (d / "etage1_decouverte.csv").write_text("nom\n", encoding="utf-8")
+    (d / "run_stats.json").write_text("{}", encoding="utf-8")
+    res = rep.generate_report("s_debug")
+    assert "error" in res
+    assert "fichiers_presents" in res
+    assert "etage1_decouverte.csv" in res["fichiers_presents"]
+    assert "run_stats.json" in res["fichiers_presents"]
+
+
+def test_lecture_csv_avec_bom(fake_root: Path) -> None:
+    """utf-8-sig tolère un BOM (cas CSV Excel France)."""
+    d = fake_root / "s_bom"
+    d.mkdir()
+    # Écrit un CSV avec BOM
+    contenu = "﻿nom,siren,dirigeant_nom,email_principal\n"
+    contenu += "Test SAS,123456,Martin,m@x.fr\n"
+    (d / "etage3_contacts.csv").write_text(contenu, encoding="utf-8")
+    (d / "run_stats.json").write_text(
+        '{"campaign": "bom-test"}', encoding="utf-8"
+    )
+    res = rep.generate_report("s_bom")
+    assert "error" not in res
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "Test SAS" in html
+    assert "Martin" in html

@@ -12,10 +12,18 @@ l'utilisateur ne sera pas notifié et continue.
 
 from __future__ import annotations
 
+import re
 import smtplib
 from email.message import EmailMessage
 
 from ...settings import get_settings
+
+# Validation email RFC-light : pas de regex parfaite, mais rejette les cas
+# de typo courants (a@, @b, a@b sans point, espaces).
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+# Plafond pièce jointe — les MTA d'entreprise refusent souvent > 20 Mo.
+_MAX_ATTACHMENT_BYTES = 20_000_000
 
 URGENCE_PREFIXES = {
     "info": "[Copilote] INFO",
@@ -100,7 +108,7 @@ def email_report(
     """
     if not destinataires:
         return {"error": "destinataires vide — fournis au moins 1 email."}
-    bad = [d for d in destinataires if "@" not in d]
+    bad = [d for d in destinataires if not _EMAIL_RE.match(d)]
     if bad:
         return {"error": f"emails invalides : {bad}"}
 
@@ -153,6 +161,15 @@ def email_report(
     msg["To"] = ", ".join(destinataires)
     msg.set_content(body_final)
 
+    taille = rapport_path.stat().st_size
+    if taille > _MAX_ATTACHMENT_BYTES:
+        return {
+            "error": (
+                f"rapport trop volumineux pour SMTP : {taille} octets "
+                f"(> {_MAX_ATTACHMENT_BYTES}). Réduis max_leads ou pars "
+                "sur un partage de lien."
+            )
+        }
     html_bytes = rapport_path.read_bytes()
     msg.add_attachment(
         html_bytes,
@@ -160,6 +177,9 @@ def email_report(
         subtype="html",
         filename=f"rapport_{session_id}.html",
     )
+    # Force le charset UTF-8 sur l'attachment HTML (Outlook old / certains
+    # MUA cassent l'affichage des accents sans déclaration explicite).
+    msg.get_payload()[-1].set_charset("utf-8")
 
     ok, raison = _connect_and_send(msg, settings)
     if not ok:

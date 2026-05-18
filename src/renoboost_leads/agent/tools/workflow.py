@@ -14,6 +14,8 @@ Utile pour « est-ce que cette zone tape mieux que l'autre ? ».
 from __future__ import annotations
 
 import csv
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,11 @@ from .quality import _metriques_l3
 from .sessions import OUTPUT_ROOT, STAGE_FILES
 
 GENERATED_ROOT = PROJECT_ROOT / "data" / "agent" / "configs"
+
+# Caractères autorisés dans le nom de fichier généré : lettres, chiffres,
+# tirets, underscores, points. Rejette espaces, slashes, autres symboles
+# pour éviter toute confusion et collision avec des noms réservés.
+_SAVE_AS_RE = re.compile(r"^[\w\-.]+$")
 
 OVERRIDES_AUTORISES = {
     "client_name",
@@ -38,8 +45,27 @@ OVERRIDES_AUTORISES = {
 }
 
 
+def _safe_int(val: Any, name: str) -> tuple[int | None, str | None]:
+    """Convertit en int, retourne (valeur, erreur)."""
+    try:
+        return int(val), None
+    except (TypeError, ValueError):
+        return None, f"'{name}' doit être un entier, reçu {val!r}"
+
+
+def _safe_float(val: Any, name: str) -> tuple[float | None, str | None]:
+    try:
+        return float(val), None
+    except (TypeError, ValueError):
+        return None, f"'{name}' doit être un nombre, reçu {val!r}"
+
+
 def _appliquer_overrides(cfg: dict, overrides: dict) -> tuple[dict, list[str]]:
-    """Applique les overrides au config parsé, renvoie (cfg modifié, log changes)."""
+    """Applique les overrides au config parsé, renvoie (cfg modifié, log changes).
+
+    Si une erreur de conversion survient, l'élément correspondant du log
+    commence par 'ERREUR : ' — le caller doit vérifier et propager.
+    """
     changes = []
 
     if "client_name" in overrides:
@@ -61,14 +87,20 @@ def _appliquer_overrides(cfg: dict, overrides: dict) -> tuple[dict, list[str]]:
         changes.append(f"zone.type → {overrides['zone_type']}")
 
     if "rayon_par_point_km" in overrides:
+        val, err = _safe_int(overrides["rayon_par_point_km"], "rayon_par_point_km")
+        if err:
+            return cfg, [f"ERREUR : {err}"]
         cfg.setdefault("zone", {})
-        cfg["zone"]["rayon_par_point_km"] = int(overrides["rayon_par_point_km"])
-        changes.append(f"zone.rayon_par_point_km → {overrides['rayon_par_point_km']}")
+        cfg["zone"]["rayon_par_point_km"] = val
+        changes.append(f"zone.rayon_par_point_km → {val}")
 
     if "pas_grille_km" in overrides:
+        val, err = _safe_int(overrides["pas_grille_km"], "pas_grille_km")
+        if err:
+            return cfg, [f"ERREUR : {err}"]
         cfg.setdefault("zone", {})
-        cfg["zone"]["pas_grille_km"] = int(overrides["pas_grille_km"])
-        changes.append(f"zone.pas_grille_km → {overrides['pas_grille_km']}")
+        cfg["zone"]["pas_grille_km"] = val
+        changes.append(f"zone.pas_grille_km → {val}")
 
     if "secteurs" in overrides:
         secteurs = overrides["secteurs"]
@@ -82,14 +114,20 @@ def _appliquer_overrides(cfg: dict, overrides: dict) -> tuple[dict, list[str]]:
         changes.append(f"secteurs → {len(cfg['secteurs'])} entrées")
 
     if "volume_cible" in overrides:
+        val, err = _safe_int(overrides["volume_cible"], "volume_cible")
+        if err:
+            return cfg, [f"ERREUR : {err}"]
         cfg.setdefault("volume", {})
-        cfg["volume"]["cible"] = int(overrides["volume_cible"])
-        changes.append(f"volume.cible → {overrides['volume_cible']}")
+        cfg["volume"]["cible"] = val
+        changes.append(f"volume.cible → {val}")
 
     if "budget_max_eur" in overrides:
+        val_f, err = _safe_float(overrides["budget_max_eur"], "budget_max_eur")
+        if err:
+            return cfg, [f"ERREUR : {err}"]
         cfg.setdefault("budget", {})
-        cfg["budget"]["max_eur"] = float(overrides["budget_max_eur"])
-        changes.append(f"budget.max_eur → {overrides['budget_max_eur']}")
+        cfg["budget"]["max_eur"] = val_f
+        changes.append(f"budget.max_eur → {val_f}")
 
     return cfg, changes
 
@@ -138,12 +176,32 @@ def clone_config(
     else:
         changes = []
 
-    # Sanitise le nom de fichier (pas de traversal)
+    # Sanitise le nom de fichier (pas de traversal + caractères safe)
     name = Path(save_as).name
-    if not name.endswith((".yaml", ".yml")):
-        name = name + ".yaml"
+    base, _, ext = name.rpartition(".")
+    if ext.lower() in ("yaml", "yml"):
+        stem = base
+        suffix = "." + ext
+    else:
+        stem = name
+        suffix = ".yaml"
+    if not stem or not _SAVE_AS_RE.match(stem):
+        return {
+            "error": (
+                f"save_as invalide : '{save_as}'. Lettres/chiffres/tiret/"
+                "underscore/point uniquement."
+            )
+        }
+
     GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
-    cible = GENERATED_ROOT / name
+    cible = GENERATED_ROOT / f"{stem}{suffix}"
+
+    # Anti-collision : si le fichier existe, suffixe avec timestamp.
+    # Les noms générés depuis Streamlit ou l'agent peuvent collisionner
+    # quand plusieurs runs partagent la même valeur par défaut.
+    if cible.exists():
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        cible = GENERATED_ROOT / f"{stem}-{ts}{suffix}"
 
     contenu = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
     cible.write_text(contenu, encoding="utf-8")
@@ -168,7 +226,8 @@ def clone_config(
 
 
 def _lire_csv(path: Path) -> list[dict]:
-    with path.open("r", encoding="utf-8", newline="") as f:
+    # utf-8-sig pour tolérer BOM (cas import/export Excel France).
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f))
 
 

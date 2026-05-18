@@ -231,3 +231,41 @@ def test_email_report_dans_registry() -> None:
     noms = {s["name"] for s in all_schemas()}
     assert "email_report" in noms
     assert "email_report" in all_dispatch()
+
+
+def test_email_report_emails_invalides_stricte() -> None:
+    """Validation stricte des emails (pas juste @)."""
+    for invalide in ["a@", "@b", "a@b", "a b@c.fr", "a@b.", "@.com"]:
+        res = notify.email_report("s1", [invalide])
+        assert "error" in res, f"'{invalide}' aurait dû être rejeté"
+        assert "invalides" in res["error"]
+
+
+def test_email_report_emails_valides_acceptes(fake_output_root: Path) -> None:
+    """Emails RFC-valid passent la validation (smtp off → reason=non envoyé)."""
+    _session_l3(fake_output_root, "s1")
+    with patch(
+        "renoboost_leads.agent.tools.notify.get_settings",
+        return_value=_settings_smtp_off(),
+    ):
+        for valide in ["a@b.fr", "user.name+tag@example.co.uk", "x@y.z"]:
+            res = notify.email_report("s1", [valide])
+            assert "error" not in res, f"'{valide}' aurait dû être accepté"
+
+
+def test_email_report_rapport_trop_volumineux(
+    fake_output_root: Path,
+) -> None:
+    """Pièce jointe > limite SMTP → erreur claire."""
+    d = _session_l3(fake_output_root, "s1")
+    # Crée un rapport.html dépassant la limite (mock via monkeypatch serait
+    # plus propre, mais 20MB d'IO en test = OK)
+    gros_html = b"x" * (notify._MAX_ATTACHMENT_BYTES + 1)
+    (d / "rapport.html").write_bytes(gros_html)
+    with patch(
+        "renoboost_leads.agent.tools.notify.get_settings",
+        return_value=_settings_smtp_ok(),
+    ):
+        res = notify.email_report("s1", ["c@x.fr"])
+    assert "error" in res
+    assert "volumineux" in res["error"]

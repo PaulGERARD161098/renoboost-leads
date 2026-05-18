@@ -168,6 +168,50 @@ def test_clone_volume_et_budget(fake_config_root: Path) -> None:
     assert parsed["budget"]["max_eur"] == 10.5
 
 
+def test_clone_volume_non_int_rejete(fake_config_root: Path) -> None:
+    """Coercition int sur volume_cible — payload malformé → message clair."""
+    (fake_config_root / "src.yaml").write_text(ROSSINI_YAML, encoding="utf-8")
+    res = wf.clone_config(
+        "src.yaml", "bad", overrides={"volume_cible": "pas un nombre"}
+    )
+    assert "error" in res
+    assert "volume_cible" in res["error"]
+
+
+def test_clone_budget_non_float_rejete(fake_config_root: Path) -> None:
+    (fake_config_root / "src.yaml").write_text(ROSSINI_YAML, encoding="utf-8")
+    res = wf.clone_config(
+        "src.yaml", "bad", overrides={"budget_max_eur": "abc"}
+    )
+    assert "error" in res
+
+
+def test_clone_save_as_caracteres_dangereux_rejetes(fake_config_root: Path) -> None:
+    """Espaces et caractères spéciaux dans save_as → erreur claire.
+
+    Note : les slashes sont silencieusement strippés via Path(save_as).name
+    avant la validation regex (cf. test_clone_save_as_basename_uniquement).
+    """
+    (fake_config_root / "src.yaml").write_text(ROSSINI_YAML, encoding="utf-8")
+    for nom in ["avec espace", "avec*etoile", "avec?question", ""]:
+        res = wf.clone_config("src.yaml", nom)
+        assert "error" in res, f"'{nom}' aurait dû échouer"
+
+
+def test_clone_save_as_collision_suffixe_timestamp(
+    fake_config_root: Path,
+) -> None:
+    """2 appels avec même save_as → 2 fichiers distincts (anti race condition)."""
+    (fake_config_root / "src.yaml").write_text(ROSSINI_YAML, encoding="utf-8")
+    r1 = wf.clone_config("src.yaml", "test_collision")
+    r2 = wf.clone_config("src.yaml", "test_collision")
+    assert r1["path"] != r2["path"]
+    assert "test_collision" in r2["path"]
+    # Le 2e a un suffixe timestamp
+    assert Path(r1["path"]).exists()
+    assert Path(r2["path"]).exists()
+
+
 # ────────────────────────────────────────────────────────────────────
 # compare_sessions
 # ────────────────────────────────────────────────────────────────────

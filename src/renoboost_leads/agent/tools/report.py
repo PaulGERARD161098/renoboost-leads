@@ -18,11 +18,17 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jinja2 import Template
+from jinja2 import Environment, select_autoescape
 
 from ...settings import PROJECT_ROOT
 from .quality import _metriques_l3, _metriques_l3_5, _verdict_pilote_phase1
 from .sessions import OUTPUT_ROOT, STAGE_FILES
+
+# Jinja2 avec autoescape HTML actif : tout `{{ var }}` est échappé par
+# défaut (protection XSS sur les noms d'entreprises, dirigeants etc.
+# venant de Google Places / scraping). Les SVG construits par nous
+# (chart_*) sont marqués `|safe` explicitement dans le template.
+_ENV = Environment(autoescape=select_autoescape(["html"]))
 
 COLONNES_LEADS = [
     ("nom", "Raison sociale"),
@@ -74,7 +80,7 @@ def _clip(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
-_TEMPLATE = Template(
+_TEMPLATE = _ENV.from_string(
     """<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -340,7 +346,9 @@ _TEMPLATE = Template(
 
 
 def _lire_csv(path: Path) -> list[dict]:
-    with path.open("r", encoding="utf-8", newline="") as f:
+    # utf-8-sig pour tolérer un BOM en tête (cas des CSV exportés par
+    # Excel France ou ré-importés via un autre outil).
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f))
 
 
@@ -479,11 +487,15 @@ def generate_report(
 
     fichier_l3 = dossier / STAGE_FILES["3"]
     if not fichier_l3.exists():
+        presents = sorted(
+            p.name for p in dossier.iterdir() if p.is_file()
+        )
         return {
             "error": (
                 "etage3_contacts.csv absent — lance au moins L1+L2+L3 "
                 "avant de générer un rapport."
-            )
+            ),
+            "fichiers_presents": presents,
         }
 
     rows_l3 = _lire_csv(fichier_l3)
