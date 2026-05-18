@@ -109,6 +109,45 @@ def agent_budget() -> None:
     )
 
 
+@agent_group.command(name="metrics")
+def agent_metrics() -> None:
+    """Affiche les métriques cumulées de l'agent (cycles, coût, par outil)."""
+    from rich.table import Table
+
+    from .agent.metrics import MetricsStore
+
+    m = MetricsStore().load()
+    console.print(
+        Panel.fit(
+            f"[bold]Métriques agent (cumul)[/bold]\n"
+            f"Cycles      : {m.cycles_total}\n"
+            f"Outils      : {m.outils_total}\n"
+            f"Coût total  : {m.cout_total_eur:.4f} €",
+            border_style="cyan",
+        )
+    )
+    if not m.par_outil:
+        console.print("[dim]Aucun outil appelé.[/dim]")
+        return
+    t = Table(title="Par outil", show_lines=False)
+    t.add_column("Outil")
+    t.add_column("Appels", justify="right")
+    t.add_column("Erreurs", justify="right")
+    t.add_column("Temps total (s)", justify="right")
+    t.add_column("Moy (ms)", justify="right")
+    for name in sorted(m.par_outil, key=lambda n: -m.par_outil[n].count):
+        tm = m.par_outil[name]
+        moy_ms = (tm.duration_total_s / tm.count * 1000) if tm.count else 0.0
+        t.add_row(
+            name,
+            str(tm.count),
+            str(tm.erreurs),
+            f"{tm.duration_total_s:.3f}",
+            f"{moy_ms:.1f}",
+        )
+    console.print(t)
+
+
 def _afficher_resultat(result) -> None:
     console.print()
     if result.outils_appeles:

@@ -19,6 +19,7 @@ gère les retries réseau automatiquement.
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -27,6 +28,7 @@ from ..settings import PROJECT_ROOT, get_settings
 from .budget import BudgetGuard
 from .config import AgentConfig, load_agent_config
 from .journal import Journal, JournalEntry
+from .metrics import MetricsStore
 from .tools import all_dispatch, all_schemas
 
 if TYPE_CHECKING:
@@ -100,16 +102,29 @@ def _tools_with_cache(schemas: list[dict]) -> list[dict]:
     return out
 
 
-def _execute_tool(name: str, args: dict, dispatch: dict) -> Any:
+def _execute_tool(name: str, args: dict, dispatch: dict) -> tuple[Any, float, bool]:
+    """Exécute l'outil et renvoie (payload, duration_s, erreur_bool)."""
     fn = dispatch.get(name)
+    start = time.perf_counter()
     if fn is None:
-        return {"error": f"outil inconnu : '{name}'"}
+        return ({"error": f"outil inconnu : '{name}'"}, 0.0, True)
     try:
-        return fn(**args)
+        out = fn(**args)
+        duration = time.perf_counter() - start
+        erreur = isinstance(out, dict) and "error" in out
+        return (out, duration, erreur)
     except TypeError as e:
-        return {"error": f"arguments invalides pour '{name}' : {e}"}
+        return (
+            {"error": f"arguments invalides pour '{name}' : {e}"},
+            time.perf_counter() - start,
+            True,
+        )
     except Exception as e:  # noqa: BLE001 — on relaie l'erreur au LLM
-        return {"error": f"exception {type(e).__name__} : {e}"}
+        return (
+            {"error": f"exception {type(e).__name__} : {e}"},
+            time.perf_counter() - start,
+            True,
+        )
 
 
 def _build_client() -> Anthropic:
@@ -130,6 +145,7 @@ def run_cycle(
     journal: Journal | None = None,
     budget: BudgetGuard | None = None,
     client: Anthropic | None = None,
+    metrics_store: MetricsStore | None = None,
 ) -> CycleResult:
     """Exécute un cycle agent complet : instruction → décision → résultat."""
     cfg = config or load_agent_config()
@@ -137,6 +153,7 @@ def run_cycle(
     b = budget or BudgetGuard(
         cap_eur_par_jour=cfg.budget_eur_par_jour, path=cfg.budget_path_abs()
     )
+    ms = metrics_store or MetricsStore()
     b.verifier()
 
     cli = client or _build_client()
@@ -198,8 +215,15 @@ def run_cycle(
         tool_results = []
         for tu in tool_uses:
             args = tu.input if isinstance(tu.input, dict) else {}
-            payload = _execute_tool(tu.name, args, dispatch)
-            result.outils_appeles.append({"name": tu.name, "args": args})
+            payload, duration_s, erreur = _execute_tool(tu.name, args, dispatch)
+            result.outils_appeles.append(
+                {
+                    "name": tu.name,
+                    "args": args,
+                    "duration_s": round(duration_s, 4),
+                    "erreur": erreur,
+                }
+            )
             tool_results.append(
                 {
                     "type": "tool_result",
@@ -226,6 +250,7 @@ def run_cycle(
             suite=f"tours={result.tours}, coût={result.cout_eur:.4f}€",
         )
     )
+    ms.record_cycle(cout_eur=result.cout_eur, outils=result.outils_appeles)
     return result
 
 

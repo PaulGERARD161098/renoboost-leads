@@ -11,6 +11,7 @@
 data/output/
 data/cache/
 data/veille/
+data/agent/
 *.csv
 !data/reference/*.csv
 !tests/fixtures_aaa/*.csv
