@@ -336,6 +336,12 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         session_id = _build_session_id(cfg.run.client_name)
         output_dir = PROJECT_ROOT / "data" / "output" / session_id
         output_dir.mkdir(parents=True, exist_ok=True)
+        # Snapshot du config utilisé pour traçabilité + rapport
+        try:
+            import shutil
+            shutil.copy2(config_path, output_dir / "config_snapshot.yaml")
+        except OSError:
+            pass
 
     # Logger
     logger = setup_logger(output_dir=output_dir, level=get_settings().log_level)
@@ -523,7 +529,7 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
     stats.leads_finaux = nb_leads_finaux
     stats.fin = datetime.now(timezone.utc)
     stats.duree_totale_secondes = (stats.fin - stats.debut).total_seconds()
-    export_run_stats(stats, output_dir / "stats_run.json")
+    export_run_stats(stats, output_dir / "run_stats.json")
 
     generer_registre_rgpd(
         output_path=output_dir / "registre_rgpd.md",

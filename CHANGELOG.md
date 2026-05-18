@@ -2,6 +2,37 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.9.0] — 2026-05-18 — Rapport HTML autonome (livrable client)
+
+### Added — outil `generate_report` + bouton Streamlit
+
+Permet de produire un **livrable visuel** pour le client à partir d'une
+session de prospection : rapport HTML autonome (CSS inline, aucune
+ressource externe) ouvrable dans n'importe quel navigateur. Pour un PDF,
+l'utilisateur fait `Ctrl+P → Enregistrer en PDF` côté navigateur (zéro
+dépendance lourde côté serveur).
+
+- **Module `agent/tools/report.py`** (8e outil agent) : génère le HTML
+  à partir de `etage3_contacts.csv` + `run_stats.json`, calcule les KPI
+  qualité, applique le verdict pilote Phase 1, inclut un tableau des
+  leads (par défaut top 50, max 200). Écrit dans
+  `data/output/<session_id>/rapport.html` par défaut, ou chemin
+  personnalisable.
+- **Sections du rapport** : header campagne, KPI grid (4 metrics :
+  total leads / SIREN / dirigeant / email), verdict GO/NO-GO Phase 2
+  avec critères, tableau leads (raison sociale, ville, SIREN,
+  dirigeant, email, téléphone, site, effectif), distribution
+  effectifs, KPI L3.5 si présent (email vérifié, tél direct), sources
+  pipeline, footer.
+- **Onglet Sessions Streamlit** : nouveau bouton "📄 Générer le
+  rapport HTML" + slider max_leads + bouton "⬇ Télécharger" une fois
+  généré. Dispo dès que L3 existe (pas besoin de L4).
+- **+9 tests** (couverture session inconnue, L3 absent, HTML complet,
+  verdict NO-GO, troncature max_leads, output_path personnalisé,
+  inclusion L3.5, registry agent).
+
+Tests : **504 verts** (vs 495). Ruff clean.
+
 ## [0.8.0] — 2026-05-18 — Cold mailing Instantly (Phase B N2) + robustesse agent
 
 ### Added — Phase B cold mailing avec staging N2 (validation humaine)

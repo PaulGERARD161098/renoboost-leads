@@ -152,7 +152,7 @@ with st.sidebar:
 
     st.divider()
     py = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
-    st.caption(f"Version : 0.8.0  •  Python {py}")
+    st.caption(f"Version : 0.9.0  •  Python {py}")
     st.caption(f"Projet : `{PROJECT_ROOT.name}`")
 
 
@@ -160,9 +160,268 @@ with st.sidebar:
 # Onglets
 # ═══════════════════════════════════════════════════════════════════
 
-tab_veille, tab_nouveau, tab_sessions, tab_stats, tab_copilote = st.tabs(
-    ["📊 Veille du jour", "📥 Nouveau run", "📁 Sessions", "📈 Stats", "🤖 Copilote"]
+tab_recherche, tab_veille, tab_nouveau, tab_sessions, tab_stats, tab_copilote = st.tabs(
+    [
+        "🔎 Nouvelle recherche",
+        "📊 Veille du jour",
+        "📥 Nouveau run",
+        "📁 Sessions",
+        "📈 Stats",
+        "🤖 Copilote",
+    ]
 )
+
+
+# ───────────────────────────────────────────────────────────────────
+# ONGLET 0 : Nouvelle recherche prospect (form non-technique)
+# ───────────────────────────────────────────────────────────────────
+
+with tab_recherche:
+    st.header("🔎 Nouvelle recherche de prospects")
+    st.caption(
+        "Configure et lance une recherche en quelques clics — pas besoin "
+        "de toucher au YAML. Génère la config + lance L1+L2+L3, puis va "
+        "dans l'onglet **📁 Sessions** pour télécharger le rapport HTML."
+    )
+
+    from renoboost_leads.agent.tools.workflow import clone_config
+
+    # Liste des configs disponibles comme template (utilise les client_*.yaml)
+    templates = sorted(
+        (PROJECT_ROOT / "config").glob("client_*.yaml"),
+        key=lambda p: p.name,
+    )
+    if not templates:
+        templates = sorted((PROJECT_ROOT / "config").glob("*.yaml"))
+    template_names = [t.name for t in templates]
+
+    if not template_names:
+        st.error("Aucun template de config trouvé dans `config/`. "
+                 "Ajoute au moins un YAML avant de lancer une recherche.")
+    else:
+        col_a, col_b = st.columns([2, 1])
+        with col_a:
+            base = st.selectbox(
+                "Modèle de départ",
+                template_names,
+                help="Copie ce config et applique tes paramètres par-dessus. "
+                "`client_rossini.yaml` = sites industriels Nord (preset).",
+            )
+        with col_b:
+            stages_choisis = st.selectbox(
+                "Étages à lancer",
+                ["1,2,3", "1,2", "1,2,3,3.5"],
+                help="L1=Google Places, L2=Sirene, L3=scraping contacts, "
+                "L3.5=Dropcontact (clé requise).",
+            )
+
+        st.subheader("Paramètres")
+        col1, col2 = st.columns(2)
+        with col1:
+            nom_campagne = st.text_input(
+                "Nom de la campagne",
+                value="recherche-2026-05",
+                help="Identifie ton run (apparaît dans le rapport).",
+            )
+            volume = st.slider(
+                "Volume cible (leads)", 5, 100, 10, step=5,
+                help="Nombre de prospects souhaités. ~0.03 € par lead L1.",
+            )
+            budget = st.number_input(
+                "Plafond budget €", 0.5, 50.0, 5.0, 0.5,
+                help="Coupe le run si dépassé.",
+            )
+        with col2:
+            depts = st.text_input(
+                "Départements (ex: `59, 62, 80`)",
+                value="59",
+                help="Codes INSEE séparés par virgules. Ou code postal pour "
+                "zone fine.",
+            )
+            secteurs_str = st.text_area(
+                "Secteurs cibles (un par ligne)",
+                value="site industriel\nplateforme logistique",
+                height=120,
+                help="Requêtes Google Places brutes — comme tu les "
+                "taperais dans Maps.",
+            )
+
+        # Bouton de lancement
+        api_ok = bool(_read_anthropic_key()) and settings.has_google_places()
+        if not settings.has_google_places():
+            st.warning("⚠ GOOGLE_PLACES_API_KEY absente — impossible de lancer "
+                       "L1. Configure-la dans les secrets.")
+
+        if st.button(
+            "🚀 Générer et lancer la recherche",
+            type="primary",
+            disabled=not api_ok,
+            use_container_width=True,
+        ):
+            secteurs = [s.strip() for s in secteurs_str.splitlines() if s.strip()]
+            if not secteurs:
+                st.error("Indique au moins un secteur.")
+                st.stop()
+
+            save_name = nom_campagne.replace(" ", "_").replace("/", "_")
+
+            with st.spinner("Création de la config…"):
+                cfg_res = clone_config(
+                    source_path=base,
+                    save_as=save_name,
+                    overrides={
+                        "client_name": nom_campagne,
+                        "zone_codes": depts,
+                        "secteurs": secteurs,
+                        "volume_cible": volume,
+                        "budget_max_eur": budget,
+                    },
+                )
+
+            if "error" in cfg_res:
+                st.error(f"Erreur config : {cfg_res['error']}")
+                st.stop()
+
+            st.success(f"✓ Config créée : `{cfg_res['path']}`")
+            with st.expander("Voir le YAML généré"):
+                contenu = (PROJECT_ROOT / cfg_res["path"]).read_text(
+                    encoding="utf-8"
+                )
+                st.code(contenu, language="yaml")
+
+            # ─── Exécution streamée du pipeline ──────────────────────
+            # subprocess.Popen + lecture ligne par ligne pour donner
+            # un feedback live à l'utilisateur (au lieu d'un spinner
+            # figé pendant 3-8 min). Garde aussi le WebSocket Streamlit
+            # actif, ce qui aide sur Streamlit Cloud (timeout reverse-
+            # proxy ~5 min en cas d'inactivité).
+            import os as _os
+            import subprocess as _sp
+            import sys as _sys
+            import time as _time
+
+            cfg_full = PROJECT_ROOT / cfg_res["path"]
+            cmd = [
+                _sys.executable,
+                "-m",
+                "renoboost_leads.cli",
+                "run",
+                "--config",
+                str(cfg_full),
+                "--stages",
+                stages_choisis,
+            ]
+
+            st.markdown("### 🔄 Recherche en cours")
+            status_box = st.empty()
+            metric_cols = st.columns(3)
+            duree_box = metric_cols[0].empty()
+            stage_box = metric_cols[1].empty()
+            lignes_box = metric_cols[2].empty()
+            log_container = st.empty()
+
+            logs_buffer: list[str] = []
+            current_stage = "Initialisation"
+            TIMEOUT_S = 1800  # 30 min — marge confortable
+            start = _time.time()
+
+            env = _os.environ.copy()
+            # Force l'unbuffering Python sinon les logs CLI n'arrivent
+            # qu'à la fin (buffering 4kB par défaut sur pipe).
+            env["PYTHONUNBUFFERED"] = "1"
+
+            try:
+                # S603 ignoré : cmd ne contient que sys.executable + literals
+                # + chemins issus de clone_config (déjà chroot/sanitized).
+                proc = _sp.Popen(  # noqa: S603
+                    cmd,
+                    stdout=_sp.PIPE,
+                    stderr=_sp.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    cwd=str(PROJECT_ROOT),
+                    encoding="utf-8",
+                    env=env,
+                )
+            except OSError as e:
+                st.error(f"Impossible de lancer le subprocess : {e}")
+                st.stop()
+
+            rc: int | None = None
+            try:
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                    logs_buffer.append(line)
+
+                    # Détection grossière de l'étage courant dans les logs
+                    low = line.lower()
+                    if "étage 1" in low or "etage1" in low or "stage 1" in low:
+                        current_stage = "L1 — Google Places"
+                    elif "étage 2" in low or "etage2" in low or "stage 2" in low:
+                        current_stage = "L2 — Sirene"
+                    elif "étage 3.5" in low or "etage3_5" in low:
+                        current_stage = "L3.5 — Dropcontact"
+                    elif "étage 3" in low or "etage3" in low or "stage 3" in low:
+                        current_stage = "L3 — Scraping"
+                    elif "étage 4" in low or "etage4" in low:
+                        current_stage = "L4 — Prospection"
+
+                    elapsed = int(_time.time() - start)
+                    mn, sec = divmod(elapsed, 60)
+                    status_box.info(
+                        f"⏱ **{mn}min {sec:02d}s** · {current_stage}"
+                    )
+                    duree_box.metric("Durée", f"{mn}:{sec:02d}")
+                    stage_box.metric(
+                        "Étage", current_stage.split(" — ")[0]
+                    )
+                    lignes_box.metric("Logs", len(logs_buffer))
+                    log_container.code(
+                        "\n".join(logs_buffer[-30:]), language="text"
+                    )
+
+                    if _time.time() - start > TIMEOUT_S:
+                        proc.kill()
+                        st.error(
+                            f"⏱ Timeout après {TIMEOUT_S}s — process tué."
+                        )
+                        break
+            finally:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except _sp.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                rc = proc.returncode
+
+            total = int(_time.time() - start)
+            mn, sec = divmod(total, 60)
+            status_box.empty()
+
+            if rc == 0:
+                st.success(
+                    f"✓ Recherche terminée en **{mn}min {sec:02d}s**. "
+                    "Onglet **📁 Sessions** pour télécharger le rapport HTML."
+                )
+                st.balloons()
+            else:
+                st.error(
+                    f"Échec du pipeline (code retour {rc}) après "
+                    f"{mn}min {sec:02d}s."
+                )
+
+            with st.expander(
+                f"Logs complets ({len(logs_buffer)} lignes)"
+            ):
+                st.code(
+                    "\n".join(logs_buffer[-200:]) or "(aucun log)",
+                    language="text",
+                )
 
 
 # ───────────────────────────────────────────────────────────────────
@@ -436,6 +695,44 @@ with tab_sessions:
 
         csv_l4 = session_dir / "etage4_prospection.csv"
         csv_l3 = session_dir / "etage3_contacts.csv"
+
+        # ── Rapport HTML (livrable client, dispo dès L3) ──
+        if csv_l3.exists():
+            from renoboost_leads.agent.tools.report import generate_report
+
+            colr1, colr2 = st.columns([1, 3])
+            with colr1:
+                max_leads = st.number_input(
+                    "Max leads dans le rapport",
+                    min_value=1, max_value=200, value=50, step=10,
+                    key=f"rep_max_{session_dir.name}",
+                )
+            with colr2:
+                if st.button(
+                    "📄 Générer le rapport HTML",
+                    key=f"rep_btn_{session_dir.name}",
+                    help="Livrable client autonome (CSS inline). "
+                    "Ctrl+P dans le navigateur pour exporter en PDF.",
+                ):
+                    res = generate_report(session_dir.name, max_leads=int(max_leads))
+                    if "error" in res:
+                        st.error(res["error"])
+                    else:
+                        st.success(
+                            f"✓ Rapport généré ({res['bytes_written'] // 1024} KB, "
+                            f"{res['leads_inclus']} leads, "
+                            f"verdict pilote : "
+                            f"{'GO' if res['verdict_go_phase2'] else 'NO-GO'})"
+                        )
+                rapport_path = session_dir / "rapport.html"
+                if rapport_path.exists():
+                    st.download_button(
+                        "⬇ Télécharger le rapport HTML",
+                        rapport_path.read_bytes(),
+                        file_name=f"rapport_{session_dir.name}.html",
+                        mime="text/html",
+                        key=f"rep_dl_{session_dir.name}",
+                    )
 
         if csv_l4.exists():
             st.success("CSV L4 trouvé")
