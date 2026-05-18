@@ -160,9 +160,163 @@ with st.sidebar:
 # Onglets
 # ═══════════════════════════════════════════════════════════════════
 
-tab_veille, tab_nouveau, tab_sessions, tab_stats, tab_copilote = st.tabs(
-    ["📊 Veille du jour", "📥 Nouveau run", "📁 Sessions", "📈 Stats", "🤖 Copilote"]
+tab_recherche, tab_veille, tab_nouveau, tab_sessions, tab_stats, tab_copilote = st.tabs(
+    [
+        "🔎 Nouvelle recherche",
+        "📊 Veille du jour",
+        "📥 Nouveau run",
+        "📁 Sessions",
+        "📈 Stats",
+        "🤖 Copilote",
+    ]
 )
+
+
+# ───────────────────────────────────────────────────────────────────
+# ONGLET 0 : Nouvelle recherche prospect (form non-technique)
+# ───────────────────────────────────────────────────────────────────
+
+with tab_recherche:
+    st.header("🔎 Nouvelle recherche de prospects")
+    st.caption(
+        "Configure et lance une recherche en quelques clics — pas besoin "
+        "de toucher au YAML. Génère la config + lance L1+L2+L3, puis va "
+        "dans l'onglet **📁 Sessions** pour télécharger le rapport HTML."
+    )
+
+    from renoboost_leads.agent.tools.pipeline import run_pipeline
+    from renoboost_leads.agent.tools.workflow import clone_config
+
+    # Liste des configs disponibles comme template (utilise les client_*.yaml)
+    templates = sorted(
+        (PROJECT_ROOT / "config").glob("client_*.yaml"),
+        key=lambda p: p.name,
+    )
+    if not templates:
+        templates = sorted((PROJECT_ROOT / "config").glob("*.yaml"))
+    template_names = [t.name for t in templates]
+
+    if not template_names:
+        st.error("Aucun template de config trouvé dans `config/`. "
+                 "Ajoute au moins un YAML avant de lancer une recherche.")
+    else:
+        col_a, col_b = st.columns([2, 1])
+        with col_a:
+            base = st.selectbox(
+                "Modèle de départ",
+                template_names,
+                help="Copie ce config et applique tes paramètres par-dessus. "
+                "`client_rossini.yaml` = sites industriels Nord (preset).",
+            )
+        with col_b:
+            stages_choisis = st.selectbox(
+                "Étages à lancer",
+                ["1,2,3", "1,2", "1,2,3,3.5"],
+                help="L1=Google Places, L2=Sirene, L3=scraping contacts, "
+                "L3.5=Dropcontact (clé requise).",
+            )
+
+        st.subheader("Paramètres")
+        col1, col2 = st.columns(2)
+        with col1:
+            nom_campagne = st.text_input(
+                "Nom de la campagne",
+                value="recherche-2026-05",
+                help="Identifie ton run (apparaît dans le rapport).",
+            )
+            volume = st.slider(
+                "Volume cible (leads)", 5, 100, 10, step=5,
+                help="Nombre de prospects souhaités. ~0.03 € par lead L1.",
+            )
+            budget = st.number_input(
+                "Plafond budget €", 0.5, 50.0, 5.0, 0.5,
+                help="Coupe le run si dépassé.",
+            )
+        with col2:
+            depts = st.text_input(
+                "Départements (ex: `59, 62, 80`)",
+                value="59",
+                help="Codes INSEE séparés par virgules. Ou code postal pour "
+                "zone fine.",
+            )
+            secteurs_str = st.text_area(
+                "Secteurs cibles (un par ligne)",
+                value="site industriel\nplateforme logistique",
+                height=120,
+                help="Requêtes Google Places brutes — comme tu les "
+                "taperais dans Maps.",
+            )
+
+        # Bouton de lancement
+        api_ok = bool(_read_anthropic_key()) and settings.has_google_places()
+        if not settings.has_google_places():
+            st.warning("⚠ GOOGLE_PLACES_API_KEY absente — impossible de lancer "
+                       "L1. Configure-la dans les secrets.")
+
+        if st.button(
+            "🚀 Générer et lancer la recherche",
+            type="primary",
+            disabled=not api_ok,
+            use_container_width=True,
+        ):
+            secteurs = [s.strip() for s in secteurs_str.splitlines() if s.strip()]
+            if not secteurs:
+                st.error("Indique au moins un secteur.")
+                st.stop()
+
+            save_name = nom_campagne.replace(" ", "_").replace("/", "_")
+
+            with st.spinner("Création de la config…"):
+                cfg_res = clone_config(
+                    source_path=base,
+                    save_as=save_name,
+                    overrides={
+                        "client_name": nom_campagne,
+                        "zone_codes": depts,
+                        "secteurs": secteurs,
+                        "volume_cible": volume,
+                        "budget_max_eur": budget,
+                    },
+                )
+
+            if "error" in cfg_res:
+                st.error(f"Erreur config : {cfg_res['error']}")
+                st.stop()
+
+            st.success(f"✓ Config créée : `{cfg_res['path']}`")
+            with st.expander("Voir le YAML généré"):
+                contenu = (PROJECT_ROOT / cfg_res["path"]).read_text(
+                    encoding="utf-8"
+                )
+                st.code(contenu, language="yaml")
+
+            with st.spinner(
+                f"Recherche en cours ({stages_choisis}, peut prendre "
+                "3-8 min pour 10 leads)…"
+            ):
+                pipe_res = run_pipeline(
+                    cfg_res["path"],
+                    stages=stages_choisis,
+                    timeout_s=1200,
+                )
+
+            if pipe_res.get("ok"):
+                st.success(
+                    "✓ Recherche terminée. Onglet **📁 Sessions** pour "
+                    "télécharger le rapport HTML."
+                )
+                st.balloons()
+                with st.expander("Logs (queue stdout)"):
+                    st.code(pipe_res.get("stdout_tail", "") or "(vide)")
+            else:
+                st.error(
+                    f"Échec du pipeline (code retour : "
+                    f"{pipe_res.get('returncode')})"
+                )
+                with st.expander("Logs stderr"):
+                    st.code(pipe_res.get("stderr_tail", "") or "(vide)")
+                with st.expander("Logs stdout"):
+                    st.code(pipe_res.get("stdout_tail", "") or "(vide)")
 
 
 # ───────────────────────────────────────────────────────────────────
