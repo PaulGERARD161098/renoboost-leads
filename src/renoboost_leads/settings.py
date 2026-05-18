@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = Field(default=None)
     claude_model: str = Field(default="claude-sonnet-4-6")
 
+    # ─── Phase B : Instantly (cold mailing — optionnel) ───
+    instantly_api_key: SecretStr | None = Field(default=None)
+    instantly_base_url: str = Field(default="https://api.instantly.ai/api/v2")
+    # Mode dry-run global : si True, le client Instantly n'envoie aucune
+    # requête réelle et renvoie des payloads simulés. Pratique tant que
+    # l'abonnement n'est pas actif et pour les tests d'intégration locaux.
+    instantly_dry_run: bool = Field(default=True)
+
     # ─── Plafonds de sécurité ───
     max_budget_eur_per_run: float = Field(default=30.0, gt=0, le=1000)
     max_leads_per_run: int = Field(default=500, gt=0, le=10_000)
@@ -105,6 +113,11 @@ class Settings(BaseSettings):
     def has_anthropic(self) -> bool:
         return self.anthropic_api_key is not None and bool(
             self.anthropic_api_key.get_secret_value()
+        )
+
+    def has_instantly(self) -> bool:
+        return self.instantly_api_key is not None and bool(
+            self.instantly_api_key.get_secret_value()
         )
 
     def has_smtp(self) -> bool:
