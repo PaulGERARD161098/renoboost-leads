@@ -1,0 +1,24 @@
+# Configuration de l'agent Copilote RénoBoost.
+# Tout est surchargeable par variables d'env via le préfixe AGENT_* (à venir).
+
+# Modèles
+modele_principal: claude-sonnet-4-6   # raisonnement / décisions
+modele_boucle: claude-haiku-4-5       # boucles répétitives (lecture sessions, etc.)
+
+# Budget garde-fou €/jour API Claude
+budget_eur_par_jour: 5.0
+
+# Garde-fou nombre max d'outils appelés dans un cycle (évite les boucles infinies)
+max_outils_par_cycle: 12
+
+# Niveau d'autonomie : N1 (proposition seule) / N2 (agit, valide envois) / N3 (boucle fermée)
+# Phase A = N2 mais sans cold mailing donc pas d'envoi à valider pour l'instant.
+niveau_autonomie: N2
+
+# Chemins (relatifs au repo)
+journal_path: data/agent/journal.md
+budget_path: data/agent/budget.json
+
+# Email d'alerte (réutilise SMTP_* de Settings)
+alerte_destinataires:
+  - paul@renoboost.fr
