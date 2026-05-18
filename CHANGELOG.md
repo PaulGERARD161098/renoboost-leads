@@ -2,6 +2,120 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.8.0] — 2026-05-18 — Cold mailing Instantly (Phase B N2) + robustesse agent
+
+### Added — Phase B cold mailing avec staging N2 (validation humaine)
+Bascule l'agent Copilote d'une posture "analyse + propose" à
+"prospection complète bout-en-bout" : 7 → 12 outils, et l'agent peut
+maintenant **drafter** des campagnes cold mail que l'utilisateur valide
+manuellement avant envoi Instantly. Aucun cold mail ne part sans clic
+humain (garde-fou N2).
+
+- **Wrapper Instantly v2** (`instantly/client.py`) : 5 méthodes (create
+  campaign, list, add leads, get analytics, pause) avec mode dry-run
+  automatique si pas de clé ou si `INSTANTLY_DRY_RUN=true`.
+- **Templates séquences** (`templates/sequences/*.md`) : 5 secteurs
+  (compta, avocats, immo, com, BE), 3 steps chacun avec délais J+0,
+  J+4-5, J+7-8. Front-matter YAML + corps markdown. Variables
+  substituables ({{civilite}}, {{prenom}}, {{nom_dirigeant}},
+  {{nom_entreprise}}, {{telephone_paul}}, {{lien_calendly}}).
+- **Staging workflow** (`instantly/staging.py`) : StagingStore JSON
+  persistant sous `data/cold_mail/staging/<id>.json`. 4 états par item :
+  en_attente / valide / refuse / envoye.
+- **5 nouveaux outils agent** (`agent/tools/cold_mail.py`) :
+  `stage_cold_emails`, `list_stagings`, `send_validated`
+  (idempotent, envoie UNIQUEMENT les 'valide'), `read_campaign_metrics`,
+  `pause_campaign`.
+- **CLI** : sous-groupe `cold-mail {list, show, validate, refuse, send,
+  metrics}`. Tableau Rich des stagings + previews par couleur d'état.
+- **Streamlit** : section "📨 Staging cold mail" ajoutée à l'onglet
+  Copilote — selectbox + métriques + expanders par item avec boutons
+  Valider/Refuser/Envoyer.
+
+### Added — robustesse agent Phase A (paliers C1-C3)
+- **Prompt caching Anthropic** (system + tools ephemeral 5 min) — ~70%
+  d'économie input tokens à partir du 2e cycle dans la fenêtre.
+  CycleResult expose tokens_cache_creation/read, budget recalcule au
+  tarif × 1.25 (write) / × 0.10 (read).
+- **Rotation journal** à 200 KB → archive `journal-archive-YYYYMM.md`
+  + troncature contexte LLM à 10 KB (~2.5k tokens). Journal reste
+  lisible même après 1000+ cycles.
+- **Métriques par outil** persistées (`data/agent/metrics.json`) :
+  count, duration_total_s, erreurs par outil + CLI `agent metrics`
+  (panel + tableau Rich trié par fréquence).
+- conftest.py autouse fixture qui isole `data/agent/*` et
+  `data/cold_mail/*` vers tmp_path pour éviter pollution en test.
+
+### Settings ajoutées
+- `INSTANTLY_API_KEY` (SecretStr optionnel)
+- `INSTANTLY_BASE_URL` (défaut https://api.instantly.ai/api/v2)
+- `INSTANTLY_DRY_RUN` (défaut True — bascule à False quand abo actif)
+
+### Tested
+- **+158 tests** (Phase B + robustesse) : 495 total (vs 344 sur main).
+  Ruff clean, Python 3.10-3.12.
+- Tous les tests Instantly utilisent mocks HTTP ou dry-run — aucune
+  hit API réelle, aucun coût.
+
+### .gitignore
+- `data/agent/` et `data/cold_mail/` ajoutés (même politique que
+  `data/output/`).
+
+## [0.7.0] — 2026-05-18 — Agent Copilote Phase A
+
+### Added — agent IA autonome de pilotage prospection
+Premier socle d'un agent qui prend des instructions en langage naturel
+("liste les sessions", "diagnostique la dernière", "priorise les leads")
+et appelle les bons outils via Claude tool-use.
+
+- **7 outils exposés au LLM** (`src/renoboost_leads/agent/tools/`) :
+  - `list_sessions(limit)` : énumère `data/output/`, plus récentes d'abord,
+    détecte les étages disponibles (1, 2, 3, 3_hors_filtre, 3.5, 4).
+  - `read_session(session_id, stage, sample_size)` : stats + N premiers leads.
+  - `run_pipeline(config_path, stages, dry_run)` : wrap subprocess `cli run`.
+  - `diagnose_quality(session_id)` : % SIREN matché, dirigeant, email,
+    distribution effectif/NAF, anomalies, **verdict Phase 1 pilote**
+    (SIREN>80%, dirigeant>50%, email>40%).
+  - `read_config(path)` / `propose_config_edit(path, contenu_cible, motif)` :
+    lecture YAML sous `config/` (chroot strict), éditions = diff unifié
+    sans écriture (garde-fou Phase A).
+  - `prioritize_leads(session_id, top_n)` : scoring chaud/tiède/froid
+    auto-sélection L4 > L3.5 > L3 + distribution + médiane.
+  - `alert_human(subject, body, urgency)` : email SMTP via Settings
+    existant. 3 niveaux (info / attention / urgent).
+- **Runner Claude tool-use** (`agent/runner.py`) : boucle complète avec
+  budget €/jour persistant (`agent/budget.py`), journal markdown append-only
+  (`agent/journal.py`), prompt système (`prompts/system.md`), config YAML
+  (`config/agent.yaml`).
+- **CLI** : sous-groupe `renoboost-leads agent {run, chat, journal, budget}`.
+  - `agent run "instruction"` : one-shot.
+  - `agent chat` : REPL.
+  - `agent journal -n 10` : lecture journal.
+  - `agent budget` : état €/jour.
+- **UI Streamlit** : 5e onglet 🤖 Copilote avec métriques budget, zone
+  instruction, affichage tours/coût/tokens, journal récent.
+
+### Garde-fous Phase A
+- Budget cap €/jour persistant (reset minuit UTC, par défaut 5 €).
+- Niveau d'autonomie N2 — pas d'écriture config sans validation user,
+  pas d'envoi cold mail (Phase B = Instantly, à venir).
+- Chroot `config/` strict pour `read_config` (rejette `..` et chemins
+  absolus hors zone).
+- Cap `max_outils_par_cycle` pour éviter boucles infinies.
+- Toutes les erreurs d'outil sont passées au LLM (pas de raise) pour
+  qu'il puisse réagir intelligemment.
+
+### Tested
+- **+76 tests** (journal, budget, config, 5 outils, runner mocké).
+- Total : **404 tests verts** (vs 328 sur main). Ruff clean, Python 3.10-3.12.
+- Runner testé sans hit Anthropic (client mocké, fake responses).
+
+### Notes Phase B
+Phase B (à coder ensuite) = intégration **Instantly** pour cold mailing
+en mode N2 (drafte campagnes, validation email humain avant envoi).
+Décision actée : Instantly retenu vs Lemlist (37 €/mois, automatisation
+native plus avancée).
+
 ## [Unreleased] — dettes techniques
 
 ### Added — smoke test L4 prêt-à-l'emploi (dette #3)
