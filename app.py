@@ -641,6 +641,104 @@ with tab_copilote:
                 st.markdown(e)
                 st.divider()
 
+    st.divider()
+    st.subheader("📨 Staging cold mail — validation manuelle")
+    st.caption(
+        "L'agent drafte les emails ici. Tu valides un par un, puis tu cliques "
+        "**Envoyer les validés** pour les pousser dans Instantly. "
+        "Tant que rien n'est validé, rien ne part."
+    )
+
+    from renoboost_leads.agent.tools.cold_mail import send_validated
+    from renoboost_leads.instantly.client import InstantlyClient
+    from renoboost_leads.instantly.staging import StagingStore
+
+    cm_store = StagingStore()
+    stagings_resume = cm_store.list()
+    if not stagings_resume:
+        st.info(
+            "Aucun staging — demande à l'agent : "
+            "`stage_cold_emails(session_id, secteur)`."
+        )
+    else:
+        labels = [
+            (
+                f"{s['staging_id']}  • {s.get('secteur')}  "
+                f"({s['etats']['en_attente']} att / "
+                f"{s['etats']['valide']} val / "
+                f"{s['etats']['envoye']} env)"
+            )
+            for s in stagings_resume
+        ]
+        choix_idx = st.selectbox(
+            "Choisir un staging",
+            range(len(labels)),
+            format_func=lambda i: labels[i],
+            key="cm_select",
+        )
+        sid = stagings_resume[choix_idx]["staging_id"]
+        staging = cm_store.load(sid)
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total", len(staging.items))
+        for col, etat in zip(
+            (c2, c3, c4), ("en_attente", "valide", "envoye"), strict=True
+        ):
+            col.metric(
+                etat,
+                sum(1 for i in staging.items if i.etat == etat),
+            )
+
+        cli = InstantlyClient()
+        if cli.is_dry_run():
+            st.warning(
+                "Instantly en **DRY-RUN** — la clé n'est pas configurée ou "
+                "INSTANTLY_DRY_RUN=true. Les envois seront simulés."
+            )
+
+        if st.button(
+            "📤 Envoyer les items validés vers Instantly",
+            disabled=not any(i.etat == "valide" for i in staging.items),
+        ):
+            res = send_validated(sid)
+            if "error" in res:
+                st.error(res["error"])
+            elif "warning" in res:
+                st.warning(res["warning"])
+            else:
+                st.success(
+                    f"{res['envoyes']} envoyé(s) — campagne {res['campaign_id']}"
+                    + (" (dry-run)" if res.get("dry_run") else "")
+                )
+                st.rerun()
+
+        st.divider()
+        for item in staging.items:
+            badge = {
+                "en_attente": "🟡 en attente",
+                "valide": "🟢 validé",
+                "refuse": "🔴 refusé",
+                "envoye": "🔵 envoyé",
+            }.get(item.etat, item.etat)
+            with st.expander(
+                f"{badge} — {item.email_dest} ({item.nom_dest})",
+                expanded=item.etat == "en_attente",
+            ):
+                st.markdown(f"**Sujet** : {item.sujet}")
+                st.text(item.corps)
+                if item.etat == "en_attente":
+                    cc1, cc2 = st.columns(2)
+                    if cc1.button("✅ Valider", key=f"v_{item.lead_id}"):
+                        cm_store.set_etat(sid, item.lead_id, "valide")
+                        st.rerun()
+                    if cc2.button("❌ Refuser", key=f"r_{item.lead_id}"):
+                        cm_store.set_etat(sid, item.lead_id, "refuse")
+                        st.rerun()
+                elif item.campagne_instantly_id:
+                    st.caption(
+                        f"Campagne Instantly : `{item.campagne_instantly_id}`"
+                    )
+
 
 st.caption(
     "📚 Doc : [README](./README.md) • [VEILLE.md](./VEILLE.md) • "

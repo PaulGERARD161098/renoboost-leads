@@ -1142,6 +1142,11 @@ from .cli_agent import agent_group  # noqa: E402
 
 cli.add_command(agent_group)
 
+# Sous-groupe cold-mail (Phase B — staging Instantly)
+from .cli_cold_mail import cold_mail_group  # noqa: E402
+
+cli.add_command(cold_mail_group)
+
 
 if __name__ == "__main__":
     cli()
