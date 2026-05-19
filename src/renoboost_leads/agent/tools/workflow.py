@@ -23,7 +23,7 @@ import yaml
 
 from ...settings import PROJECT_ROOT
 from .config import _resolve_config
-from .quality import _metriques_l3
+from .quality import _metriques_l3, _metriques_l3_5, _metriques_l4
 from .sessions import OUTPUT_ROOT, STAGE_FILES
 
 GENERATED_ROOT = PROJECT_ROOT / "data" / "agent" / "configs"
@@ -232,13 +232,16 @@ def _lire_csv(path: Path) -> list[dict]:
 
 
 def compare_sessions(session_a: str, session_b: str) -> dict[str, Any]:
-    """Compare la qualité de 2 sessions sur leur étage 3.
+    """Compare la qualité de 2 sessions sur L3 (+ L3.5 et L4 si présents).
 
     Renvoie les métriques par session + un delta orienté (B - A) avec
-    une recommandation textuelle.
+    une recommandation textuelle. Le delta couvre L3 toujours et étend
+    aux étages enrichissement / scoring quand ils sont présents dans les
+    deux sessions.
     """
     out: dict[str, Any] = {"session_a": session_a, "session_b": session_b}
-    metriques = {}
+    metriques_par_session: dict[str, dict[str, Any]] = {}
+
     for label, sid in (("a", session_a), ("b", session_b)):
         dossier = OUTPUT_ROOT / sid
         if not dossier.is_dir():
@@ -251,34 +254,63 @@ def compare_sessions(session_a: str, session_b: str) -> dict[str, Any]:
                     "avant de comparer."
                 )
             }
-        rows = _lire_csv(fichier_l3)
-        metriques[label] = _metriques_l3(rows)
+        per_stage: dict[str, Any] = {"l3": _metriques_l3(_lire_csv(fichier_l3))}
+        fichier_l3_5 = dossier / STAGE_FILES["3.5"]
+        if fichier_l3_5.exists():
+            per_stage["l3_5"] = _metriques_l3_5(_lire_csv(fichier_l3_5))
+        fichier_l4 = dossier / STAGE_FILES["4"]
+        if fichier_l4.exists():
+            per_stage["l4"] = _metriques_l4(_lire_csv(fichier_l4))
+        metriques_par_session[label] = per_stage
 
-    m_a = metriques["a"]
-    m_b = metriques["b"]
-    deltas = {
-        "row_count": m_b["row_count"] - m_a["row_count"],
-        "pct_siren_matche": round(
-            m_b["pct_siren_matche"] - m_a["pct_siren_matche"], 1
-        ),
-        "pct_dirigeant_identifie": round(
-            m_b["pct_dirigeant_identifie"] - m_a["pct_dirigeant_identifie"], 1
-        ),
-        "pct_email_scrape": round(
-            m_b["pct_email_scrape"] - m_a["pct_email_scrape"], 1
-        ),
+    m_a = metriques_par_session["a"]
+    m_b = metriques_par_session["b"]
+    l3_a = m_a["l3"]
+    l3_b = m_b["l3"]
+
+    deltas: dict[str, Any] = {
+        "l3": {
+            "row_count": l3_b["row_count"] - l3_a["row_count"],
+            "pct_siren_matche": round(
+                l3_b["pct_siren_matche"] - l3_a["pct_siren_matche"], 1
+            ),
+            "pct_dirigeant_identifie": round(
+                l3_b["pct_dirigeant_identifie"] - l3_a["pct_dirigeant_identifie"], 1
+            ),
+            "pct_email_scrape": round(
+                l3_b["pct_email_scrape"] - l3_a["pct_email_scrape"], 1
+            ),
+        }
     }
+    if "l3_5" in m_a and "l3_5" in m_b:
+        deltas["l3_5"] = {
+            "pct_email_verifie_dropcontact": round(
+                m_b["l3_5"]["pct_email_verifie_dropcontact"]
+                - m_a["l3_5"]["pct_email_verifie_dropcontact"],
+                1,
+            ),
+            "pct_tel_direct": round(
+                m_b["l3_5"]["pct_tel_direct"] - m_a["l3_5"]["pct_tel_direct"], 1
+            ),
+        }
+    if "l4" in m_a and "l4" in m_b:
+        deltas["l4"] = {
+            "nb_top_leads": m_b["l4"]["nb_top_leads"] - m_a["l4"]["nb_top_leads"],
+            "score_moyen": round(
+                m_b["l4"]["score_moyen"] - m_a["l4"]["score_moyen"], 1
+            ),
+        }
 
-    # Recommandation simple : on agrège SIREN+dirigeant+email
+    # Recommandation simple : on agrège SIREN+dirigeant+email sur L3.
     score_a = (
-        m_a["pct_siren_matche"]
-        + m_a["pct_dirigeant_identifie"]
-        + m_a["pct_email_scrape"]
+        l3_a["pct_siren_matche"]
+        + l3_a["pct_dirigeant_identifie"]
+        + l3_a["pct_email_scrape"]
     )
     score_b = (
-        m_b["pct_siren_matche"]
-        + m_b["pct_dirigeant_identifie"]
-        + m_b["pct_email_scrape"]
+        l3_b["pct_siren_matche"]
+        + l3_b["pct_dirigeant_identifie"]
+        + l3_b["pct_email_scrape"]
     )
     if abs(score_b - score_a) < 5:
         verdict = "qualité équivalente entre les deux sessions"

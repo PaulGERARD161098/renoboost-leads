@@ -123,7 +123,7 @@ def test_inclut_l3_5_si_present(fake_root: Path) -> None:
         {"nom": f"E{i}", "email_verifie": f"v{i}@x.fr", "tel_direct": "0600000000"}
         for i in range(5)
     ]
-    _ecrire_csv(d / "etage3_5_enrichment.csv", rows35)
+    _ecrire_csv(d / "etage3_5_enrichissement.csv", rows35)
     res = rep.generate_report("s5")
     assert "error" not in res
     html = (d / "rapport.html").read_text(encoding="utf-8")

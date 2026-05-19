@@ -237,8 +237,58 @@ def test_compare_sessions_b_meilleure(fake_output_root: Path) -> None:
     _session_l3(fake_output_root, "s_b", n=10, complet=True)
     res = wf.compare_sessions("s_a", "s_b")
     assert "error" not in res
-    assert res["delta_b_moins_a"]["pct_siren_matche"] == 100.0
+    assert res["delta_b_moins_a"]["l3"]["pct_siren_matche"] == 100.0
     assert "B meilleure" in res["verdict"]
+
+
+def test_compare_sessions_inclut_l3_5_si_present(fake_output_root: Path) -> None:
+    """Quand les 2 sessions ont L3.5, le delta couvre aussi cet étage."""
+    _session_l3(fake_output_root, "s_a", n=5, complet=True)
+    _session_l3(fake_output_root, "s_b", n=5, complet=True)
+    _ecrire_csv(
+        fake_output_root / "s_a" / "etage3_5_enrichissement.csv",
+        [
+            {"nom": "X", "email_dropcontact": "", "telephone_direct_dropcontact": ""}
+        ],
+    )
+    _ecrire_csv(
+        fake_output_root / "s_b" / "etage3_5_enrichissement.csv",
+        [
+            {
+                "nom": "X",
+                "email_dropcontact": "x@y.fr",
+                "telephone_direct_dropcontact": "0102",
+            }
+        ],
+    )
+    res = wf.compare_sessions("s_a", "s_b")
+    assert "l3_5" in res["metriques_a"]
+    assert "l3_5" in res["delta_b_moins_a"]
+    assert res["delta_b_moins_a"]["l3_5"]["pct_email_verifie_dropcontact"] == 100.0
+
+
+def test_compare_sessions_inclut_l4_si_present(fake_output_root: Path) -> None:
+    """Quand les 2 sessions ont L4, le delta couvre top_leads et score."""
+    _session_l3(fake_output_root, "s_a", n=3, complet=True)
+    _session_l3(fake_output_root, "s_b", n=3, complet=True)
+    _ecrire_csv(
+        fake_output_root / "s_a" / "etage4_prospection.csv",
+        [
+            {"nom": "X", "score_interet": "40", "top_lead": "FAUX"},
+            {"nom": "Y", "score_interet": "50", "top_lead": "FAUX"},
+        ],
+    )
+    _ecrire_csv(
+        fake_output_root / "s_b" / "etage4_prospection.csv",
+        [
+            {"nom": "X", "score_interet": "85", "top_lead": "VRAI"},
+            {"nom": "Y", "score_interet": "90", "top_lead": "VRAI"},
+        ],
+    )
+    res = wf.compare_sessions("s_a", "s_b")
+    assert "l4" in res["delta_b_moins_a"]
+    assert res["delta_b_moins_a"]["l4"]["nb_top_leads"] == 2
+    assert res["delta_b_moins_a"]["l4"]["score_moyen"] > 40
 
 
 def test_compare_sessions_a_meilleure(fake_output_root: Path) -> None:

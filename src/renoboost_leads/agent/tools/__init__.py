@@ -11,7 +11,16 @@ Convention :
 
 from __future__ import annotations
 
-from . import cold_mail, notify, pipeline, quality, report, sessions, workflow
+from . import (
+    cold_mail,
+    enrich,
+    notify,
+    pipeline,
+    quality,
+    report,
+    sessions,
+    workflow,
+)
 from . import config as cfg_tools
 from . import leads as leads_tools
 
@@ -21,6 +30,7 @@ def all_schemas() -> list[dict]:
     return [
         *sessions.SCHEMAS,
         *pipeline.SCHEMAS,
+        *enrich.SCHEMAS,
         *quality.SCHEMAS,
         *cfg_tools.SCHEMAS,
         *leads_tools.SCHEMAS,
@@ -37,6 +47,7 @@ def all_dispatch() -> dict:
     for mod in (
         sessions,
         pipeline,
+        enrich,
         quality,
         cfg_tools,
         leads_tools,

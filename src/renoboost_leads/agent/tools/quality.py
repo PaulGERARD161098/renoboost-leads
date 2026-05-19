@@ -87,15 +87,77 @@ def _metriques_l3(rows: list[dict]) -> dict:
 
 
 def _metriques_l3_5(rows: list[dict]) -> dict:
+    """Métriques L3.5 lues depuis `etage3_5_enrichissement.csv`.
+
+    Accepte les anciens noms de colonnes (`email_verifie`, `tel_direct`)
+    pour compat ascendante, mais préfère les colonnes officielles
+    Dropcontact (`email_dropcontact`, `telephone_direct_dropcontact`).
+    """
     n = len(rows)
     if not n:
         return {"row_count_3_5": 0}
-    email_verif = sum(1 for r in rows if _has(r, "email_verifie"))
-    tel_direct = sum(1 for r in rows if _has(r, "tel_direct"))
+    email_dc = sum(
+        1
+        for r in rows
+        if _has(r, "email_dropcontact") or _has(r, "email_verifie")
+    )
+    email_correct = sum(
+        1
+        for r in rows
+        if (r.get("qualification_email_dropcontact") or "").strip().lower()
+        == "correct"
+    )
+    tel_direct = sum(
+        1
+        for r in rows
+        if _has(r, "telephone_direct_dropcontact") or _has(r, "tel_direct")
+    )
+    linkedin = sum(
+        1
+        for r in rows
+        if _has(r, "linkedin_dirigeant_dropcontact")
+        or _has(r, "linkedin_entreprise_dropcontact")
+    )
+    enrichis = sum(1 for r in rows if (r.get("enrichi_dropcontact") or "") == "VRAI")
     return {
         "row_count_3_5": n,
-        "pct_email_verifie_dropcontact": _pct(email_verif, n),
+        "pct_email_verifie_dropcontact": _pct(email_dc, n),
+        "pct_email_correct": _pct(email_correct, n),
         "pct_tel_direct": _pct(tel_direct, n),
+        "pct_linkedin": _pct(linkedin, n),
+        "nb_enrichis": enrichis,
+    }
+
+
+def _metriques_l4(rows: list[dict], seuil_top: int = 70) -> dict:
+    """Métriques L4 lues depuis `etage4_prospection.csv`.
+
+    Calcule top_leads (`top_lead=VRAI`), score moyen/médian (champ
+    `score_interet`), % pitchés.
+    """
+    n = len(rows)
+    if not n:
+        return {"row_count_4": 0}
+    scores: list[int] = []
+    for r in rows:
+        try:
+            scores.append(int(float(r.get("score_interet") or 0)))
+        except (TypeError, ValueError):
+            continue
+    top = sum(1 for r in rows if (r.get("top_lead") or "") == "VRAI")
+    avec_pitch = sum(1 for r in rows if _has(r, "pitch_propose"))
+    avec_raison = sum(1 for r in rows if _has(r, "raison_score"))
+    score_moyen = round(sum(scores) / len(scores), 1) if scores else 0.0
+    score_median = sorted(scores)[len(scores) // 2] if scores else 0
+    return {
+        "row_count_4": n,
+        "nb_top_leads": top,
+        "pct_top_leads": _pct(top, n),
+        "score_moyen": score_moyen,
+        "score_median": score_median,
+        "pct_avec_pitch": _pct(avec_pitch, n),
+        "pct_avec_raison": _pct(avec_raison, n),
+        "seuil_top": seuil_top,
     }
 
 
@@ -154,6 +216,16 @@ def diagnose_quality(session_id: str) -> dict:
     fichier_l3_5 = dossier / STAGE_FILES["3.5"]
     if fichier_l3_5.exists():
         result["metriques_l3_5"] = _metriques_l3_5(_lire_csv(fichier_l3_5))
+
+    fichier_l4 = dossier / STAGE_FILES["4"]
+    if fichier_l4.exists():
+        result["metriques_l4"] = _metriques_l4(_lire_csv(fichier_l4))
+
+    result["etages_presents"] = sorted(
+        stage_key
+        for stage_key in ("1", "2", "3", "3.5", "4")
+        if (dossier / STAGE_FILES[stage_key]).exists()
+    )
 
     # 5 anomalies = lignes sans SIREN ni email ni dirigeant
     anomalies = [

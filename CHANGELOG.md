@@ -2,6 +2,74 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.10.0] — 2026-05-19 — Navigation L3.5/L4 via l'agent + UI symétrique
+
+### Added — 2 outils agent ciblés
+
+Le copilote IA peut désormais piloter finement les étages L3.5 et L4 sur
+une **session existante**, sans relancer tout le pipeline.
+
+- **`enrich_l3_5_on_session(session_id, dry_run)`** : lance L3.5
+  (Dropcontact — email vérifié, tél direct, LinkedIn) sur une session
+  ayant déjà L3. Subprocess CLI, extraction de stats post-CSV (%email
+  qualifié, %tel direct, %LinkedIn, coût). Préfère cet outil à
+  `run_pipeline` quand la session existe.
+- **`score_l4_on_session(session_id, dry_run)`** : lance L4 (scoring
+  Claude + pitch) sur une session existante. Source automatique : L3.5
+  prioritaire, fallback L3. Retourne top_leads, score moyen/médian,
+  %pitch.
+- Registry agent passe de 10 à **12 outils**.
+
+### Added — bouton "Enrichir L3.5" dans l'onglet Sessions Streamlit
+
+UX symétrique au bouton "Lancer L4" existant : dès qu'une session a L3,
+deux boutons côte-à-côte permettent d'ajouter L3.5 puis L4 à la souris.
+Checkboxes dry-run par défaut quand la clé API correspondante est
+absente. Sidebar affiche désormais l'état de la clé **Dropcontact**.
+
+### Changed — `diagnose_quality` étendu aux 3 étages
+
+- Renvoie désormais `metriques_l3_5` (4 indicateurs Dropcontact :
+  %email, %email "correct", %tel, %LinkedIn) au lieu de 2.
+- Renvoie `metriques_l4` quand `etage4_prospection.csv` présent
+  (top_leads, score moyen/médian, %pitch, %raison).
+- Renvoie `etages_presents` : liste des étages effectivement présents
+  dans la session.
+
+### Changed — `compare_sessions` étendu aux étages L3.5 et L4
+
+Le diff de qualité couvre désormais L3.5 (%email Dropcontact, %tel
+direct) et L4 (delta top_leads, delta score moyen) quand les deux
+sessions comparées les ont. Format du retour : `metriques_a.l3 |
+.l3_5 | .l4` (auparavant plat). Le verdict textuel reste basé sur L3
+pour cohérence avec le pilote Phase 1.
+
+### Fixed — désalignement nom fichier L3.5
+
+`STAGE_FILES["3.5"]` pointait vers `etage3_5_enrichment.csv` (anglais)
+alors que le CLI produit `etage3_5_enrichissement.csv` (français).
+Conséquence : `diagnose_quality`, `list_sessions`, `prioritize_leads`
+ne voyaient jamais L3.5 en prod. Aligné sur le vrai nom produit par le
+CLI.
+
+### Changed — prompt système agent à jour
+
+`agent/prompts/system.md` retire la mention obsolète "Phase A : pas
+d'outils cold mailing" (Phase B est livrée depuis 0.8.0). Liste les 12
+outils par usage, donne des règles rapides de choix entre
+`run_pipeline` / `enrich_l3_5_on_session` / `score_l4_on_session`.
+
+### Internal
+
+- Nouveau module `agent/tools/enrich.py` (~280 lignes, subprocess CLI).
+- Nouvelles fonctions `_metriques_l4()` et stats Dropcontact étendues
+  dans `quality.py`.
+- `app.py` : simplification du bouton L4 (in-process → subprocess via
+  outil agent), suppression des imports devenus inutilisés
+  (`ClaudeClient`, `EnricheurStage4`, `CacheStage4`...).
+- **+15 tests** (10 sur `enrich`, 3 sur `quality`/L4, 2 sur `compare`
+  L3.5/L4).
+
 ## [0.9.1] — 2026-05-19 — Cosmétiques rapport HTML (livrable client)
 
 ### Fixed — lisibilité du rapport `generate_report`
