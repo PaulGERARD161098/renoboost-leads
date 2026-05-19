@@ -32,6 +32,9 @@ dev = [
 ui = [
     "streamlit>=1.30.0",
 ]
+storage = [
+    "supabase>=2.8.0",
+]
 
 [project.scripts]
 renoboost-leads = "renoboost_leads.cli:cli"
