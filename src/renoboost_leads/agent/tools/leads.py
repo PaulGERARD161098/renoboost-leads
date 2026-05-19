@@ -1,7 +1,7 @@
 """Outil `prioritize_leads` — scoring chaud/tiède/froid d'une session.
 
 Lit `etage4_prospection.csv` si dispo (a score Claude), sinon
-`etage3_5_enrichment.csv`, sinon `etage3_contacts.csv`. Tri descendant
+`etage3_5_enrichissement.csv`, sinon `etage3_contacts.csv`. Tri descendant
 sur le score combiné :
 
 - +50 si email vérifié Dropcontact OU email scrapé

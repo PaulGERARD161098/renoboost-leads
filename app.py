@@ -50,22 +50,12 @@ _bridge_streamlit_secrets_to_env()
 
 # noqa: E402 — les imports ci-dessous viennent APRÈS le bridge des secrets
 # Streamlit (volontaire), pour que Settings voie les variables au bon moment.
-from renoboost_leads.common.budget_guard import BudgetGuard  # noqa: E402
-from renoboost_leads.common.rate_limiter import RateLimiter  # noqa: E402
 from renoboost_leads.exporter import (  # noqa: E402
     export_csv_crm,
-    export_stage4_csv,
-    lire_stage3_csv,
     lire_stage4_csv,
 )
 from renoboost_leads.models import ClaudeScoring  # noqa: E402
 from renoboost_leads.settings import PROJECT_ROOT, get_settings  # noqa: E402
-from renoboost_leads.stage4_prospection.cache import CacheStage4  # noqa: E402
-from renoboost_leads.stage4_prospection.client import (  # noqa: E402
-    ClaudeClient,
-    ClaudeClientConfig,
-)
-from renoboost_leads.stage4_prospection.enricher import EnricheurStage4  # noqa: E402
 from renoboost_leads.stage4_prospection.prompt_template import (  # noqa: E402
     CONTEXTE_CLIENT_DEFAUT,
 )
@@ -148,11 +138,15 @@ with st.sidebar:
     cle_anthropic = _read_anthropic_key()
     st.write("🔑 **Anthropic** :", "✓ active" if cle_anthropic else "✗ absente")
     st.write("📍 **Google Places** :", "✓ active" if settings.has_google_places() else "✗ absente")
+    st.write(
+        "💎 **Dropcontact** :",
+        "✓ active" if settings.has_dropcontact() else "✗ absente",
+    )
     st.write("📧 **SMTP veille** :", "✓ configuré" if settings.has_smtp() else "✗ absent")
 
     st.divider()
     py = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
-    st.caption(f"Version : 0.9.0  •  Python {py}")
+    st.caption(f"Version : 0.10.0  •  Python {py}")
     st.caption(f"Projet : `{PROJECT_ROOT.name}`")
 
 
@@ -694,6 +688,7 @@ with tab_sessions:
         session_dir = sessions[labels.index(choix)]
 
         csv_l4 = session_dir / "etage4_prospection.csv"
+        csv_l35 = session_dir / "etage3_5_enrichissement.csv"
         csv_l3 = session_dir / "etage3_contacts.csv"
 
         # ── Rapport HTML (livrable client, dispo dès L3) ──
@@ -783,26 +778,82 @@ with tab_sessions:
                     st.caption("Aucun top lead (score ≥ seuil) dans cette session.")
 
         elif csv_l3.exists():
+            from renoboost_leads.agent.tools.enrich import (
+                enrich_l3_5_on_session,
+                score_l4_on_session,
+            )
+
             st.info("CSV L3 trouvé. L4 non encore exécuté pour cette session.")
-            if cle_anthropic and st.button("🚀 Lancer L4 sur cette session"):
-                with st.spinner("Scoring L4…"):
-                    leads_l3 = lire_stage3_csv(csv_l3)
-                    client = ClaudeClient(
-                        ClaudeClientConfig(
-                            api_key=cle_anthropic,
-                            modele="claude-haiku-4-5",
-                            rate_limiter=RateLimiter(60),
-                            budget=BudgetGuard(plafond_eur=5.0),
+
+            # ── L3.5 : enrichissement Dropcontact (optionnel, avant L4) ──
+            col_l35a, col_l35b = st.columns([1, 1])
+            with col_l35a:
+                if csv_l35.exists():
+                    st.success("💎 L3.5 déjà exécuté pour cette session.")
+                else:
+                    has_dc = settings.has_dropcontact()
+                    dry = st.checkbox(
+                        "Mode dry-run (simulation)",
+                        value=not has_dc,
+                        key=f"l35_dry_{session_dir.name}",
+                        help="Si la clé Dropcontact n'est pas configurée, "
+                        "le dry-run permet de tester sans coût.",
+                    )
+                    if st.button(
+                        "💎 Enrichir L3.5 (Dropcontact)",
+                        key=f"l35_btn_{session_dir.name}",
+                        disabled=not (has_dc or dry),
+                        help="Email vérifié + tél direct + LinkedIn. "
+                        "Coût ~0.10€/lead éligible.",
+                    ):
+                        with st.spinner("Enrichissement Dropcontact…"):
+                            res = enrich_l3_5_on_session(
+                                session_dir.name, dry_run=dry
+                            )
+                        if not res.get("ok"):
+                            st.error(
+                                res.get("error")
+                                or f"Échec L3.5 (code {res.get('returncode')})"
+                            )
+                            if res.get("stderr_tail"):
+                                st.code(res["stderr_tail"], language=None)
+                        else:
+                            s = res.get("stats", {})
+                            st.success(
+                                f"✓ L3.5 terminé — {s.get('total', '?')} leads, "
+                                f"{s.get('pct_email_dropcontact', 0)}% email, "
+                                f"{s.get('pct_tel_direct', 0)}% tél direct."
+                            )
+                            st.rerun()
+
+            # ── L4 : scoring Claude ──
+            with col_l35b:
+                dry_l4 = st.checkbox(
+                    "Mode dry-run (simulation)",
+                    value=not cle_anthropic,
+                    key=f"l4_dry_{session_dir.name}",
+                )
+                if st.button(
+                    "🚀 Lancer L4 sur cette session",
+                    key=f"l4_btn_{session_dir.name}",
+                    disabled=not (cle_anthropic or dry_l4),
+                ):
+                    with st.spinner("Scoring L4…"):
+                        res = score_l4_on_session(session_dir.name, dry_run=dry_l4)
+                    if not res.get("ok"):
+                        st.error(
+                            res.get("error")
+                            or f"Échec L4 (code {res.get('returncode')})"
                         )
-                    )
-                    cache = CacheStage4(session_dir / "cache_l4.sqlite")
-                    enricher = EnricheurStage4(
-                        client=client, config=ClaudeScoring(), cache=cache
-                    )
-                    leads_l4 = enricher.enrichir(leads_l3)
-                    export_stage4_csv(leads_l4, csv_l4)
-                st.success(f"✓ L4 terminé. Coût {enricher.cout_total_eur:.4f} €")
-                st.rerun()
+                        if res.get("stderr_tail"):
+                            st.code(res["stderr_tail"], language=None)
+                    else:
+                        s = res.get("stats", {})
+                        st.success(
+                            f"✓ L4 terminé — {s.get('top_leads', 0)} top leads, "
+                            f"score moyen {s.get('score_moyen', 0)}."
+                        )
+                        st.rerun()
         else:
             st.warning("Aucun CSV L3 ou L4 dans cette session.")
 

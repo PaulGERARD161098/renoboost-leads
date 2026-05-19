@@ -4,7 +4,7 @@ Inspecte `data/output/<session_id>/` :
 - etage1_decouverte.csv
 - etage2_entreprises.csv
 - etage3_contacts.csv (+ etage3_contacts_hors_filtre.csv)
-- etage3_5_enrichment.csv
+- etage3_5_enrichissement.csv
 - etage4_prospection.csv
 - run_stats.json
 """
@@ -25,7 +25,7 @@ STAGE_FILES = {
     "2": "etage2_entreprises.csv",
     "3": "etage3_contacts.csv",
     "3_hors_filtre": "etage3_contacts_hors_filtre.csv",
-    "3.5": "etage3_5_enrichment.csv",
+    "3.5": "etage3_5_enrichissement.csv",
     "4": "etage4_prospection.csv",
 }
 
