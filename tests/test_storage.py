@@ -79,6 +79,34 @@ def test_extract_tarball_rejette_path_traversal(tmp_path: Path) -> None:
         _extract_tarball(buf.getvalue(), tmp_path)
 
 
+def test_extract_tarball_rejette_symlink(tmp_path: Path) -> None:
+    """Sécurité : un tar contenant un symlink doit être refusé (CVE 2007-4559)."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        info = tarfile.TarInfo(name="evil_link")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "/etc/passwd"
+        tar.addfile(info)
+    with pytest.raises(ValueError, match="lien"):
+        _extract_tarball(buf.getvalue(), tmp_path)
+
+
+def test_extract_tarball_rejette_hardlink(tmp_path: Path) -> None:
+    """Idem pour les hardlinks."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        # un fichier régulier d'abord (cible du hardlink)
+        info_target = tarfile.TarInfo(name="target.txt")
+        info_target.size = 4
+        tar.addfile(info_target, io.BytesIO(b"data"))
+        info = tarfile.TarInfo(name="hard_link")
+        info.type = tarfile.LNKTYPE
+        info.linkname = "target.txt"
+        tar.addfile(info)
+    with pytest.raises(ValueError, match="lien"):
+        _extract_tarball(buf.getvalue(), tmp_path)
+
+
 # ── LocalSessionStorage ───────────────────────────────────────────
 
 
