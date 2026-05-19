@@ -313,6 +313,157 @@ def test_l3_absent_liste_fichiers_presents(fake_root: Path) -> None:
     assert "run_stats.json" in res["fichiers_presents"]
 
 
+def test_effectif_libelle_lisible_dans_rapport(fake_root: Path) -> None:
+    """Le rapport affiche un libellé lisible, pas le code INSEE brut."""
+    d = fake_root / "s_eff"
+    d.mkdir()
+    rows = [
+        {
+            "nom": f"E{i}",
+            "siren": f"100{i}",
+            "dirigeant_nom": "Martin",
+            "email_principal": "x@y.fr",
+            "telephone": "01 02 03 04 05",
+            "tranche_effectif": "12",  # code INSEE seul (sans libellé)
+        }
+        for i in range(3)
+    ]
+    _ecrire_csv(d / "etage3_contacts.csv", rows)
+    (d / "run_stats.json").write_text('{"campaign": "t"}', encoding="utf-8")
+    res = rep.generate_report("s_eff")
+    assert "error" not in res
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    # Le code "12" est décodé en libellé humain
+    assert "20 à 49 salariés" in html
+    # Et le tableau ne montre plus le code seul comme cellule
+    assert "<td>12</td>" not in html
+
+
+def test_effectif_libelle_prioritaire_sur_code(fake_root: Path) -> None:
+    """Si le CSV a déjà libelle_effectif (cas normal API), il prime."""
+    d = fake_root / "s_eff2"
+    d.mkdir()
+    rows = [
+        {
+            "nom": "Test",
+            "siren": "100",
+            "dirigeant_nom": "M",
+            "email_principal": "a@b.fr",
+            "telephone": "",
+            "tranche_effectif": "11",
+            "libelle_effectif": "Une dizaine de personnes",
+        }
+    ]
+    _ecrire_csv(d / "etage3_contacts.csv", rows)
+    (d / "run_stats.json").write_text('{"campaign": "t"}', encoding="utf-8")
+    rep.generate_report("s_eff2")
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "Une dizaine de personnes" in html
+
+
+def test_naf_libelle_dans_distribution(fake_root: Path) -> None:
+    """La distribution NAF utilise le libellé, pas le code seul.
+
+    Note : `_bar_chart_svg` tronque les labels à 30 caractères pour
+    rester lisible — on vérifie donc un préfixe représentatif.
+    """
+    d = fake_root / "s_naf"
+    d.mkdir()
+    rows = [
+        {
+            "nom": f"E{i}",
+            "siren": f"1{i}",
+            "dirigeant_nom": "M",
+            "email_principal": "a@b.fr",
+            "telephone": "",
+            "code_naf": "47.91B",
+            "libelle_naf": "Vente à distance",
+        }
+        for i in range(5)
+    ]
+    _ecrire_csv(d / "etage3_contacts.csv", rows)
+    (d / "run_stats.json").write_text('{"campaign": "t"}', encoding="utf-8")
+    rep.generate_report("s_naf")
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "47.91B — Vente à distance" in html
+
+
+def test_nom_avec_lettres_espacees_recolle(fake_root: Path) -> None:
+    """Google Places renvoie 'S H C I' → on affiche 'SHCI' dans le rapport."""
+    d = fake_root / "s_nom"
+    d.mkdir()
+    rows = [
+        {
+            "nom": "S H C I LOGISTIQUE",
+            "siren": "100",
+            "dirigeant_nom": "Martin",
+            "email_principal": "a@b.fr",
+            "telephone": "",
+        }
+    ]
+    _ecrire_csv(d / "etage3_contacts.csv", rows)
+    (d / "run_stats.json").write_text('{"campaign": "t"}', encoding="utf-8")
+    rep.generate_report("s_nom")
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "SHCI LOGISTIQUE" in html
+    assert "S H C I LOGISTIQUE" not in html
+
+
+def test_dirigeant_format_propre(fake_root: Path) -> None:
+    """Dirigeant 'GAMBATESA MERCALDI' apparaît en 'Gambatesa MERCALDI'."""
+    d = fake_root / "s_dir"
+    d.mkdir()
+    rows = [
+        {
+            "nom": "E",
+            "siren": "1",
+            "dirigeant_nom": "MERCALDI",
+            "dirigeant_prenom": "GAMBATESA",
+            "dirigeant_qualite": "Président",
+            "email_principal": "a@b.fr",
+            "telephone": "",
+        }
+    ]
+    _ecrire_csv(d / "etage3_contacts.csv", rows)
+    (d / "run_stats.json").write_text('{"campaign": "t"}', encoding="utf-8")
+    rep.generate_report("s_dir")
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "Gambatesa MERCALDI (Président)" in html
+
+
+def test_dirigeant_doublon_nom_prenom(fake_root: Path) -> None:
+    """Si nom == prénom (cas 'JAZ (JAZ)'), on n'affiche pas le doublon."""
+    d = fake_root / "s_jaz"
+    d.mkdir()
+    rows = [
+        {
+            "nom": "E",
+            "siren": "1",
+            "dirigeant_nom": "JAZ",
+            "dirigeant_prenom": "JAZ",
+            "email_principal": "a@b.fr",
+            "telephone": "",
+        }
+    ]
+    _ecrire_csv(d / "etage3_contacts.csv", rows)
+    (d / "run_stats.json").write_text('{"campaign": "t"}', encoding="utf-8")
+    rep.generate_report("s_jaz")
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert ">JAZ<" in html
+    assert "JAZ JAZ" not in html
+
+
+def test_telephone_cellule_nowrap(fake_root: Path) -> None:
+    """La colonne Téléphone porte la classe nowrap pour éviter la coupure."""
+    _session_l3(fake_root, "s_tel", n=2)
+    rep.generate_report("s_tel")
+    html = (fake_root / "s_tel" / "rapport.html").read_text(encoding="utf-8")
+    # La règle CSS est définie
+    assert "td.nowrap" in html
+    # Au moins une cellule porte la classe (téléphone)
+    assert 'class="nowrap"' in html
+
+
 def test_lecture_csv_avec_bom(fake_root: Path) -> None:
     """utf-8-sig tolère un BOM (cas CSV Excel France)."""
     d = fake_root / "s_bom"

@@ -27,6 +27,7 @@ import csv
 from collections import Counter
 from pathlib import Path
 
+from ._formatters import decode_effectif, format_naf
 from .sessions import OUTPUT_ROOT, STAGE_FILES
 
 
@@ -57,12 +58,21 @@ def _metriques_l3(rows: list[dict]) -> dict:
         if _has(r, "email_principal") or _has(r, "email") or _has(r, "emails")
     )
     site_ok = sum(1 for r in rows if _has(r, "site_web") or _has(r, "website"))
+    # Distributions affichées dans le rapport client : on utilise les
+    # libellés lisibles (`libelle_effectif`, `libelle_naf`) plutôt que
+    # les codes INSEE/NAF bruts. Fallback sur décodage du code.
     effectifs = Counter(
-        (r.get("tranche_effectif") or r.get("effectif") or "n/a").strip()
+        decode_effectif(
+            r.get("tranche_effectif") or r.get("effectif"),
+            r.get("libelle_effectif"),
+        )
         for r in rows
     )
     nafs = Counter(
-        (r.get("naf") or r.get("code_naf") or "n/a").strip()
+        format_naf(
+            r.get("code_naf") or r.get("naf"),
+            r.get("libelle_naf"),
+        )
         for r in rows
     )
     return {

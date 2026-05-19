@@ -21,6 +21,11 @@ import yaml
 from jinja2 import Environment, select_autoescape
 
 from ...settings import PROJECT_ROOT
+from ._formatters import (
+    decode_effectif,
+    format_dirigeant,
+    nettoyer_nom_espaces,
+)
 from .quality import _metriques_l3, _metriques_l3_5, _verdict_pilote_phase1
 from .sessions import OUTPUT_ROOT, STAGE_FILES
 
@@ -30,16 +35,42 @@ from .sessions import OUTPUT_ROOT, STAGE_FILES
 # (chart_*) sont marqués `|safe` explicitement dans le template.
 _ENV = Environment(autoescape=select_autoescape(["html"]))
 
+# Les clés référencent les champs **enrichis** (cf. `_preparer_leads`) :
+# `nom_affiche`, `dirigeant_affiche`, `effectif_affiche` sont produits
+# à l'affichage et n'existent pas dans le CSV stocké.
 COLONNES_LEADS = [
-    ("nom", "Raison sociale"),
-    ("ville", "Ville"),
-    ("siren", "SIREN"),
-    ("dirigeant_nom", "Dirigeant"),
-    ("email_principal", "Email"),
-    ("telephone", "Téléphone"),
-    ("site_web", "Site"),
-    ("tranche_effectif", "Effectif"),
+    ("nom_affiche", "Raison sociale", False),
+    ("ville", "Ville", False),
+    ("siren", "SIREN", True),
+    ("dirigeant_affiche", "Dirigeant", False),
+    ("email_principal", "Email", True),
+    ("telephone", "Téléphone", True),
+    ("site_web", "Site", True),
+    ("effectif_affiche", "Effectif", False),
 ]
+
+
+def _preparer_leads(rows: list[dict]) -> list[dict]:
+    """Enrichit chaque ligne avec les champs d'affichage formatés.
+
+    On ne touche pas au CSV : on calcule à la volée `nom_affiche`,
+    `dirigeant_affiche`, `effectif_affiche` à partir des champs bruts.
+    """
+    enrichis = []
+    for r in rows:
+        e = dict(r)
+        e["nom_affiche"] = nettoyer_nom_espaces(r.get("nom"))
+        e["dirigeant_affiche"] = format_dirigeant(
+            r.get("dirigeant_nom"),
+            r.get("dirigeant_prenom"),
+            r.get("dirigeant_qualite"),
+        )
+        e["effectif_affiche"] = decode_effectif(
+            r.get("tranche_effectif"),
+            r.get("libelle_effectif"),
+        )
+        enrichis.append(e)
+    return enrichis
 
 
 def _bar_chart_svg(
@@ -119,6 +150,7 @@ _TEMPLATE = _ENV.from_string(
   th { background: #0f4c81; color: white; text-align: left; padding: 8px;
     font-weight: 500; }
   td { padding: 8px; border-bottom: 1px solid #eee; }
+  td.nowrap { white-space: nowrap; }
   tr:nth-child(even) td { background: #fafafa; }
   .verdict { padding: 16px; border-radius: 6px; margin: 16px 0;
     font-weight: 500; }
@@ -272,14 +304,14 @@ _TEMPLATE = _ENV.from_string(
   <table>
     <thead>
       <tr>
-        {% for _, label in colonnes %}<th>{{ label }}</th>{% endfor %}
+        {% for _, label, _ in colonnes %}<th>{{ label }}</th>{% endfor %}
       </tr>
     </thead>
     <tbody>
       {% for lead in leads %}
       <tr>
-        {% for key, _ in colonnes %}
-        <td>{{ lead.get(key, '') }}</td>
+        {% for key, _, nowrap in colonnes %}
+        <td{% if nowrap %} class="nowrap"{% endif %}>{{ lead.get(key, '') }}</td>
         {% endfor %}
       </tr>
       {% endfor %}
@@ -512,7 +544,7 @@ def generate_report(
         metriques_l3_5 = _metriques_l3_5(_lire_csv(fichier_l3_5))
 
     n = max(0, min(int(max_leads), len(rows_l3)))
-    leads = rows_l3[:n]
+    leads = _preparer_leads(rows_l3[:n])
 
     chart_naf = _bar_chart_svg(metriques.get("distribution_naf_top5") or {})
     chart_effectifs = _bar_chart_svg(metriques.get("distribution_effectif") or {})

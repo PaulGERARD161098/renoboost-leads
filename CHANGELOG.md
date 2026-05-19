@@ -2,6 +2,40 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.9.1] — 2026-05-19 — Cosmétiques rapport HTML (livrable client)
+
+### Fixed — lisibilité du rapport `generate_report`
+
+Patch cosmétique du rapport HTML livré au client : les codes bruts
+INSEE / NAF n'apparaissent plus, les téléphones ne se cassent plus sur
+deux lignes, les noms d'entreprises mal saisis dans Google Places et les
+formats dirigeants incohérents sont normalisés à l'affichage.
+
+- **Décodage tranches d'effectif INSEE** : les codes "01", "02", "11",
+  "12"... sont remplacés par leur libellé humain ("1 ou 2 salariés",
+  "3 à 5 salariés", "10 à 19 salariés"...) dans le tableau et la
+  distribution. Priorité au `libelle_effectif` fourni par l'API
+  recherche-entreprises, fallback sur décodage du code via dict.
+- **Libellés NAF** : la distribution sectorielle affiche
+  `47.91B — Vente à distance...` plutôt que le code seul.
+- **Téléphones nowrap** : classe CSS `td.nowrap` ajoutée pour empêcher
+  la coupure `04 91 12` ↵ `34 56` quand la cellule est étroite.
+- **Noms d'entreprises "espacés"** : recolle automatiquement les
+  séquences de ≥ 3 lettres isolées séparées par des espaces
+  ("S H C I LOGISTIQUE" → "SHCI LOGISTIQUE"). Heuristique conservatrice
+  (2 tokens isolés → laissés tels quels).
+- **Dirigeants** : format propre `Prénom NOM (Qualité)`, avec
+  title-case automatique des prénoms tout-majuscules
+  ("GAMBATESA" → "Gambatesa"), suppression du doublon quand
+  `prenom == nom` ("JAZ (JAZ)" → "JAZ"), et capitalisation de la
+  qualité ("GÉRANT" → "Gérant").
+- **Nouveau module `agent/tools/_formatters.py`** centralisant les
+  helpers `decode_effectif`, `format_naf`, `nettoyer_nom_espaces`,
+  `format_dirigeant` (et dict `LIBELLES_TRANCHE_EFFECTIF`).
+- Aucune modification du CSV stocké : le nettoyage est strictement à
+  l'affichage (traçabilité préservée).
+- **+31 tests** (23 helpers + 8 intégration rapport HTML).
+
 ## [0.9.0] — 2026-05-18 — Rapport HTML autonome (livrable client)
 
 ### Added — outil `generate_report` + bouton Streamlit
