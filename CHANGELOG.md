@@ -2,6 +2,80 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [0.11.0] — 2026-05-19 — Déploiement en ligne : persistance Supabase + auth
+
+### Added — persistance des sessions sur Supabase Storage
+
+Sans ça, le filesystem éphémère de Streamlit Cloud effaçait toutes les
+sessions à chaque redéploiement. La plateforme devient maintenant
+**réellement utilisable en ligne** : runs lancés depuis l'app déployée,
+sessions visibles depuis n'importe quel poste.
+
+- **Nouveau module `src/renoboost_leads/storage/`** :
+  - Protocol `SessionStorage` (`upload_session`, `download_session`,
+    `list_remote_sessions`, `delete_remote_session`)
+  - Backend `local` (défaut, no-op — `data/output/` reste source de vérité)
+  - Backend `supabase` (tarball gzippé par session, bucket privé,
+    upsert idempotent, file_size_limit 50 MB)
+  - Factory `get_storage()` qui lit `settings.storage_backend`
+- **Bucket Supabase `sessions`** créé dans projet `RenoboostIA`.
+- **Hook fin de CLI run** : upload auto vers Supabase si
+  `STORAGE_BACKEND=supabase`. Échec d'upload non bloquant pour le run.
+- **Sécurité** : extract tarball refuse `..` / paths absolus
+  (path traversal protection, type CVE-2007-4559). `service_role` key
+  utilisée uniquement côté serveur Python.
+
+### Added — Streamlit affiche local + Supabase fusionnés
+
+- Onglet **Sessions** : header bandeau "💾 N local · ☁ M Supabase",
+  bouton **🔄 Resync liste** (cache st.cache_data ttl=120s).
+- Le selectbox merge les sessions locales et les sessions remote-only
+  (préfixées `☁`). **Auto-download** dès qu'une session remote-only est
+  sélectionnée.
+- Aucun changement d'API pour les sessions purement locales (rétrocompat).
+
+### Added — outil agent `sync_session`
+
+13ᵉ outil agent : `sync_session(session_id, direction="up|down|list")`.
+Permet au copilote de pousser/tirer des sessions vers/depuis Supabase,
+ou de lister ce qui est dans le bucket. En backend local, c'est un
+no-op qui renvoie `skipped=True`.
+
+### Added — auth mot de passe pour l'app Streamlit déployée
+
+- Variable `APP_PASSWORD` : si renseignée, l'app demande le mdp avant
+  rendu de l'UI (mode prod). Si vide, l'app est ouverte (mode dev local).
+- Comparaison **constant-time** via `hmac.compare_digest` (anti
+  timing-attack).
+- Bouton **🚪 Déconnexion** dans la sidebar (n'apparaît que si auth actif).
+- Stockage du flag dans `st.session_state` — pas de cookie persistant, le
+  rechargement onglet/fermeture refait passer par le login.
+
+### Changed — settings
+
+5 nouvelles variables (toutes optionnelles, défaut = comportement actuel) :
+- `STORAGE_BACKEND` : `local` (défaut) | `supabase`
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`
+- `APP_PASSWORD`
+
+Documentées dans `.env.example`.
+
+### Internal
+
+- Dépendance `supabase>=2.8.0` ajoutée à `requirements.txt` (Streamlit
+  Cloud la pulle automatiquement) et `pyproject.toml` (extra `storage`).
+- **+22 tests** (16 sur `storage/`, 6 sur `sync_session`). 617 tests
+  verts, ruff clean.
+
+### Action requise utilisateur (sinon backend reste `local`)
+
+1. Récupérer la `service_role` key sur le dashboard Supabase du projet
+   `RenoboostIA` (Settings → API → `service_role`).
+2. La poser dans `.env` local + Secrets Streamlit Cloud avec
+   `STORAGE_BACKEND=supabase` + `SUPABASE_URL` + `SUPABASE_BUCKET=sessions`.
+3. Choisir un `APP_PASSWORD` et l'ajouter aux Secrets Streamlit Cloud
+   pour protéger l'app publique. Voir `STREAMLIT_CLOUD.md`.
+
 ## [0.10.0] — 2026-05-19 — Navigation L3.5/L4 via l'agent + UI symétrique
 
 ### Added — 2 outils agent ciblés

@@ -19,6 +19,7 @@ from . import (
     quality,
     report,
     sessions,
+    storage_sync,
     workflow,
 )
 from . import config as cfg_tools
@@ -38,6 +39,7 @@ def all_schemas() -> list[dict]:
         *cold_mail.SCHEMAS,
         *report.SCHEMAS,
         *workflow.SCHEMAS,
+        *storage_sync.SCHEMAS,
     ]
 
 
@@ -55,6 +57,7 @@ def all_dispatch() -> dict:
         cold_mail,
         report,
         workflow,
+        storage_sync,
     ):
         d.update(mod.DISPATCH)
     return d
