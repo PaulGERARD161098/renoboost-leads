@@ -83,6 +83,40 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")
     log_format: Literal["json", "text"] = Field(default="json")
 
+    # ─── Storage Supabase (persistance des sessions, optionnel) ───
+    storage_backend: Literal["local", "supabase"] = Field(
+        default="local",
+        description=(
+            "Backend de persistance des sessions. 'local' (défaut) = "
+            "data/output/ uniquement. 'supabase' = upload auto vers le "
+            "bucket configuré + lecture depuis ce bucket."
+        ),
+    )
+    supabase_url: str | None = Field(
+        default=None,
+        description="URL projet Supabase, ex https://xxx.supabase.co",
+    )
+    supabase_service_role_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Clé service_role (pas anon) — permet l'upload/download "
+            "côté serveur en bypassant RLS. NE JAMAIS exposer côté client."
+        ),
+    )
+    supabase_bucket: str = Field(
+        default="sessions",
+        description="Nom du bucket Supabase Storage qui héberge les sessions.",
+    )
+
+    # ─── Auth interface Streamlit (optionnel) ───
+    app_password: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Mot de passe partagé pour accéder à l'app Streamlit déployée. "
+            "Si vide, l'app est ouverte (mode dev local)."
+        ),
+    )
+
     # ─── Veille — SMTP (notification email post-run) ───
     smtp_host: str | None = Field(default=None)
     smtp_port: int = Field(default=587, ge=1, le=65535)
@@ -138,6 +172,18 @@ class Settings(BaseSettings):
 
     def has_google_places(self) -> bool:
         return bool(self.google_places_api_key.get_secret_value())
+
+    def has_supabase_storage(self) -> bool:
+        """Supabase Storage utilisable (URL + service role + backend activé)."""
+        return (
+            self.storage_backend == "supabase"
+            and bool(self.supabase_url)
+            and self.supabase_service_role_key is not None
+            and bool(self.supabase_service_role_key.get_secret_value())
+        )
+
+    def has_app_password(self) -> bool:
+        return self.app_password is not None and bool(self.app_password.get_secret_value())
 
 
 # Instance unique

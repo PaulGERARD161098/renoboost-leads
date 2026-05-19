@@ -531,6 +531,31 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
     stats.duree_totale_secondes = (stats.fin - stats.debut).total_seconds()
     export_run_stats(stats, output_dir / "run_stats.json")
 
+    # ─── Persistance optionnelle (Supabase Storage) ───
+    # Si STORAGE_BACKEND=supabase, on uploade la session au remote pour
+    # qu'elle survive aux redéploiements Streamlit Cloud. En mode local
+    # (défaut), c'est un no-op silencieux.
+    if settings.storage_backend == "supabase":
+        try:
+            from .storage import get_storage
+
+            storage = get_storage()
+            res_upload = storage.upload_session(session_id)
+            if res_upload.get("ok"):
+                console.print(
+                    f"[cyan]☁  Session synchronisée vers Supabase "
+                    f"({res_upload.get('bytes_uploaded', 0) // 1024} KB)[/cyan]"
+                )
+            else:
+                console.print(
+                    f"[yellow]⚠  Upload Supabase échoué : "
+                    f"{res_upload.get('error', 'inconnu')}[/yellow]"
+                )
+        except Exception as e:  # noqa: BLE001 — on ne fait pas planter le run
+            console.print(
+                f"[yellow]⚠  Storage Supabase indisponible : {e}[/yellow]"
+            )
+
     generer_registre_rgpd(
         output_path=output_dir / "registre_rgpd.md",
         client_name=cfg.run.client_name,

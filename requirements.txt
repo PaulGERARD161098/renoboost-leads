@@ -24,5 +24,8 @@ lxml>=5.0.0
 # UI
 streamlit>=1.30.0
 
+# Storage Supabase (persistance des sessions sur Streamlit Cloud)
+supabase>=2.8.0
+
 # Le package lui-même (Streamlit Cloud le détecte via pyproject.toml et l'installe)
 -e .

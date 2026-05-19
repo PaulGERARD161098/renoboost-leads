@@ -101,6 +101,45 @@ def _sessions_classiques() -> list[Path]:
     )
 
 
+@st.cache_data(ttl=120)
+def _sessions_remotes_supabase() -> list[str]:
+    """Liste les session_ids présents dans le bucket Supabase.
+
+    Cache 2 minutes pour éviter de spammer l'API à chaque rerun Streamlit.
+    Renvoie [] si le backend n'est pas activé ou en cas d'erreur silencieuse.
+    """
+    try:
+        s = get_settings()
+        if s.storage_backend != "supabase":
+            return []
+        from renoboost_leads.storage import get_storage
+
+        res = get_storage().list_remote_sessions()
+        return list(res.get("sessions", []))
+    except Exception:  # noqa: BLE001 — on dégrade silencieusement
+        return []
+
+
+def _sync_session_si_remote(session_id: str) -> bool:
+    """Télécharge la session depuis Supabase si absente en local.
+
+    Renvoie True si un download a effectivement eu lieu, False sinon.
+    """
+    base = PROJECT_ROOT / "data" / "output"
+    if (base / session_id).is_dir():
+        return False
+    try:
+        s = get_settings()
+        if s.storage_backend != "supabase":
+            return False
+        from renoboost_leads.storage import get_storage
+
+        res = get_storage().download_session(session_id)
+        return bool(res.get("ok"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _runs_veille() -> list[Path]:
     base = PROJECT_ROOT / "data" / "veille"
     if not base.exists():
@@ -117,6 +156,71 @@ def _charger_csv(path: Path) -> pd.DataFrame:
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Auth simple (mot de passe partagé via APP_PASSWORD)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _read_app_password() -> str | None:
+    """Récupère APP_PASSWORD depuis st.secrets, env ou settings.
+
+    Mêmes 3 sources que les clés API (st.secrets prioritaire en Cloud,
+    .env en local).
+    """
+    try:
+        if "APP_PASSWORD" in st.secrets:
+            val = st.secrets["APP_PASSWORD"]
+            if val:
+                return str(val)
+    except Exception:  # noqa: BLE001, S110 — st.secrets absent en local
+        pass
+    try:
+        s = get_settings()
+        if s.has_app_password():
+            return s.app_password.get_secret_value()
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return os.environ.get("APP_PASSWORD") or None
+
+
+def _require_auth() -> None:
+    """Bloque le rendu de l'app tant que l'utilisateur n'est pas authentifié.
+
+    No-op si aucun APP_PASSWORD configuré (mode dev local ouvert).
+    Sinon affiche un formulaire de mdp et `st.stop()` jusqu'à validation.
+    Comparaison constant-time (hmac.compare_digest) pour éviter timing attacks.
+    """
+    import hmac
+
+    expected = _read_app_password()
+    if not expected:
+        # Pas de mdp configuré → app ouverte (dev local)
+        return
+
+    if st.session_state.get("authenticated"):
+        return
+
+    st.markdown(
+        "<h1 style='text-align:center;margin-top:80px;'>🔒 RénoBoost Leads</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='text-align:center;color:#666;'>"
+        "Saisis le mot de passe d'accès pour continuer.</p>",
+        unsafe_allow_html=True,
+    )
+    _, col, _ = st.columns([1, 2, 1])
+    with col:
+        pwd = st.text_input("Mot de passe", type="password", key="auth_pwd_input")
+        if st.button("Entrer", type="primary", use_container_width=True):
+            if hmac.compare_digest(pwd or "", expected):
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Mot de passe incorrect.")
+    st.stop()
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Page setup
 # ═══════════════════════════════════════════════════════════════════
 
@@ -125,6 +229,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Auth obligatoire si APP_PASSWORD est configuré (no-op sinon)
+_require_auth()
 
 
 # ── Sidebar : statut système ──
@@ -145,8 +252,15 @@ with st.sidebar:
     st.write("📧 **SMTP veille** :", "✓ configuré" if settings.has_smtp() else "✗ absent")
 
     st.divider()
+
+    # Bouton déconnexion uniquement si on est authentifié via APP_PASSWORD
+    if st.session_state.get("authenticated"):
+        if st.button("🚪 Déconnexion", use_container_width=True):
+            st.session_state["authenticated"] = False
+            st.rerun()
+
     py = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
-    st.caption(f"Version : 0.10.0  •  Python {py}")
+    st.caption(f"Version : 0.11.0  •  Python {py}")
     st.caption(f"Projet : `{PROJECT_ROOT.name}`")
 
 
@@ -676,16 +790,54 @@ with tab_nouveau:
 
 with tab_sessions:
     st.header("📁 Sessions L1-L4")
+
     sessions = _sessions_classiques()
-    if not sessions:
+    local_ids = {s.name for s in sessions}
+    remote_ids = _sessions_remotes_supabase()
+    remote_only = [rid for rid in remote_ids if rid not in local_ids]
+
+    # ── Header bandeau : état stockage ──
+    bandeau_cols = st.columns([3, 1])
+    with bandeau_cols[0]:
+        if remote_ids:
+            st.caption(
+                f"💾 **{len(local_ids)} local** · ☁ **{len(remote_ids)} sur Supabase** "
+                f"(dont **{len(remote_only)} à télécharger**)"
+            )
+        elif settings.storage_backend == "supabase":
+            st.caption("☁ Backend Supabase actif — aucune session dans le bucket pour l'instant.")
+        else:
+            st.caption(f"💾 {len(local_ids)} session(s) en local.")
+    with bandeau_cols[1]:
+        if remote_ids and st.button("🔄 Resync liste", key="resync_remote"):
+            _sessions_remotes_supabase.clear()
+            st.rerun()
+
+    if not sessions and not remote_ids:
         st.info(
             "Aucune session classique. "
             "Lance `python -m renoboost_leads.cli run --stages 1,2,3`."
         )
     else:
-        labels = [s.name for s in sessions]
+        # Construit les labels : préfixe ☁ pour les remote-only
+        labels_locaux = sorted(local_ids, reverse=True)
+        labels_remote = sorted([f"☁ {rid}" for rid in remote_only], reverse=True)
+        labels = labels_locaux + labels_remote
         choix = st.selectbox("Session", labels, key="sess_select")
-        session_dir = sessions[labels.index(choix)]
+        session_id_choisi = choix.removeprefix("☁ ").strip()
+
+        # Auto-download si remote-only
+        if session_id_choisi not in local_ids:
+            with st.spinner(f"Téléchargement depuis Supabase : {session_id_choisi}…"):
+                downloaded = _sync_session_si_remote(session_id_choisi)
+            if not downloaded:
+                st.error(
+                    f"Impossible de télécharger '{session_id_choisi}'. "
+                    "Vérifie SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY."
+                )
+                st.stop()
+            st.success(f"✓ Session '{session_id_choisi}' téléchargée.")
+        session_dir = PROJECT_ROOT / "data" / "output" / session_id_choisi
 
         csv_l4 = session_dir / "etage4_prospection.csv"
         csv_l35 = session_dir / "etage3_5_enrichissement.csv"
