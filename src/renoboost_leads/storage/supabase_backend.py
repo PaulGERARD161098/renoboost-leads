@@ -48,18 +48,35 @@ def _build_tarball(session_dir: Path) -> bytes:
 
 
 def _extract_tarball(data: bytes, target_root: Path) -> Path:
-    """Extrait un tar.gz et renvoie le dossier session écrit."""
+    """Extrait un tar.gz et renvoie le dossier session écrit.
+
+    Sécurité : refuse les chemins absolus, les remontées `..`, et les
+    symlinks/hardlinks (qui pourraient pointer hors de target_root après
+    extraction). En Python 3.12+ on s'appuie aussi sur `filter="data"`
+    (PEP 706) qui durcit l'extraction par défaut ; en 3.11/3.10 anciens
+    sans ce kwarg on retombe sur la validation manuelle.
+    """
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
-        # Sécurité : refuse les chemins absolus ou ../ qui sortiraient
-        # de target_root (CVE-2007-4559 style tarbomb / path traversal).
-        for member in tar.getmembers():
+        members = tar.getmembers()
+        for member in members:
             name = member.name
             if name.startswith("/") or ".." in Path(name).parts:
                 raise ValueError(f"chemin suspect dans le tarball : {name!r}")
-        tar.extractall(target_root, filter="data")  # filter="data" Python 3.12+
+            if member.issym() or member.islnk():
+                # CVE-2007-4559 + variantes : un symlink dans le tar peut
+                # pointer vers /etc/passwd, et le fichier suivant qui
+                # l'écrase s'écrit là où il pointe.
+                raise ValueError(
+                    f"lien (symlink/hardlink) refusé dans le tarball : {name!r}"
+                )
+        try:
+            tar.extractall(target_root, filter="data")  # 3.12+ et 3.11.4+/3.10.12+
+        except TypeError:
+            # Python ancien sans le kwarg `filter` : on retombe sur l'extract
+            # standard, sécurisé par la validation manuelle ci-dessus.
+            tar.extractall(target_root)  # noqa: S202 — chemins déjà validés
     # Le tarball racine est `<session_id>/`, on renvoie ce dossier
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar2:
-        racines = {Path(m.name).parts[0] for m in tar2.getmembers()}
+    racines = {Path(m.name).parts[0] for m in members}
     if len(racines) == 1:
         return target_root / next(iter(racines))
     return target_root
