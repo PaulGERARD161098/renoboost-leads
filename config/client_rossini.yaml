@@ -17,12 +17,15 @@ stages:
 # NB : les `type` ici ne sont pas dans _TYPES_PLACES_NATIFS → fallback
 # Text Search piloté uniquement par `query`. Queries reformulées avec
 # le vocabulaire réellement utilisé dans les fiches Google Places FR.
+# Types distincts (sentinels) pour que `volume.max_par_secteur` s'applique
+# par query : sinon le compteur leads_par_secteur partagé bloque les
+# secteurs suivants dès que le premier a atteint le cap.
 secteurs:
-  - type: "establishment"
+  - type: "industrie"
     query: "usine"
-  - type: "establishment"
+  - type: "logistique"
     query: "entrepôt logistique"
-  - type: "establishment"
+  - type: "sieges_sociaux"
     query: "siège social"
 
 zone:
