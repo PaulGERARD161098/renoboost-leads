@@ -1,6 +1,11 @@
+# ════════════════════════════════════════════════════════════════
+# Rossini — proto 10 leads, Nord (59)
+# Cible : sites industriels + plateformes logistiques + sièges sociaux PME/ETI
+# ════════════════════════════════════════════════════════════════
+
 run:
   client_name: "rossini-test-nord"
-  description: "Proto 10 leads - sites industriels / plateformes logistiques / sieges sociaux - Nord (59)"
+  description: "Proto 10 leads — sites industriels + logistique + sièges PME/ETI Nord (59)"
   campaign_date: "2026-05-08"
 
 stages:
@@ -9,18 +14,21 @@ stages:
   enable_stage_3_contacts: true
   enable_stage_4_prospection: false
 
+# NB : les `type` ici ne sont pas dans _TYPES_PLACES_NATIFS → fallback
+# Text Search piloté uniquement par `query`. Queries reformulées avec
+# le vocabulaire réellement utilisé dans les fiches Google Places FR.
 secteurs:
   - type: "establishment"
-    query: "site industriel"
+    query: "usine"
   - type: "establishment"
-    query: "plateforme logistique"
+    query: "entrepôt logistique"
   - type: "establishment"
-    query: "siege social entreprise"
+    query: "siège social"
 
 zone:
   type: "departement"
   codes: ["59"]
-  rayon_par_point_km: 10
+  rayon_par_point_km: 12        # rayon ≥ pas/√2 pour éviter trous de couverture
   pas_grille_km: 15
 
 filtres:
@@ -32,12 +40,38 @@ filtres:
   exiger_site_web: true
   dedup_chaines: false
 
+# Filtres NAF + effectif appliqués après L2 (data.gouv.fr).
+# Leads hors-filtre sont conservés dans etage3_contacts_hors_filtre.csv.
+filtres_entreprise:
+  effectif_min: 20              # plancher salariés (signal taille de site)
+  effectif_max: null
+  naf_inclus:                   # préfixes — matchent "10..", "25.62A", etc.
+    - "10"                      # industries alimentaires
+    - "20"                      # chimie
+    - "22"                      # caoutchouc/plastiques
+    - "23"                      # autres produits minéraux
+    - "24"                      # métallurgie
+    - "25"                      # produits métalliques
+    - "26"                      # produits informatiques/électroniques
+    - "27"                      # équipements électriques
+    - "28"                      # machines/équipements
+    - "29"                      # automobile
+    - "30"                      # autres matériels de transport
+    - "31"                      # meubles
+    - "32"                      # autres industries manufacturières
+    - "33"                      # réparation/installation machines
+    - "49"                      # transports terrestres
+    - "52"                      # entreposage / services auxiliaires transports
+    - "53"                      # activités de poste/courrier
+    - "70.10"                   # sièges sociaux (NAF 70.10Z)
+  naf_exclus: []
+
 volume:
   cible: 10
   max_par_secteur: 5
 
 budget:
-  max_eur: 1.0
+  max_eur: 2.0                  # marge Text Search × 3 secteurs × grille 59
 
 sortie:
   format: ["csv"]
