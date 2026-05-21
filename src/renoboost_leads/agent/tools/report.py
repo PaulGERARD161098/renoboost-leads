@@ -246,15 +246,27 @@ _TEMPLATE = _ENV.from_string(
     </div>
     <div class="kpi">
       <div class="label">SIREN matchés</div>
-      <div class="value">{% if metriques.pct_siren_matche is not none %}{{ metriques.pct_siren_matche }}%{% else %}N/A{% endif %}</div>
+      <div class="value">
+        {%- if metriques.pct_siren_matche is not none -%}
+          {{ metriques.pct_siren_matche }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
     <div class="kpi">
       <div class="label">Dirigeant identifié</div>
-      <div class="value">{% if metriques.pct_dirigeant_identifie is not none %}{{ metriques.pct_dirigeant_identifie }}%{% else %}N/A{% endif %}</div>
+      <div class="value">
+        {%- if metriques.pct_dirigeant_identifie is not none -%}
+          {{ metriques.pct_dirigeant_identifie }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
     <div class="kpi">
       <div class="label">Email scrapé</div>
-      <div class="value">{% if metriques.pct_email_scrape is not none %}{{ metriques.pct_email_scrape }}%{% else %}N/A{% endif %}</div>
+      <div class="value">
+        {%- if metriques.pct_email_scrape is not none -%}
+          {{ metriques.pct_email_scrape }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
   </div>
 
@@ -348,12 +360,18 @@ _TEMPLATE = _ENV.from_string(
     <div class="kpi">
       <div class="label">Email vérifié</div>
       <div class="value">
-        {% if metriques_l3_5.pct_email_verifie_dropcontact is not none %}{{ metriques_l3_5.pct_email_verifie_dropcontact }}%{% else %}N/A{% endif %}
+        {%- if metriques_l3_5.pct_email_verifie_dropcontact is not none -%}
+          {{ metriques_l3_5.pct_email_verifie_dropcontact }}%
+        {%- else -%}N/A{%- endif -%}
       </div>
     </div>
     <div class="kpi">
       <div class="label">Tél. direct</div>
-      <div class="value">{% if metriques_l3_5.pct_tel_direct is not none %}{{ metriques_l3_5.pct_tel_direct }}%{% else %}N/A{% endif %}</div>
+      <div class="value">
+        {%- if metriques_l3_5.pct_tel_direct is not none -%}
+          {{ metriques_l3_5.pct_tel_direct }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
   </div>
   {% endif %}
