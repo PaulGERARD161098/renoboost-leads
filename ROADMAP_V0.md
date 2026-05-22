@@ -129,15 +129,27 @@ app.py                            # MODIFIÉ — sélecteur verticale, onglet
 
 ### Phase développement (25-31 mai)
 
-**D1 lundi 25 mai** — Dé-solarisation + objet Verticale
+**D1 lundi 25 mai** — Dé-solarisation + objet Verticale + dispatcher B2B/B2C
 - Créer module `src/renoboost_leads/verticale/` (loader, schema)
 - Créer dossier `verticales/` à la racine
 - Migrer configs existantes ombrières en `verticales/ombrieres-...`
-- Ajouter validation JSON Schema des `verticale.yaml`
-- Tests : ouverture / chargement / validation des 3 verticales
-- **Livrable** : `python -m renoboost_leads.cli verticales list` fonctionne
-- **PR draft** : `feat(verticales): objet Verticale 1ère classe (D1)`
-- **Charge** : 6-8 h
+- Ajouter validation JSON Schema des `verticale.yaml` — incluant le
+  champ obligatoire `cible.type` (V0 : seule valeur acceptée = `b2b`)
+- **Câbler le dispatcher par étage** (cf VERTICALES.md section 8.5) :
+  créer `stage1_decouverte/strategies/b2b_places.py` (wrapper de
+  l'existant), `stage1_decouverte/orchestrator.py` qui dispatche sur
+  `cible.type`. Idem pour L2 et L3. **Une seule stratégie B2B en V0**,
+  mais l'API du dispatcher est en place — V1 ajoutera des fichiers
+  `b2c_*.py` sans toucher au cœur.
+- Tests : ouverture / chargement / validation des 3 verticales,
+  dispatcher renvoie bien la stratégie B2B, refus d'un YAML avec
+  `cible.type: b2c-particulier` en V0
+- **Livrable** : `python -m renoboost_leads.cli verticales list` fonctionne,
+  pipeline existant continue à marcher sans régression via les
+  orchestrateurs
+- **PR draft** : `feat(verticales): objet Verticale + dispatcher étages (D1)`
+- **Charge** : 8-10 h *(2-3 h de plus que prévu pour câbler le
+  dispatcher — épargne ~1 semaine en V1)*
 
 **D2 mardi 26 mai** — Agent discovery conversationnel
 - Prompt `agent/prompts/discovery.md`
@@ -248,20 +260,30 @@ claude/prospecting-automation-platform-9mq8j.
   Instantly staging N2 opérationnel, 617 tests verts.
 - Aucune ligne de code applicatif modifiée depuis le 21 mai.
 
-Sprint D1 (aujourd'hui) — Objet Verticale 1ère classe :
+Sprint D1 (aujourd'hui) — Objet Verticale + dispatcher B2B/B2C :
 1. Créer module src/renoboost_leads/verticale/ (loader, schema, tests)
 2. Créer dossier verticales/ à la racine du repo
 3. Migrer configs existantes : config/client_ombrieres*.yaml devient
    verticales/ombrieres-parkings-grandes-surfaces/verticale.yaml +
    templates_sequence/ + pitch_l4.md
-4. Ajouter validation JSON Schema des verticale.yaml
-5. CLI : `python -m renoboost_leads.cli verticales list` + `show <slug>`
-6. Tests : 5-10 nouveaux tests sur le module verticale
+4. Ajouter validation JSON Schema des verticale.yaml, incluant le
+   champ obligatoire cible.type (V0 : seule valeur acceptée = "b2b").
+   Voir VERTICALES.md section 8.
+5. Câbler dispatcher par étage (cf VERTICALES.md section 8.5) :
+   - stage1_decouverte/strategies/b2b_places.py (wrapper existant)
+   - stage1_decouverte/orchestrator.py (dispatch sur cible.type)
+   - Idem L2 (b2b_siren_datagouv.py) et L3 (b2b_email_pro.py)
+   Une seule stratégie B2B implémentée en V0, mais l'API dispatcher
+   est en place pour V1.
+6. CLI : `python -m renoboost_leads.cli verticales list` + `show <slug>`
+7. Tests : 5-10 nouveaux tests sur le module verticale + tests
+   dispatcher (renvoie B2B, refuse cible.type=b2c-particulier en V0)
 
 Livrable D1 : depuis la CLI, on liste et inspecte les verticales
-disponibles. Le pipeline existant continue à marcher sans régression.
+disponibles. Le pipeline existant continue à marcher sans régression
+via les orchestrateurs.
 
-PR draft : `feat(verticales): objet Verticale 1ère classe (D1)`.
+PR draft : `feat(verticales): objet Verticale + dispatcher étages (D1)`.
 
 Règles dures (cf PRE_MORTEM.md) :
 - Tests verts en fin de journée non négociable.

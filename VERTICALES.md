@@ -176,10 +176,12 @@ formulaire rigide.
 - Switch = 1 clic, pas de relance d'app.
 - Une session de chat agent garde l'historique par verticale.
 
-## 8. B2B en V0, B2C en V1
+## 8. B2B en V0, B2C en V1 — pas de fork, stratégies par étage
 
-V0 = **B2B uniquement**. Le pipeline actuel suppose une entreprise avec
-SIREN et adresse pro. Adapter au B2C particulier exige :
+### 8.1 V0 = B2B uniquement
+
+Le pipeline actuel suppose une entreprise avec SIREN et adresse pro.
+Adapter au B2C particulier exige :
 
 - Sources données différentes (cadastre DGFiP, listes nominatives achetées)
 - RGPD beaucoup plus strict (consentement explicite, pas d'intérêt légitime)
@@ -190,6 +192,98 @@ SIREN et adresse pro. Adapter au B2C particulier exige :
 Une verticale dont la cible finale est B2C reste exécutable en V0 via le
 prisme B2B : on prospecte les **installateurs / distributeurs / artisans
 locaux** qui revendent au particulier. Le B2C direct = V1.
+
+### 8.2 Décision d'architecture — un seul outil, stratégies pluggables
+
+**Pas de ramification ni de fork de codebase pour le B2C.** Le B2C V1 sera
+implémenté comme une **famille de stratégies pluggables** dans le même
+outil, sélectionnées par le champ `cible.type` de la verticale.
+
+Justification :
+- 80 % du code est commun entre B2B et B2C (agent, L4, wizard, cold mail
+  staging, Instantly, Supabase, RGPD modules)
+- Forker = duplication, divergence inévitable, maintenance ×2, pivot
+  inter-verticales impossible
+- Le hook coûte ~2-3 h de design en D1 et épargne ~1 semaine de refacto
+  en V1
+
+### 8.3 Briques communes vs spécifiques
+
+| Brique | B2B (V0) | B2C particulier (V1) | Stratégie partagée ? |
+|---|---|---|---|
+| L1 Découverte | Google Places (entreprises) | Cadastre / zones résidentielles | Non — stratégie distincte |
+| L2 Identification | SIREN data.gouv.fr | Propriétaire foncier DGFiP | Non — stratégie distincte |
+| L3 Contacts | Email pro scraping + patterns | Annuaires inversés / fichiers achetés | Non — stratégie distincte |
+| L0 Terrain (V1) | Optionnel | Souvent requis | Module commun, activable |
+| L4 Scoring + pitch | Claude | Claude | Oui — identique |
+| Agent discovery | Claude conversation | Claude conversation | Oui — identique |
+| Wizard Streamlit | Idem | Idem | Oui — identique |
+| Cold mail draft + staging N2 | Idem | Idem | Oui — identique |
+| Instantly + Supabase | Idem | Idem | Oui — identique |
+| RGPD registre + forget | Intérêt légitime B2B | Consentement explicite B2C | Même module, modes différents |
+
+### 8.4 Schéma — champ `cible.type` dès V0
+
+L'objet `Verticale` expose dès D1 le champ obligatoire suivant :
+
+```yaml
+verticale:
+  slug: solaire-pme-toitures
+  cible:
+    type: b2b              # V0 : seule valeur acceptée
+    detail: "PME industrielles propriétaires"
+
+# Plus tard en V1 :
+verticale:
+  slug: pv-particuliers-maisons-individuelles
+  cible:
+    type: b2c-particulier  # V1 : nouvelle valeur, active stratégies cadastre + RGPD strict
+    detail: "Propriétaires maison individuelle > 100 m² toiture"
+```
+
+Valeurs prévues :
+- `b2b` — entreprise avec SIREN (V0)
+- `b2c-particulier` — particulier propriétaire (V1)
+- `b2c-locataire` — particulier locataire (V1+, RGPD très strict)
+- `mixte` — verticale qui cible les deux (V1+, dispatch interne)
+
+### 8.5 Architecture cible (rappel)
+
+```
+src/renoboost_leads/
+  stage1_decouverte/
+    strategies/
+      b2b_places.py             # V0 — wrapper de l'existant
+      b2c_cadastre.py           # V1
+    orchestrator.py             # dispatch selon verticale.cible.type
+  stage2_entreprises/
+    strategies/
+      b2b_siren_datagouv.py     # V0
+      b2c_dgfip_proprietaire.py # V1
+    orchestrator.py
+  stage3_contacts/
+    strategies/
+      b2b_email_pro.py          # V0
+      b2c_email_perso.py        # V1
+    orchestrator.py
+```
+
+En V0, chaque `orchestrator.py` ne connaît qu'une seule stratégie
+(`b2b_*`) mais expose déjà l'API du dispatcher. En V1, on ajoute des
+fichiers `b2c_*.py` et 1 ligne dans le dispatcher — zéro refacto du
+cœur.
+
+### 8.6 RGPD : modes par `cible.type`
+
+Le module RGPD existant (`registre_rgpd.md`, commande `forget`) reste
+unique mais expose 2 modes :
+
+- `mode: interet_legitime` (B2B) — opt-out suffisant, mention dans le mail
+- `mode: consentement_explicite` (B2C) — opt-in préalable, traçabilité
+  du consentement
+
+Le mode est dérivé automatiquement du `cible.type` de la verticale
+active.
 
 ## 9. Champs verticale.yaml — règle d'extension
 
