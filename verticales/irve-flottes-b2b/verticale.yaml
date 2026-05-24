@@ -1,21 +1,37 @@
 # ════════════════════════════════════════════════════════════════
-# VERTICALE — Bornes IRVE pour flottes entreprise
+# VERTICALE — Bornes IRVE pour flottes entreprise   [*** PILOTE V0 ***]
 # ════════════════════════════════════════════════════════════════
 # Brouillon de cadrage V0 (24 mai 2026). Le schéma est validé en D1.
-# Peut se brancher sur le module veille_immatriculations (flux VE flotte).
+# C'EST LA VERTICALE DU RUN PILOTE (D5/D6) — cible réelle du client de
+# l'utilisateur (intermédiaire). Se branche sur le module
+# veille_immatriculations (flux VE flotte AAA).
 # Référence : VERTICALES.md sections 4 et 8.
+#
+# Cible idéale décrite par le client :
+#   "Entreprises de moyenne taille, dont on peut voir le CA annuel pour
+#    s'assurer des ressources, qui viennent de se doter de véhicules
+#    électriques et cherchent à installer des bornes de recharge."
+#
+# DÉPENDANCES À LEVER AVANT LE PILOTE (cf ROADMAP_V0 'État préparation'):
+#   - CA annuel : NON disponible via data.gouv.fr gratuit (qui ne donne
+#     que la tranche d'effectif). Nécessite une clé Pappers (payant), ou
+#     on se rabat sur la tranche d'effectif comme proxy de ressources.
+#   - Signal VE récent : nécessite un accès au flux d'immatriculations
+#     VE par entreprise (AAA Data ou source équivalente). Sans lui, on
+#     retombe sur des heuristiques NAF (transport/logistique), plus faible.
 
 verticale:
   slug: irve-flottes-b2b
   nom: "Bornes IRVE — flottes entreprise"
   description: |
-    Installateur IRVE démarchant des entreprises qui électrifient leur
-    flotte : sociétés avec flotte VE/VHR croissante, concessionnaires,
-    logisticiens, sociétés de transport léger.
+    Installateur IRVE démarchant des entreprises de moyenne taille qui
+    électrifient leur flotte : sociétés dont les ressources sont
+    confirmées (CA), avec immatriculations VE/VHR récentes, cherchant à
+    s'équiper en bornes de recharge sur site.
 
 cible:
   type: b2b
-  detail: "Entreprises avec flotte VE > 10 véhicules, ou en bascule vers l'électrique"
+  detail: "Entreprises moyenne taille (ETI/PME), CA confirmé, flotte VE en croissance"
 
 offre:
   produit: "Infrastructure de recharge VE sur site (bornes + supervision)"
@@ -33,15 +49,16 @@ cibles:
     - type: "establishment"
       query: "société de services techniques"
   filtres_entreprise:
-    effectif_min: 30
+    effectif_min: 50          # "moyenne taille" — ETI/PME
     naf_inclus: ["49", "45", "53", "81", "43"]
     naf_exclus: []
     forme_juridique_inclus: ["SAS", "SARL", "SA"]
     multi_sites_only: false
 
 signaux:
-  # Le module veille_immatriculations peut alimenter le signal #1 (flux VE flotte).
-  - "Immatriculations VE/VHR récentes au nom de l'entreprise (veille AAA)"
+  # Le module veille_immatriculations alimente le signal #1 (flux VE flotte).
+  - "Immatriculations VE/VHR récentes au nom de l'entreprise (données AAA)"
+  - "CA annuel confirmé suffisant (ressources) — via Pappers, ou proxy effectif"
   - "Flotte > 10 véhicules"
   - "Parking/dépôt propre pour installer les bornes"
   - "Obligation LOM (flotte > 100 véhicules = quota VE)"
@@ -49,12 +66,13 @@ signaux:
 qualification:
   seuil_score_top: 70
   criteres_top:
-    - "Signal immatriculation VE flotte présent"
-    - "Effectif >= 30 ou flotte > 10"
+    - "Signal immatriculation VE flotte présent (données AAA)"
+    - "CA confirmé ou effectif >= 50 (ressources suffisantes)"
     - "Email décideur (DG, resp. flotte/moyens généraux) trouvé"
   criteres_exclusion:
     - "Pas de site propre pour installer"
     - "Activité sans flotte significative"
+    - "Ressources insuffisantes (TPE)"
 
 enrichissements:
   l3_5_dropcontact: true

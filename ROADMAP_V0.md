@@ -14,6 +14,50 @@ pivotable par verticale, agent-first, utile pas belle ».
 **Charge estimée** : 50-65 h de code sur 7 jours soit 7-9 h/jour. Tenable
 si focus, agressif sans.
 
+## État de préparation (pré-D1)
+
+Contexte opérateur : l'utilisateur est **intermédiaire / agence** — il
+prospecte pour le compte d'un client pro et lui fournit les clients
+finaux. Opérateur unique → V0 mono-tenant confirmée, multi-tenant = V1.
+
+**Cible finale V0** : entreprises (B2B). Extension vers les particuliers
+(B2C) prévue ensuite (V1, cf VERTICALES.md section 8).
+
+**Verticale du run pilote (D5/D6)** : `irve-flottes-b2b` — cible réelle
+du client. Entreprises moyenne taille, CA confirmé, flotte VE récente,
+cherchant des bornes de recharge.
+
+**Clés API disponibles** :
+
+| Service | Dispo ? | Permet |
+|---|---|---|
+| Google Places | OUI | L1 Découverte |
+| data.gouv.fr | OUI (gratuit) | L2 (SIREN, NAF, tranche effectif) |
+| Scraping web | OUI (gratuit) | L3 Contacts |
+| Dropcontact | OUI | L3.5 (email vérifié, tél, LinkedIn) |
+| Anthropic | OUI | L4 Scoring + pitch + agent |
+| Pappers | NON | CA exact (data.gouv ne donne que la tranche effectif) |
+| Instantly | NON | Envoi cold mail |
+| Domaine d'envoi dédié | NON | Envoi cold mail |
+| Accès flux AAA Data (immat VE) | À CONFIRMER | Signal #1 de la verticale pilote |
+
+→ **La chaîne L1→L4 + draft des mails tourne en réel.** L'envoi est
+bloqué (pas d'Instantly ni de domaine).
+
+**Modèle d'envoi** : l'utilisateur veut envoyer lui-même → nécessite
+acquisition domaine dédié + Instantly. **Tant que ce n'est pas acquis,
+le pilote tourne en dry-run / export** (produit leads + drafts, n'envoie
+pas). Bonne nouvelle : pas de domaine à griller pendant la V0 (neutralise
+MORT-2 pour la deadline).
+
+**3 dépendances à lever pour le pilote IRVE** (décisions utilisateur) :
+1. **CA annuel** : prendre une clé Pappers (payant) OU accepter la
+   tranche d'effectif comme proxy de ressources (gratuit, moins précis).
+2. **Flux VE par entreprise (AAA Data)** : confirmer l'accès. Sans lui,
+   le signal #1 retombe sur des heuristiques NAF (plus faible).
+3. **Domaine + Instantly** : à acquérir avant tout envoi réel ; sinon
+   pilote en dry-run/export.
+
 ## Périmètre V0 — figé
 
 ### Inclus
