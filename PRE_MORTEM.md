@@ -245,16 +245,123 @@ Le wizard chat peut underfit.
 | 14 | Wizard sous-spécifié | F-M | M | Conversation libre + mode expert |
 | 15 | Utilisateur bloqué | F | H | Reformulation langage naturel par agent |
 
-## Revue de ce document
+# Partie II — Pré-mortem produit & passage SaaS (long terme)
+
+Les 15 risques ci-dessus concernent **la livraison V0 du 1er juin**.
+Cette partie concerne **la survie du produit au-delà**, en particulier
+au moment du passage au modèle de location (SaaS multi-client). Aucun
+de ces risques ne se matérialise en V0 (un seul opérateur, un domaine,
+des runs maîtrisés) — ils se déclenchent **quand tu loues l'outil**.
+
+Analyse fondée sur lecture du code réel (settings, scraper, budget,
+storage Supabase, auth Streamlit, runner agent) en mai 2026.
+
+## Constat de départ : le code est sain, l'architecture est mono-tenant
+
+Points forts vérifiés dans le code (à ne pas casser) :
+- Secrets en `SecretStr`, validation Pydantic stricte au démarrage
+- Auth Streamlit en comparaison constant-time (`hmac.compare_digest`)
+- Scraper politesse-first : respecte robots.txt, rate limit 1 req/s,
+  User-Agent honnête, taille de réponse plafonnée
+- Protection path-traversal sur tarballs (CVE-2007-4559 + symlinks)
+- Dry-run par défaut sur Instantly, cap budget €/jour persistant
+- 617 tests verts
+
+Le code ne tuera pas le projet. Ce qui peut le tuer = l'écart entre
+l'architecture **mono-utilisateur actuelle** et l'ambition **SaaS
+multi-client**, plus la fragilité de la **délivrabilité**.
+
+## Les 3 morts les plus probables du projet
+
+### MORT-1 — La location tue le produit avant le décollage [structurel]
+
+Tu loues à plusieurs clients sur une architecture mono-tenant :
+- **Pas d'isolation des données** : `data/output/` partagé, un seul
+  bucket Supabase, un seul `APP_PASSWORD`. Client A peut voir les leads
+  de client B.
+- **Pas d'attribution ni de plafond de coût par client** : le cap budget
+  est global (`budget.json`), pas par tenant. Un client qui lance « toute
+  la France » brûle TES clés Google/Anthropic/Dropcontact sans limite.
+- **Pas de gestion d'utilisateurs** : un mot de passe unique, pas de
+  révocation individuelle.
+- **Responsabilité RGPD démultipliée** : tu deviens sous-traitant voire
+  responsable conjoint (art. 28 RGPD), pour des pratiques de prospection
+  que tu ne contrôles pas, multiplié par le nombre de clients.
+
+**Conséquence** : fuite de données entre clients + coûts incontrôlés +
+exposition juridique.
+
+**Prérequis non négociable** : le **multi-tenant n'est pas une feature
+V1 parmi d'autres, c'est LE prérequis du modèle économique**. Avant de
+louer à un seul client externe, il faut :
+1. Isolation stricte des données par tenant (bucket/préfixe ou projet
+   Supabase par client, RLS activée)
+2. Métering + cap de coût API **par tenant et par campagne**
+3. Gestion d'utilisateurs réelle (comptes, rôles, révocation) — remplacer
+   `APP_PASSWORD` unique
+4. Cadre RGPD : contrat de sous-traitance type, registre par client,
+   clause sur la légitimité des cibles du client
+
+### MORT-2 — La délivrabilité s'effondre [opérationnel]
+
+Toute la chaîne de valeur finit en cold mail. Emails scrapés de qualité
+moyenne (L3 = 50-65 %) → bounce > 15 % → **domaines grillés** → zéro
+réponse → les clients résilient.
+
+**Prérequis** : la discipline de délivrabilité doit devenir un **citoyen
+de première classe**, pas une note de bas de page :
+1. Vérification batch obligatoire avant envoi (NeverBounce/ZeroBounce),
+   bloquante si bounce estimé > seuil
+2. Warm-up de domaine géré et imposé (refus d'envoi sur domaine froid
+   au-delà d'un quota)
+3. Cap d'envoi quotidien par domaine, par client
+4. Séparation domaine de prospection / domaine pro principal
+
+### MORT-3 — « Tout le monde peut l'utiliser » s'avère faux [adoption]
+
+La thèse de location repose entièrement sur l'agent discovery (D2). S'il
+génère des verticales bancales ou pose des questions trop techniques,
+l'outil reste pilotable par l'expert (toi) seul → impossible à louer.
+
+**Prérequis** : D2 est le sprint **le plus risqué et le plus
+déterminant**. Critère de succès dur : un utilisateur non-technique crée
+une verticale exploitable en conversation, sans jamais voir un code NAF
+ni un YAML. Si ce critère n'est pas tenu, la thèse SaaS vacille — à
+réévaluer avant d'investir dans le multi-tenant.
+
+## Risques produit secondaires (à garder en tête, non bloquants V0)
+
+| Axe | Risque | Quand ça mord |
+|---|---|---|
+| **Coûts** | Agent tourne sur Sonnet par défaut (6× Haiku) ; grille README chiffrée sur Haiku → coût réel sous-estimé | Dès les premiers runs agent-pilotés |
+| **Coûts** | Pas de cap par campagne, seulement par jour | Run large multi-verticale |
+| **Légal** | Cache Places persistant (SQLite + Supabase) potentiellement contraire aux ToS Google Places en usage commercial | Au passage commercial |
+| **Sécurité** | Blast radius `service_role` key : si elle fuite, tout le bucket (toutes sessions, tous clients) exposé | Fuite secret / dépendance compromise |
+| **Sécurité** | Autonomie agent N3 « boucle fermée » : dépense + agit sans validation | Si on monte le niveau d'autonomie |
+| **Dépendances** | 6 fournisseurs externes hors contrôle (Google, data.gouv, Instantly, Anthropic, Supabase, Streamlit Cloud) ; un changement de ToS casse un étage | Imprévisible |
+| **Données** | Qualité très variable par verticale (artisans/indépendants = match bas) ; une verticale peut « ne pas marcher » | Client loué déçu |
+| **UX** | Streamlit responsive ≠ vraie ergonomie mobile | Adoption grand public |
+
+## Règle d'or issue de ce pré-mortem
+
+**Le passage à la location ne doit jamais être traité comme « ajouter des
+comptes utilisateurs ».** C'est une refonte d'isolation + métering +
+conformité. À planifier comme un chantier dédié post-V0, avec ses propres
+critères d'acceptation, avant tout client externe payant.
+
+# Revue de ce document
 
 À ouvrir :
 - À chaque début de sprint (D1, D2, D3, etc.)
 - Avant chaque PR draft
 - Lors de toute proposition de feature hors V0
+- **Avant tout engagement de location à un client externe** (relire
+  Partie II)
 
 À mettre à jour :
 - Si un risque se réalise (passer la mitigation en « post-mortem »)
 - Si un nouveau risque émerge en cours de route
 
-Ce document est figé sur ses 15 risques jusqu'au 1er juin sauf
-matérialisation d'un risque nouveau majeur.
+La Partie I (15 risques V0) est figée jusqu'au 1er juin sauf
+matérialisation d'un risque nouveau majeur. La Partie II (produit/SaaS)
+sera reprise et détaillée au moment de planifier le multi-tenant.
