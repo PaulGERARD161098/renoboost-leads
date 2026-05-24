@@ -134,7 +134,11 @@ app.py                            # MODIFIÉ — sélecteur verticale, onglet
 - Créer dossier `verticales/` à la racine
 - Migrer configs existantes ombrières en `verticales/ombrieres-...`
 - Ajouter validation JSON Schema des `verticale.yaml` — incluant le
-  champ obligatoire `cible.type` (V0 : seule valeur acceptée = `b2b`)
+  champ obligatoire `cible.type` (V0 : seule valeur acceptée = `b2b`),
+  ainsi que les sections `signaux:` et `qualification:` (2 recadrages
+  gratuits inspirés des AI SDR — cf POSITIONNEMENT.md). Ces deux
+  sections existent déjà dans le pipeline sous une autre forme ; D1
+  ne fait que les formaliser dans le schéma.
 - **Câbler le dispatcher par étage** (cf VERTICALES.md section 8.5) :
   créer `stage1_decouverte/strategies/b2b_places.py` (wrapper de
   l'existant), `stage1_decouverte/orchestrator.py` qui dispatche sur
@@ -177,6 +181,10 @@ app.py                            # MODIFIÉ — sélecteur verticale, onglet
 - Module `site_reader.py` : lit page d'accueil + 1 page "à propos" du
   lead, extrait 2-3 signaux
 - L4 enricher utilise signaux + tone verticale dans le pitch
+- **Scoring signal-centric** : L4 score chaque lead par rapport aux
+  `signaux:` de la verticale et applique la `qualification:` (seuil +
+  critères top/exclusion) pour marquer `top_lead`. Logique inspirée
+  des AI SDR, mais alimentée par nos signaux à nous.
 - **Livrable** : campagne complète déclenchée depuis le mobile/desktop
 - **PR draft** : `feat(perso): lecture site web + pitch personnalisé (D4)`
 - **Charge** : 10 h

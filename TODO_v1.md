@@ -3,6 +3,20 @@
 Toute idée hors V0 atterrit ici sans débat. On en reparle après livraison V0.
 
 Voir `ROADMAP_V0.md` pour le périmètre V0 figé.
+Voir `POSITIONNEMENT.md` pour ce qu'on emprunte au marché et ce qu'on rejette.
+
+## Emprunts marché différés (priorité haute post-V0)
+
+Inspirés des AI SDR du marché, alignés avec notre vision, mais hors V0
+pour ne pas faire sauter le 1er juin. Ordre de priorité :
+
+1. **Reply handling** — quand un prospect répond, l'agent drafte la
+   réponse, l'humain valide. Extension naturelle du staging N2.
+   Très aligné avec notre cœur "humain au draft". À faire en premier.
+2. **Prise de RDV automatique** — CTA mail → créneau réservable
+   (Calendly dispo dans l'environnement).
+3. Le reste (signaux temps réel, multi-canal, dashboard) est détaillé
+   dans les sections ci-dessous.
 
 ## Différenciants puissance (à prioriser ensuite)
 

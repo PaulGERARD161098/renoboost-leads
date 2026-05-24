@@ -97,13 +97,28 @@ cibles:
     multi_sites_only: false
 
 signaux:
-  # Ce qui rend un lead intéressant pour cette verticale
+  # Ce qui rend un lead intéressant pour cette verticale.
+  # V0 : ces signaux pilotent EXPLICITEMENT le scoring L4 (logique
+  # "vente sur signal" inspirée des AI SDR 2026, cf POSITIONNEMENT.md).
+  # Le prompt L4 reçoit cette liste et score chaque lead par rapport à elle.
   - "Bâtiment propriétaire (vs locataire)"
   - "Conso élec annuelle estimée > 100 MWh"
   - "Toiture orientée S/SE/SO"
   - "Surface bâti > 500 m²"
-  # Note V0 : ces signaux sont décrits en texte libre pour le prompt L4.
-  # En V1, ils deviennent calculables (Google Solar API, IGN ortho).
+  # En V1, ces signaux deviennent calculables (Google Solar API, IGN ortho).
+
+qualification:
+  # Critères déclaratifs qui définissent un lead "top" pour cette verticale.
+  # Recadrage gratuit inspiré de la "qualification logic" des AI SDR : L4
+  # s'y adosse pour marquer top_lead=true et expliquer pourquoi.
+  seuil_score_top: 70
+  criteres_top:
+    - "Au moins 2 signaux présents sur 4"
+    - "Effectif >= 20"
+    - "Email décideur trouvé"
+  criteres_exclusion:
+    - "Locataire des locaux"
+    - "Secteur hors cible NAF"
 
 enrichissements:
   l3_5_dropcontact: true     # email vérifié, tél direct, LinkedIn
