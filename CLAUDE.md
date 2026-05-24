@@ -68,7 +68,10 @@ Streamlit affiche, l'agent pilote. Pas de site statique à formulaires.
 
 **Méthode de progression** :
 - Tests verts non négociables (617+ tests, on monte vers 650+)
-- 1 PR draft par sprint (D1, D2, D3+D4, D5, D6, D7)
+- **Stratégie git (B4)** : une seule branche
+  `claude/prospecting-automation-platform-9mq8j`, 1 commit par sprint,
+  merge dans `main` **uniquement au 1er juin** (fin V0). La PR #17 sert
+  de PR de suivi global jusque-là.
 - 1 run réel quotidien à partir de D5
 - Journal de session chaque soir (`data/agent/journal.md`)
 - Réflexion 48-72h (22-24 mai) avant D1 (25 mai matin)
