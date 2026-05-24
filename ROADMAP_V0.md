@@ -23,9 +23,41 @@ finaux. Opérateur unique → V0 mono-tenant confirmée, multi-tenant = V1.
 **Cible finale V0** : entreprises (B2B). Extension vers les particuliers
 (B2C) prévue ensuite (V1, cf VERTICALES.md section 8).
 
-**Verticale du run pilote (D5/D6)** : `irve-flottes-b2b` — cible réelle
-du client. Entreprises moyenne taille, CA confirmé, flotte VE récente,
-cherchant des bornes de recharge.
+**Verticale du run pilote (D5/D6)** : **Rossini Energy** — client réel.
+Installateur d'**ombrières solaires bois imputrescible + bornes IRVE**
+pour parkings B2B, avec **entretien** en cross-sell. Offre vendue en
+**combo** (ombrières + bornes + maintenance). Source : fiche Notion
+« Rossini Energy — Compte client ». Remplace l'ébauche générique
+`irve-flottes-b2b` comme verticale pilote.
+
+**Ciblage Rossini confirmé** :
+- Cible : **PME**, incluant **sièges sociaux**, entrepôts, sites
+  logistiques, industrie, tertiaire B2B. **ERT, pas ERP.**
+- Exclus : hôtellerie, événementiel, zones commerciales / retail
+  (propriété parking trop complexe — SCPI, multi-propriétaires).
+- Seuils (fiche) : effectif **≥ 20**, **multisites ≥ 2**, santé
+  financière OK (ni déficitaire N/N-1, ni procédure collective).
+- NAF whitelist sections **C / H / J / M / N** ; types Places
+  `warehouse / storage / industrial_park`.
+- **Zone géo** : ~10 départements limitrophes des zones d'installation
+  42/49/59. Le YAML proto utilisait `[42, 43, 49, 53, 59, 62, 02]`
+  (7 dpts) — **liste fermée définitive À CONFIRMER par l'utilisateur**,
+  ne pas inventer.
+
+**Deux critères seulement APPROCHÉS en V0** (versions précises = V1) :
+- **Grand parking** : pas de donnée de surface en base → approché par
+  le secteur (entrepôts/logistique). Détection par imagerie = V1.
+- **Propriétaire des locaux** : matching cadastre×exploitant non fiable
+  → approché en excluant le retail par NAF (~80 %). Le reste se
+  requalifie à l'appel.
+
+**Modèle d'usage confirmé** : gros cold mailing pour générer du contact,
+puis **appel des intéressés** pour qualifier. La V0 **fournit les
+coordonnées du bon interlocuteur** (décideur ou échelon intermédiaire :
+nom, rôle, email, tél via scraping + Dropcontact) — c'est DANS le scope.
+Ce qui reste **hors V0** = un **module qui passe/gère les appels** (file
+d'appels, scripts, CRM d'appel). L'utilisateur appelle lui-même avec les
+coordonnées fournies.
 
 **Clés API disponibles** :
 
@@ -36,27 +68,25 @@ cherchant des bornes de recharge.
 | Scraping web | OUI (gratuit) | L3 Contacts |
 | Dropcontact | OUI | L3.5 (email vérifié, tél, LinkedIn) |
 | Anthropic | OUI | L4 Scoring + pitch + agent |
-| Pappers | NON | CA exact (data.gouv ne donne que la tranche effectif) |
+| Pappers | OUI (décidé) | CA exact + santé financière + multisites |
+| Triple A Data (immat VE, SFTP) | OUI — Rossini abonné | Signal VE (entreprises qui débutent leur flotte) |
 | Instantly | NON | Envoi cold mail |
 | Domaine d'envoi dédié | NON | Envoi cold mail |
-| Accès flux AAA Data (immat VE) | À CONFIRMER | Signal #1 de la verticale pilote |
 
 → **La chaîne L1→L4 + draft des mails tourne en réel.** L'envoi est
-bloqué (pas d'Instantly ni de domaine).
+bloqué (pas d'Instantly ni de domaine) → pilote en dry-run/export tant
+que non acquis (neutralise MORT-2 pour la deadline).
 
-**Modèle d'envoi** : l'utilisateur veut envoyer lui-même → nécessite
-acquisition domaine dédié + Instantly. **Tant que ce n'est pas acquis,
-le pilote tourne en dry-run / export** (produit leads + drafts, n'envoie
-pas). Bonne nouvelle : pas de domaine à griller pendant la V0 (neutralise
-MORT-2 pour la deadline).
+Note Triple A : base non publique livrée **quotidiennement par SFTP**,
+**ne fournit pas le tél du décideur** et ne voit que les entreprises qui
+**débutent** leur flotte VE (pas celles déjà équipées → d'où le scoring).
 
-**3 dépendances à lever pour le pilote IRVE** (décisions utilisateur) :
-1. **CA annuel** : prendre une clé Pappers (payant) OU accepter la
-   tranche d'effectif comme proxy de ressources (gratuit, moins précis).
-2. **Flux VE par entreprise (AAA Data)** : confirmer l'accès. Sans lui,
-   le signal #1 retombe sur des heuristiques NAF (plus faible).
-3. **Domaine + Instantly** : à acquérir avant tout envoi réel ; sinon
-   pilote en dry-run/export.
+**3 ÉLÉMENTS CONCRETS attendus de l'utilisateur pour avancer** :
+1. **Liste fermée des départements** (7 du proto, ou les ~10 définitifs).
+2. **Accès + format du flux SFTP Triple A** (à récupérer auprès de
+   Simon/Rossini) — c'est ce qui alimente le signal VE.
+3. **Domaine d'envoi dédié + compte Instantly** (mise en place semaine
+   prochaine) — pour l'envoi réel.
 
 ## Périmètre V0 — figé
 

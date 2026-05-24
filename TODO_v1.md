@@ -27,6 +27,19 @@ pour ne pas faire sauter le 1er juin. Ordre de priorité :
 - Branchement par verticale (activable / désactivable)
 - Estimation surface, orientation, ombrage
 
+#### ⭐ Lead-gen géo-first par détection de parkings (idée phare, éval. 24/05)
+- Inversion du pipeline : partir des **parkings repérés par imagerie**
+  (IGN BD ORTHO/BD TOPO + vision) puis **remonter à l'exploitant** plutôt
+  que partir d'une liste d'entreprises. Vraie plus-value (cf demande
+  utilisateur Rossini : « trouver mes propres leads géographiques »).
+- **Évalué pour la V0 → REFUSÉ** : le dur n'est pas de voir un parking
+  mais de l'**attribuer** à la bonne société de façon fiable. Chantier
+  2-4 sem. + ML d'attribution → ferait sauter le 1er juin (scope creep,
+  risque #1 PRE_MORTEM). En V0 : parking approché par le secteur (NAF).
+- **Piste V1 'cheap'** : si la couche parkings d'IGN BD TOPO est exploitable
+  en vectoriel, estimation de surface gratuite sans ML (l'attribution
+  reste le point dur).
+
 ### Signaux d'achat enrichis
 - Levées de fonds BPI / sociétés de capital-risque
 - Recrutement actif (Pôle Emploi, LinkedIn, sites carrière)
