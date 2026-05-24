@@ -1,0 +1,89 @@
+# ════════════════════════════════════════════════════════════════
+# VERTICALE — Bornes IRVE pour flottes entreprise
+# ════════════════════════════════════════════════════════════════
+# Brouillon de cadrage V0 (24 mai 2026). Le schéma est validé en D1.
+# Peut se brancher sur le module veille_immatriculations (flux VE flotte).
+# Référence : VERTICALES.md sections 4 et 8.
+
+verticale:
+  slug: irve-flottes-b2b
+  nom: "Bornes IRVE — flottes entreprise"
+  description: |
+    Installateur IRVE démarchant des entreprises qui électrifient leur
+    flotte : sociétés avec flotte VE/VHR croissante, concessionnaires,
+    logisticiens, sociétés de transport léger.
+
+cible:
+  type: b2b
+  detail: "Entreprises avec flotte VE > 10 véhicules, ou en bascule vers l'électrique"
+
+offre:
+  produit: "Infrastructure de recharge VE sur site (bornes + supervision)"
+  argument_principal: "Obligation LOM, TCO flotte, prime ADVENIR, autonomie de recharge"
+  ticket_moyen_eur: 60000
+
+cibles:
+  secteurs_places:
+    - type: "establishment"
+      query: "société de transport"
+    - type: "car_dealer"
+      query: "concessionnaire automobile"
+    - type: "establishment"
+      query: "entreprise logistique"
+    - type: "establishment"
+      query: "société de services techniques"
+  filtres_entreprise:
+    effectif_min: 30
+    naf_inclus: ["49", "45", "53", "81", "43"]
+    naf_exclus: []
+    forme_juridique_inclus: ["SAS", "SARL", "SA"]
+    multi_sites_only: false
+
+signaux:
+  # Le module veille_immatriculations peut alimenter le signal #1 (flux VE flotte).
+  - "Immatriculations VE/VHR récentes au nom de l'entreprise (veille AAA)"
+  - "Flotte > 10 véhicules"
+  - "Parking/dépôt propre pour installer les bornes"
+  - "Obligation LOM (flotte > 100 véhicules = quota VE)"
+
+qualification:
+  seuil_score_top: 70
+  criteres_top:
+    - "Signal immatriculation VE flotte présent"
+    - "Effectif >= 30 ou flotte > 10"
+    - "Email décideur (DG, resp. flotte/moyens généraux) trouvé"
+  criteres_exclusion:
+    - "Pas de site propre pour installer"
+    - "Activité sans flotte significative"
+
+enrichissements:
+  l3_5_dropcontact: true
+  lecture_site_web: true
+  detection_terrain: false   # V1
+
+ton_mail:
+  registre: "professionnel, orienté obligation + économies"
+  longueur_mots: 120
+  attaque: "Constat sur leur bascule de flotte vers l'électrique"
+  cta: "15 min pour cadrer votre infrastructure de recharge"
+  signaux_a_personnaliser:
+    - "nom décideur (resp. flotte / DG)"
+    - "ville"
+    - "indice d'électrification observé"
+    - "taille de flotte"
+
+sequence:
+  j0:
+    template: "templates_sequence/mail_j0.md"
+    sujet: "{nom_entreprise} — recharger votre flotte VE sur site ?"
+  j3:
+    template: "templates_sequence/mail_j3.md"
+    sujet: "Relance — IRVE {ville}"
+  j7:
+    template: "templates_sequence/mail_j7.md"
+    sujet: "Dernière relance — {nom_entreprise}"
+
+budget_typique:
+  volume_cible: 150
+  cout_pipeline_eur: 12
+  cout_avec_l3_5_eur: 35

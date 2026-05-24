@@ -222,6 +222,31 @@ app.py                            # MODIFIÉ — sélecteur verticale, onglet
 - Bilan : ce qui marche, ce qui reste pour V1
 - **Charge** : 2-3 h
 
+## Critères de succès du run pilote (D5/D6)
+
+Seuils chiffrés pour décider si un run pilote est un succès ou un échec.
+Sur une cible de **50 leads** par run. À ajuster après le premier run
+réel — ce sont des hypothèses de départ, pas des vérités gravées.
+
+| Métrique | Seuil minimal | Cible | Échec si |
+|---|---|---|---|
+| Taux de match SIREN (L2) | >= 60 % | 75 % | < 50 % |
+| Taux email trouvé (L3 gratuit) | >= 40 % | 55 % | < 30 % |
+| Taux email trouvé (avec L3.5 Dropcontact) | >= 65 % | 80 % | < 55 % |
+| Nb de leads "top" (score >= 70) | >= 8 sur 50 | 12+ | < 5 |
+| Pitchs avec >= 2 signaux de perso visibles | >= 75 % | 90 % | < 60 % |
+| Coût du run (50 leads, Haiku, sans L3.5) | <= 5 € | 3 € | > 8 € |
+| Coût du run (50 leads + L3.5 Dropcontact) | <= 13 € | 10 € | > 18 € |
+| Délivrabilité (si envoi réel, batch vérifié) | bounce < 5 % | < 2 % | > 10 % |
+
+**Règle de décision** :
+- Si la verticale #1 (D5) tombe sous "échec" sur le nb de leads top ou
+  le taux email → on pivote sur la verticale #2 en D6 sans s'acharner.
+- Si 2 verticales sur 3 atteignent au moins les seuils minimaux → V0 est
+  validée sur le critère "produit des leads exploitables".
+- Le coût réel mesuré en D5 sert à corriger la grille de
+  `budget_typique` des verticales et le `COSTS_AND_LIMITS.md`.
+
 ## Critères d'acceptation V0
 
 V0 est livré si **tous** ces critères sont remplis :
