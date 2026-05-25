@@ -1,8 +1,8 @@
 """Wrapper API Dropcontact pour l'enrichissement L3.5.
 
 Dropcontact fonctionne en deux temps :
-1. POST /batch avec une liste de leads → renvoie un `request_id`
-2. GET /batch/<request_id> en polling jusqu'à `success=True`
+1. POST /v1/enrich/all avec une liste de leads → renvoie un `request_id`
+2. GET /v1/enrich/all/<request_id> en polling jusqu'à `success=True`
 
 Conçu pour être facilement mockable dans les tests : on injecte une fonction
 `http_post` / `http_get` (par défaut wrap autour de `requests`).
@@ -91,7 +91,7 @@ class DropcontactClient:
     def _post_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.config.rate_limiter:
             self.config.rate_limiter.acquire()
-        url = f"{self.config.base_url}/batch"
+        url = f"{self.config.base_url}/v1/enrich/all"
         resp = self._post(url, json=payload, headers=self._headers(), timeout=30)
         if resp.status_code >= 400:
             raise DropcontactError(
@@ -109,7 +109,7 @@ class DropcontactClient:
         reraise=True,
     )
     def _get_batch(self, request_id: str) -> dict[str, Any]:
-        url = f"{self.config.base_url}/batch/{request_id}"
+        url = f"{self.config.base_url}/v1/enrich/all/{request_id}"
         resp = self._get(url, headers=self._headers(), timeout=30)
         if resp.status_code >= 400:
             raise DropcontactError(
