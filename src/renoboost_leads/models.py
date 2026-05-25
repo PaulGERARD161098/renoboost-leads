@@ -78,6 +78,9 @@ class FiltresEntreprise(BaseModel):
     effectif_min: int | None = Field(default=None, ge=0)
     effectif_max: int | None = Field(default=None, ge=0)
     tranche_effectif_inclus: list[str] = Field(default_factory=list)
+    # Effectif inconnu (tranche absente, fréquent sur établissements secondaires
+    # Sirene) : par défaut on n'évince PAS, sinon le filtre mange tous ces leads.
+    rejeter_effectif_inconnu: bool = False
 
     # NAF : préfixe libre. "25" matche "25.62A" ; "25.62A" ne matche que ce code.
     naf_inclus: list[str] = Field(default_factory=list)

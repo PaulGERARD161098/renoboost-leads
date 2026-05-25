@@ -122,7 +122,7 @@ def _verifier_effectif(lead: LeadStage2, filtres: FiltresEntreprise) -> str | No
     # Priorité aux codes explicites
     if filtres.tranche_effectif_inclus:
         if tranche is None:
-            return "effectif inconnu"
+            return "effectif inconnu" if filtres.rejeter_effectif_inconnu else None
         if tranche not in filtres.tranche_effectif_inclus:
             return f"tranche_effectif={tranche} pas dans {filtres.tranche_effectif_inclus}"
         return None
@@ -131,7 +131,7 @@ def _verifier_effectif(lead: LeadStage2, filtres: FiltresEntreprise) -> str | No
     if filtres.effectif_min is None and filtres.effectif_max is None:
         return None
     if tranche is None:
-        return "effectif inconnu"
+        return "effectif inconnu" if filtres.rejeter_effectif_inconnu else None
     if not _tranche_overlap_range(tranche, filtres.effectif_min, filtres.effectif_max):
         bornes = _TRANCHES_INSEE.get(tranche, ("?", "?"))
         return (
