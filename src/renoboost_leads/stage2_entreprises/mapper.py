@@ -83,10 +83,35 @@ def _extraire_nb_etablissements(candidat: dict[str, Any]) -> int | None:
     return None
 
 
+def _extraire_finances(candidat: dict[str, Any]) -> tuple[int | None, int | None, str | None]:
+    """Extrait (chiffre_affaires, resultat_net, annee) de l'année la plus récente.
+
+    L'API gouv expose un bloc `finances` indexé par année :
+        {"2024": {"ca": 1278355060, "resultat_net": 74398429}, ...}
+    Absent pour les sociétés qui ne publient pas leurs comptes (fréquent en PME).
+    """
+    finances = candidat.get("finances")
+    if not isinstance(finances, dict) or not finances:
+        return None, None, None
+    annees = [a for a in finances if isinstance(finances.get(a), dict)]
+    if not annees:
+        return None, None, None
+    annee = max(annees)  # années au format "YYYY" → tri lexical = chronologique
+    bloc = finances[annee]
+    ca = bloc.get("ca")
+    resultat = bloc.get("resultat_net")
+    ca = int(ca) if isinstance(ca, (int, float)) else None
+    resultat = int(resultat) if isinstance(resultat, (int, float)) else None
+    if ca is None and resultat is None:
+        return None, None, None
+    return ca, resultat, annee
+
+
 def candidat_to_l2_fields(candidat: dict[str, Any]) -> dict[str, Any]:
     """Convertit un résultat API en dict de champs L2 prêts à fusionner avec LeadStage1."""
     nom_dir, prenom_dir, qualite_dir = extraire_dirigeant_principal(candidat)
     siege = candidat.get("siege") or {}
+    ca, resultat_net, annee_finances = _extraire_finances(candidat)
 
     return {
         "siren": candidat.get("siren"),
@@ -108,4 +133,8 @@ def candidat_to_l2_fields(candidat: dict[str, Any]) -> dict[str, Any]:
         "adresse_normalisee": extraire_adresse_normalisee(candidat),
         "date_creation": candidat.get("date_creation"),
         "nb_etablissements": _extraire_nb_etablissements(candidat),
+        "chiffre_affaires": ca,
+        "resultat_net": resultat_net,
+        "annee_finances": annee_finances,
+        "categorie_entreprise": candidat.get("categorie_entreprise"),
     }
