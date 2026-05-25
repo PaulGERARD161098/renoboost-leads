@@ -141,9 +141,12 @@ class TestEnricherAvecFiltres:
 
     def test_lead_sans_match_api_flag_si_filtres_actifs(self):
         """Lead pour lequel l'API ne renvoie rien : pas de SIREN, donc les
-        filtres qui exigent des données entreprise déclenchent le flag."""
+        filtres qui exigent des données entreprise déclenchent le flag.
+
+        On active `rejeter_effectif_inconnu` car par défaut un effectif inconnu
+        n'évince plus (établissements secondaires Sirene sans tranche)."""
         client = _FakeRechercheClient({})  # aucun candidat
-        filtres = FiltresEntreprise(effectif_min=50)
+        filtres = FiltresEntreprise(effectif_min=50, rejeter_effectif_inconnu=True)
         enr = EnricheurStage2(client=client, filtres_entreprise=filtres)
         leads_l2 = enr.enrichir([_lead_l1("Inconnue")])
 

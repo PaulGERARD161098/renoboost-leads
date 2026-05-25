@@ -136,11 +136,25 @@ class TestEvaluationFiltres:
         ok, _ = evaluer_filtres_entreprise(lead, FiltresEntreprise(effectif_min=50))
         assert ok is True
 
-    def test_effectif_inconnu_rejete_si_filtre_actif(self):
+    def test_effectif_inconnu_rejete_si_option_active(self):
         lead = _lead(tranche_effectif=None)
-        ok, raison = evaluer_filtres_entreprise(lead, FiltresEntreprise(effectif_min=50))
+        ok, raison = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(effectif_min=50, rejeter_effectif_inconnu=True)
+        )
         assert ok is False
         assert "inconnu" in raison
+
+    def test_effectif_inconnu_accepte_par_defaut(self):
+        lead = _lead(tranche_effectif=None)
+        ok, _ = evaluer_filtres_entreprise(lead, FiltresEntreprise(effectif_min=50))
+        assert ok is True
+
+    def test_effectif_inconnu_accepte_par_defaut_avec_tranche_inclus(self):
+        lead = _lead(tranche_effectif=None)
+        ok, _ = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(tranche_effectif_inclus=["22"])
+        )
+        assert ok is True
 
     def test_tranche_explicite_prioritaire_sur_min_max(self):
         # filtre min=50 (qui accepterait tranche 21) MAIS codes restreints à ["22"]
