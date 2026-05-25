@@ -207,6 +207,27 @@ class TestEnricheurStage35:
         assert all("api_error" in (lead.enrichissement_erreur or "") for lead in out)
         assert enr.nb_erreurs == 2
 
+    def test_hote_bloque_ignore_proprement(self):
+        from renoboost_leads.stage3_5_enrichment.client import DropcontactHostBlockedError
+        leads = [_lead(f"p{i}") for i in range(5)]
+        client = _FakeClient(exception=DropcontactHostBlockedError("host bloqué"))
+        enr = EnricheurStage35(client=client, config=self._config(batch_size=2))
+        out = enr.enrichir(leads)
+
+        # Aucun lead perdu, tous passés sans enrichissement
+        assert len(out) == 5
+        assert all(not lead.enrichi_dropcontact for lead in out)
+        assert all(
+            lead.enrichissement_erreur == "reseau_indisponible: hote_bloque_allowlist"
+            for lead in out
+        )
+        # Comptés comme ignorés-réseau, pas comme erreurs
+        assert enr.nb_ignores_reseau == 5
+        assert enr.nb_erreurs == 0
+        assert enr.nb_envoyes == 0
+        # Un seul appel : on n'insiste pas une fois l'hôte connu comme bloqué
+        assert len(client.appels) == 1
+
     def test_dry_run_client_fonctionne(self):
         leads = [_lead("p1")]
         client = DropcontactClientDryRun()

@@ -214,6 +214,9 @@ class ScraperContact:
         self._robots_cache: dict[str, urllib.robotparser.RobotFileParser] = {}
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
+        # Mis à True si le proxy réseau renvoie un hôte hors allowlist : signale
+        # que le scraping est de fait désactivé par la politique réseau.
+        self.reseau_bloque = False
 
     def _attendre_rate_limit(self, host: str) -> None:
         last = self._last_request_per_host.get(host)
@@ -265,6 +268,8 @@ class ScraperContact:
                 if len(content) > 2_000_000:  # 2 Mo max
                     content = content[:2_000_000]
                 return content
+            if resp.status_code == 403 and "allowlist" in (resp.text or "").lower():
+                self.reseau_bloque = True
             return None
         except requests.RequestException:
             raise
@@ -301,7 +306,9 @@ class ScraperContact:
         # Test de connectivité de base
         homepage_html = self._fetch(base_url)
         if homepage_html is None:
-            result.raison_echec = "site_inaccessible"
+            result.raison_echec = (
+                "reseau_bloque_allowlist" if self.reseau_bloque else "site_inaccessible"
+            )
             return result
         result.pages_visitees.append(base_url)
 

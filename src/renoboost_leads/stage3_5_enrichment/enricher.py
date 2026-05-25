@@ -22,7 +22,12 @@ from ..common.budget_guard import BudgetExceededError
 from ..common.logger import get_logger
 from ..models import EnrichissementL35, LeadStage3, LeadStage35
 from .cache import CacheStage35, calcul_cache_key
-from .client import DropcontactError, DropcontactReponse, lead_payload_dropcontact
+from .client import (
+    DropcontactError,
+    DropcontactHostBlockedError,
+    DropcontactReponse,
+    lead_payload_dropcontact,
+)
 
 logger = get_logger(__name__)
 
@@ -126,6 +131,7 @@ class EnricheurStage35:
         self.nb_enrichis = 0  # leads avec au moins email OU phone OU linkedin
         self.nb_filtres_out = 0
         self.nb_erreurs = 0
+        self.nb_ignores_reseau = 0  # hôte bloqué par l'allowlist → skip propre
 
     def enrichir(self, leads_l3: list[LeadStage3]) -> list[LeadStage35]:
         logger.info(
@@ -169,6 +175,28 @@ class EnricheurStage35:
 
             try:
                 reponse = self.client.enrichir_batch(lots)
+            except DropcontactHostBlockedError as e:
+                # Hôte injoignable (allowlist) : inutile de retenter les lots
+                # suivants, le même hôte restera bloqué. On ignore proprement
+                # tout le reste et on passe les leads sans enrichissement.
+                restants = a_envoyer[i:]
+                self.nb_envoyes -= len(batch)  # lot courant jamais réellement traité
+                logger.warning(
+                    "Étage 3.5 ignoré : hôte Dropcontact bloqué par la politique "
+                    "réseau (allowlist) — %d lead(s) passé(s) sans enrichissement. "
+                    "Détail : %s",
+                    len(restants),
+                    e,
+                )
+                for idx, lead in restants:
+                    resultats[idx] = LeadStage35(
+                        **lead.model_dump(),
+                        enrichi_dropcontact=False,
+                        enrichissement_erreur="reseau_indisponible: hote_bloque_allowlist",
+                    )
+                self.nb_ignores_reseau += len(restants)
+                budget_atteint = True  # réutilise le drapeau d'arrêt de boucle
+                break
             except BudgetExceededError as e:
                 logger.error("L3.5 stoppé par budget guard : %s", e)
                 budget_atteint = True
@@ -243,6 +271,7 @@ class EnricheurStage35:
             "  Filtrés (hors filtre / inéligibles) : %d\n"
             "  Cache hits / miss : %d / %d\n"
             "  Envoyés à l'API : %d (enrichis : %d, erreurs : %d)\n"
+            "  Ignorés (réseau indisponible) : %d\n"
             "  Coût total : %.2f €",
             len(leads_l35),
             duree,
@@ -252,6 +281,7 @@ class EnricheurStage35:
             self.nb_envoyes,
             self.nb_enrichis,
             self.nb_erreurs,
+            self.nb_ignores_reseau,
             self.cout_total_eur,
         )
         return leads_l35
@@ -273,6 +303,7 @@ class EnricheurStage35:
             "envoyes_api": self.nb_envoyes,
             "enrichis": self.nb_enrichis,
             "erreurs": self.nb_erreurs,
+            "ignores_reseau": self.nb_ignores_reseau,
             "cache_hits": self.cache_hits,
             "cache_misses": self.cache_misses,
             "cout_total_eur": round(self.cout_total_eur, 4),

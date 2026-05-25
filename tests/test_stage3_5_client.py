@@ -161,6 +161,37 @@ class TestDropcontactClient:
         with pytest.raises(DropcontactError):
             client.enrichir_batch([{"first_name": "P"}])
 
+    def test_403_allowlist_leve_host_blocked(self):
+        from renoboost_leads.stage3_5_enrichment.client import DropcontactHostBlockedError
+
+        post_resp = _FakeResponse(403, text="Host not in allowlist")
+        post_fn, _ = _post_factory(post_resp)
+        cfg = DropcontactClientConfig(
+            api_key="k",
+            http_post=post_fn,
+            http_get=lambda *a, **k: _FakeResponse(200, body={}),
+            sleep_fn=lambda s: None,
+        )
+        client = DropcontactClient(cfg)
+        with pytest.raises(DropcontactHostBlockedError):
+            client.enrichir_batch([{"first_name": "P"}])
+
+    def test_403_autre_reste_dropcontact_error(self):
+        from renoboost_leads.stage3_5_enrichment.client import DropcontactHostBlockedError
+
+        post_resp = _FakeResponse(403, text="Forbidden: bad token")
+        post_fn, _ = _post_factory(post_resp)
+        cfg = DropcontactClientConfig(
+            api_key="k",
+            http_post=post_fn,
+            http_get=lambda *a, **k: _FakeResponse(200, body={}),
+            sleep_fn=lambda s: None,
+        )
+        client = DropcontactClient(cfg)
+        with pytest.raises(DropcontactError) as exc:
+            client.enrichir_batch([{"first_name": "P"}])
+        assert not isinstance(exc.value, DropcontactHostBlockedError)
+
     def test_budget_exceeded_avant_appel(self):
         budget = BudgetGuard(plafond_eur=0.10)
         cfg = DropcontactClientConfig(

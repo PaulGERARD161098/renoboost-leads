@@ -36,6 +36,21 @@ class DropcontactTimeoutError(DropcontactError):
     """Le polling a dépassé `poll_timeout_s` sans réponse `success=True`."""
 
 
+class DropcontactHostBlockedError(DropcontactError):
+    """L'hôte Dropcontact est injoignable car bloqué par la politique réseau.
+
+    Cas typique : exécution dans un conteneur dont l'allowlist sortante
+    n'autorise pas `api.dropcontact.com` (réponse proxy `403 Host not in
+    allowlist`). Distinct d'une vraie erreur API : inutile de retenter, l'hôte
+    restera bloqué pour tout le run.
+    """
+
+
+def _hote_bloque_par_reseau(status_code: int, text: str | None) -> bool:
+    """Détecte une réponse de proxy signalant un hôte hors allowlist."""
+    return status_code == 403 and "allowlist" in (text or "").lower()
+
+
 @dataclass
 class DropcontactReponse:
     """Réponse brute Dropcontact pour un lot, indexée par position d'entrée.
@@ -94,6 +109,11 @@ class DropcontactClient:
         url = f"{self.config.base_url}/batch"
         resp = self._post(url, json=payload, headers=self._headers(), timeout=30)
         if resp.status_code >= 400:
+            if _hote_bloque_par_reseau(resp.status_code, resp.text):
+                raise DropcontactHostBlockedError(
+                    f"POST /batch : hôte {self.config.base_url} bloqué par la "
+                    f"politique réseau (HTTP {resp.status_code} : {resp.text[:120]})"
+                )
             raise DropcontactError(
                 f"POST /batch HTTP {resp.status_code} : {resp.text[:200]}"
             )
@@ -112,6 +132,11 @@ class DropcontactClient:
         url = f"{self.config.base_url}/batch/{request_id}"
         resp = self._get(url, headers=self._headers(), timeout=30)
         if resp.status_code >= 400:
+            if _hote_bloque_par_reseau(resp.status_code, resp.text):
+                raise DropcontactHostBlockedError(
+                    f"GET /batch/{request_id} : hôte {self.config.base_url} bloqué par "
+                    f"la politique réseau (HTTP {resp.status_code} : {resp.text[:120]})"
+                )
             raise DropcontactError(
                 f"GET /batch/{request_id} HTTP {resp.status_code} : {resp.text[:200]}"
             )
@@ -220,6 +245,7 @@ __all__ = [
     "DropcontactClient",
     "DropcontactClientConfig",
     "DropcontactError",
+    "DropcontactHostBlockedError",
     "DropcontactTimeoutError",
     "DropcontactReponse",
     "BudgetExceededError",

@@ -185,6 +185,13 @@ class EnricheurStage3:
                 logger.info("  L3 progress: %d/%d", i, len(leads_l2))
 
         duree = time.monotonic() - t0
+        if getattr(self.scraper, "reseau_bloque", False) and nb_scraping_ok == 0:
+            logger.warning(
+                "Scraping de fait désactivé : les sites web externes sont bloqués "
+                "par la politique réseau (allowlist). Emails issus des patterns "
+                "uniquement — relancer dans un environnement au réseau ouvert pour "
+                "récupérer les emails scrapés."
+            )
         logger.info(
             "=== Étage 3 terminé : %d leads (%.1fs) ===\n"
             "  Au moins 1 email scrapé : %d (%.0f%%)\n"
