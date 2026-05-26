@@ -1183,6 +1183,11 @@ from .cli_verticales import verticales_group  # noqa: E402
 
 cli.add_command(verticales_group)
 
+# Sous-groupe campagnes (verticale + zone + volume + budget)
+from .cli_campagnes import campagnes_group  # noqa: E402
+
+cli.add_command(campagnes_group)
+
 
 if __name__ == "__main__":
     cli()

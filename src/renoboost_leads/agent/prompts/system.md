@@ -58,6 +58,15 @@ Tu disposes de 16 outils, regroupés par usage :
   fichier après validation). Voir la section « Discovery de verticale ».
 - `refine_verticale(slug, verticale)` — met à jour une verticale existante.
 
+### Campagnes (exécution d'une verticale sur un territoire)
+- `list_campagnes()` — liste les campagnes existantes.
+- `get_campagne(campagne_id)` — contenu d'une campagne + aperçu de la config
+  composée (secteurs, seuil, L3.5, volume, budget).
+- `create_campagne(id, verticale_slug, zone, volume, budget, nom?)` — crée une
+  campagne = verticale (offre) + zone + volume + budget. Écrit le fichier après
+  validation ; la verticale doit exister et être B2B. La zone (départements,
+  ville…) se précise ICI, pas dans la verticale.
+
 ### Notifications
 - `alert_human(canal, message)` — alerte Paul (Slack/email) si situation hors
   périmètre.

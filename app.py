@@ -259,6 +259,22 @@ with st.sidebar:
             st.session_state["authenticated"] = False
             st.rerun()
 
+    st.divider()
+
+    # Verticale active (offre pilotée) — partagée par les onglets
+    from renoboost_leads.verticale import list_verticales as _list_verticales
+
+    _slugs = _list_verticales()
+    if _slugs:
+        st.selectbox(
+            "🎯 Verticale active",
+            _slugs,
+            key="verticale_active",
+            help="Offre commerciale pilotée. Sert de défaut à l'onglet « Nouvelle campagne ».",
+        )
+    else:
+        st.caption("🎯 Aucune verticale (dossier `verticales/` vide)")
+
     py = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
     st.caption(f"Version : 0.11.0  •  Python {py}")
     st.caption(f"Projet : `{PROJECT_ROOT.name}`")
@@ -268,11 +284,20 @@ with st.sidebar:
 # Onglets
 # ═══════════════════════════════════════════════════════════════════
 
-tab_recherche, tab_veille, tab_nouveau, tab_sessions, tab_stats, tab_copilote = st.tabs(
+(
+    tab_recherche,
+    tab_veille,
+    tab_nouveau,
+    tab_campagne,
+    tab_sessions,
+    tab_stats,
+    tab_copilote,
+) = st.tabs(
     [
         "🔎 Nouvelle recherche",
         "📊 Veille du jour",
         "📥 Nouveau run",
+        "🧭 Nouvelle campagne",
         "📁 Sessions",
         "📈 Stats",
         "🤖 Copilote",
@@ -1238,6 +1263,126 @@ with tab_copilote:
                     st.caption(
                         f"Campagne Instantly : `{item.campagne_instantly_id}`"
                     )
+
+
+# ───────────────────────────────────────────────────────────────────
+# ONGLET : Nouvelle campagne (verticale + zone + volume + budget)
+# ───────────────────────────────────────────────────────────────────
+
+with tab_campagne:
+    st.header("🧭 Nouvelle campagne")
+    st.caption(
+        "Une campagne exécute une **verticale** (l'offre) sur un **territoire**. "
+        "La verticale dit *quoi / à qui* vendre ; ici on précise *où, combien, "
+        "pour quel budget*. Génère une `campagne.yaml` (le lancement se fait ensuite)."
+    )
+
+    from renoboost_leads.campagne import composer_campaign_config, save_campagne
+    from renoboost_leads.campagne.schema import Campagne, IdentiteCampagne
+    from renoboost_leads.models import Budget, Volume, Zone
+    from renoboost_leads.verticale import (
+        VerticaleHorsV0Error,
+        list_verticales,
+        load_verticale,
+    )
+
+    slugs_camp = list_verticales()
+    if not slugs_camp:
+        st.warning("Aucune verticale disponible. Crée d'abord une offre (onglet Copilote).")
+    else:
+        defaut = st.session_state.get("verticale_active")
+        idx = slugs_camp.index(defaut) if defaut in slugs_camp else 0
+        slug_choisi = st.selectbox("Verticale (offre)", slugs_camp, index=idx)
+
+        try:
+            v_camp = load_verticale(slug_choisi)
+        except VerticaleHorsV0Error as e:
+            st.error(f"Verticale hors V0 : {e}")
+            v_camp = None
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Verticale invalide : {e}")
+            v_camp = None
+
+        if v_camp is not None:
+            st.info(f"**{v_camp.verticale.nom}** — {v_camp.offre.argument_principal}")
+
+            c1, c2 = st.columns(2)
+            zone_type = c1.selectbox(
+                "Type de zone", ["departement", "ville", "region", "france"]
+            )
+            codes_raw = c2.text_input(
+                "Codes (séparés par virgule)",
+                value="59, 80",
+                help="Ex. départements : 59, 80. Pour 'france', mettre 'FR'.",
+            )
+
+            c3, c4 = st.columns(2)
+            volume_cible = c3.number_input(
+                "Volume cible (leads)", min_value=1, max_value=10_000, value=150
+            )
+            budget_max = c4.number_input(
+                "Budget max (€)", min_value=1.0, max_value=1_000.0, value=20.0
+            )
+
+            nom_camp = st.text_input(
+                "Nom de la campagne (optionnel)",
+                value=f"{v_camp.verticale.nom} — {zone_type}",
+            )
+            id_defaut = f"{slug_choisi}-{datetime.now():%Y%m%d}"
+            id_camp = st.text_input(
+                "Identifiant (minuscules/tirets)", value=id_defaut
+            )
+
+            codes = [c.strip() for c in codes_raw.split(",") if c.strip()]
+
+            # Aperçu de la config composée (sans rien écrire)
+            apercu_ok = False
+            if codes:
+                try:
+                    _camp_preview = Campagne(
+                        campagne=IdentiteCampagne(
+                            id=id_camp,
+                            verticale_slug=slug_choisi,
+                            nom=nom_camp or None,
+                            created=datetime.now().date().isoformat(),
+                        ),
+                        zone=Zone(type=zone_type, codes=codes),
+                        volume=Volume(cible=int(volume_cible)),
+                        budget=Budget(max_eur=float(budget_max)),
+                    )
+                    _cfg = composer_campaign_config(_camp_preview, v_camp)
+                    apercu_ok = True
+                    with st.expander("Aperçu de la config composée (lançable)", expanded=True):
+                        st.write(f"**client_name** : `{_cfg.run.client_name}`")
+                        st.write(
+                            "**secteurs** : "
+                            + ", ".join(s.query for s in _cfg.secteurs)
+                        )
+                        st.write(f"**zone** : {_cfg.zone.type} — {', '.join(_cfg.zone.codes)}")
+                        st.write(f"**seuil top lead** : {_cfg.claude_scoring.seuil_top_lead}")
+                        st.write(
+                            f"**enrichissement L3.5** : "
+                            f"{'oui' if _cfg.stages.enable_stage_3_5_enrichment else 'non'}"
+                        )
+                        st.write(
+                            f"**volume / budget** : {_cfg.volume.cible} leads "
+                            f"/ {_cfg.budget.max_eur:g} €"
+                        )
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Paramètres invalides : {e}")
+            else:
+                st.warning("Renseigne au moins un code de zone.")
+
+            if st.button("💾 Générer la campagne", disabled=not apercu_ok):
+                try:
+                    chemin = save_campagne(_camp_preview)
+                    st.success(f"Campagne générée : `{chemin}`")
+                    st.caption(
+                        "Le lancement du pipeline depuis cette campagne arrive "
+                        "dans une prochaine étape."
+                    )
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Échec de génération : {e}")
 
 
 st.caption(

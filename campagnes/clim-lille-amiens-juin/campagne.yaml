@@ -1,0 +1,17 @@
+campagne:
+  id: clim-lille-amiens-juin
+  verticale_slug: clim-pro-b2b
+  nom: Pilote clim Hauts-de-France
+  created: '2026-05-26'
+zone:
+  type: departement
+  codes:
+  - '59'
+  - '80'
+  rayon_par_point_km: 10.0
+  pas_grille_km: 15.0
+volume:
+  cible: 150
+  max_par_secteur: null
+budget:
+  max_eur: 20.0

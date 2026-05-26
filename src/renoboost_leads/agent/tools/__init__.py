@@ -12,6 +12,7 @@ Convention :
 from __future__ import annotations
 
 from . import (
+    campagnes,
     cold_mail,
     enrich,
     notify,
@@ -42,6 +43,7 @@ def all_schemas() -> list[dict]:
         *workflow.SCHEMAS,
         *storage_sync.SCHEMAS,
         *verticales.SCHEMAS,
+        *campagnes.SCHEMAS,
     ]
 
 
@@ -61,6 +63,7 @@ def all_dispatch() -> dict:
         workflow,
         storage_sync,
         verticales,
+        campagnes,
     ):
         d.update(mod.DISPATCH)
     return d
