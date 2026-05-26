@@ -169,16 +169,18 @@ class ClaudeScoring(BaseModel):
     # Seuil au-delà duquel un lead est marqué `top_lead=True`.
     seuil_top_lead: int = Field(default=70, ge=0, le=100)
 
-    # Inclure (ou non) la génération du pitch_propose.
-    # Si False, on économise ~30% de tokens de sortie.
+    # Inclure (ou non) la génération du contenu commercial (pitch + email
+    # objet/corps prêt à envoyer). Si False, on économise ~50% de tokens de sortie
+    # (score + raison seulement).
     inclure_pitch: bool = True
 
     # Contexte client à injecter dans le prompt (description offre + ICP).
     # None → CONTEXTE_CLIENT_DEFAUT (RénoBoost).
     contexte_client: str | None = None
 
-    # Plafond max de tokens de sortie par lead.
-    max_tokens_sortie: int = Field(default=400, ge=50, le=4096)
+    # Plafond max de tokens de sortie par lead. Défaut 800 pour loger l'email
+    # complet (objet + corps) en plus du score/raison/pitch.
+    max_tokens_sortie: int = Field(default=800, ge=50, le=4096)
 
 
 class CampaignConfig(BaseModel):
@@ -388,6 +390,8 @@ class LeadStage4(LeadStage35):
     score_interet: int | None = None
     raison_score: str | None = None
     pitch_propose: str | None = None
+    email_objet: str | None = None  # objet de l'email prêt à envoyer
+    email_corps: str | None = None  # corps complet (formule + accroche + CTA + signature)
     top_lead: bool = False
     scoring_modele: str | None = None
     scoring_erreur: str | None = None

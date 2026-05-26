@@ -10,7 +10,7 @@ from ..models import LeadStage3
 
 # Bump ce numéro à chaque modification du prompt (structure, instructions, JSON shape).
 # Le cache L4 utilise cette valeur comme partie de sa clé de hachage.
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 
 CONTEXTE_CLIENT_DEFAUT = """\
@@ -112,14 +112,26 @@ def construire_prompt(
             '{\n'
             '  "score_interet": <entier 0-100>,\n'
             '  "raison_score": "<une seule phrase courte en français>",\n'
-            '  "pitch_propose": "<2 à 3 lignes d\'accroche email/téléphone en français>"\n'
+            '  "pitch_propose": "<2 à 3 lignes d\'accroche téléphone en français>",\n'
+            '  "email_objet": "<objet d\'email court et accrocheur, en français>",\n'
+            '  "email_corps": "<email complet prêt à envoyer, en français>"\n'
             '}'
         )
         regles = (
             "1. `score_interet` : 0-100 (0 = aucun intérêt, 100 = lead idéal).\n"
             "2. `raison_score` : UNE phrase, en français, qui justifie le score.\n"
-            "3. `pitch_propose` : 2-3 lignes max, ton pro, personnalisé au lead. "
-            "Pas de signature ni d'objet. Pas d'invention de chiffres."
+            "3. `pitch_propose` : 2-3 lignes max, ton pro, accroche pour un appel. "
+            "Pas de signature ni d'objet.\n"
+            "4. `email_objet` : objet d'email court (≤ 70 caractères), spécifique au lead, "
+            "sans majuscules criardes ni spam.\n"
+            "5. `email_corps` : email B2B complet et personnalisé, prêt à envoyer, structuré : "
+            "formule d'appel (utilise le nom du dirigeant si fourni, sinon « Madame, Monsieur »), "
+            "2-3 paragraphes courts reliant l'offre au profil du lead (activité, taille, bâti), "
+            "un appel à l'action clair (proposer un échange de 15 min), puis une signature "
+            "« Cordialement, » suivie du nom de l'entreprise émettrice (issu de l'offre "
+            "commerciale ci-dessus). Sauts de ligne encodés en \\n.\n"
+            "6. Aucune invention de chiffres (CA, économies, montants CEE) ni de fausse "
+            "référence client. Reste factuel et sobre."
         )
     else:
         format_json = (

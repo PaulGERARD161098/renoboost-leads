@@ -90,6 +90,16 @@ class TestConstruirePrompt:
         assert "pitch_propose" not in prompt
         assert "score_interet" in prompt
 
+    def test_prompt_avec_pitch_demande_email(self):
+        prompt = construire_prompt(_lead_minimal(), inclure_pitch=True)
+        assert "email_objet" in prompt
+        assert "email_corps" in prompt
+
+    def test_prompt_sans_pitch_omet_email(self):
+        prompt = construire_prompt(_lead_minimal(), inclure_pitch=False)
+        assert "email_objet" not in prompt
+        assert "email_corps" not in prompt
+
     def test_prompt_flag_chaine_signale(self):
         lead = _lead_minimal()
         lead.flag_chaine = True
