@@ -20,6 +20,7 @@ from . import (
     report,
     sessions,
     storage_sync,
+    verticales,
     workflow,
 )
 from . import config as cfg_tools
@@ -40,6 +41,7 @@ def all_schemas() -> list[dict]:
         *report.SCHEMAS,
         *workflow.SCHEMAS,
         *storage_sync.SCHEMAS,
+        *verticales.SCHEMAS,
     ]
 
 
@@ -58,6 +60,7 @@ def all_dispatch() -> dict:
         report,
         workflow,
         storage_sync,
+        verticales,
     ):
         d.update(mod.DISPATCH)
     return d

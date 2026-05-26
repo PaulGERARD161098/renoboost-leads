@@ -36,6 +36,9 @@ if TYPE_CHECKING:
 
 
 SYSTEM_PROMPT_PATH = PROJECT_ROOT / "src" / "renoboost_leads" / "agent" / "prompts" / "system.md"
+DISCOVERY_PROMPT_PATH = (
+    PROJECT_ROOT / "src" / "renoboost_leads" / "agent" / "prompts" / "discovery.md"
+)
 
 
 @dataclass
@@ -76,6 +79,8 @@ def _system_blocks(journal: Journal) -> list[dict]:
     non-caché.
     """
     base = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+    if DISCOVERY_PROMPT_PATH.exists():
+        base += "\n\n" + DISCOVERY_PROMPT_PATH.read_text(encoding="utf-8")
     ctx = journal.context_pour_agent(n=5)
     return [
         {
