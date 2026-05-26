@@ -66,7 +66,10 @@ def _ecrire(slug: str, modele: Verticale) -> str:
         modele.model_dump(), allow_unicode=True, sort_keys=False
     )
     chemin.write_text(contenu, encoding="utf-8")
-    return str(chemin.relative_to(PROJECT_ROOT))
+    try:
+        return str(chemin.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(chemin)
 
 
 def list_verticales_tool() -> dict:
