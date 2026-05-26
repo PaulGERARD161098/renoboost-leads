@@ -1,0 +1,88 @@
+# ════════════════════════════════════════════════════════════════
+# Volume-test 59+62 — calibration rendement / coût avant montée en charge
+# Cible : sites industriels + plateformes logistiques + sièges sociaux
+#         PME/ETI avec CA ≥ 1 M€ (capacité à financer des travaux).
+# Stratégie : run L1→L3 d'abord (quasi gratuit) pour mesurer combien de
+# leads passent le filtre CA, AVANT d'engager Dropcontact (L3.5) sur un
+# sous-ensemble plafonné.
+# ════════════════════════════════════════════════════════════════
+
+run:
+  client_name: "volume-test-5962"
+  description: "Zone-test 59+62 — industrie/logistique/sièges, PME-ETI CA ≥ 1 M€"
+  campaign_date: "2026-05-25"
+
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_3_5_enrichment: true
+  enable_stage_4_prospection: false
+
+secteurs:
+  - type: "industrie"
+    query: "usine"
+  - type: "logistique"
+    query: "entrepôt logistique"
+  - type: "sieges_sociaux"
+    query: "siège social"
+
+zone:
+  type: "departement"
+  codes: ["59", "62"]
+  rayon_par_point_km: 12        # rayon ≥ pas/√2 pour éviter trous de couverture
+  pas_grille_km: 15
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  note_min: null
+  nb_avis_min: null
+  nb_avis_max: null
+  exiger_telephone: false
+  exiger_site_web: true
+  dedup_chaines: false
+
+# Filtres entreprise appliqués après L2 (data.gouv.fr, gratuit).
+# Les leads hors-filtre sont conservés dans etage3_contacts_hors_filtre.csv.
+filtres_entreprise:
+  effectif_min: 20              # garde-fou taille de site (signal capacité travaux)
+  effectif_max: null
+  # ca_min retiré après zone-test : peu discriminant (81% des CA connus déjà >1M€,
+  # 62% de CA inconnus conservés). Le tri se fait via NAF + catégorie + effectif.
+  ca_min: null
+  ca_max: null
+  rejeter_ca_inconnu: false    # CA non publié (fréquent PME) → on conserve
+  categorie_entreprise_inclus:
+    - "PME"
+    - "ETI"
+  naf_inclus:                   # préfixes — matchent "10..", "25.62A", etc.
+    - "10"                      # industries alimentaires
+    - "20"                      # chimie
+    - "22"                      # caoutchouc/plastiques
+    - "23"                      # autres produits minéraux
+    - "24"                      # métallurgie
+    - "25"                      # produits métalliques
+    - "26"                      # produits informatiques/électroniques
+    - "27"                      # équipements électriques
+    - "28"                      # machines/équipements
+    - "29"                      # automobile
+    - "30"                      # autres matériels de transport
+    - "31"                      # meubles
+    - "32"                      # autres industries manufacturières
+    - "33"                      # réparation/installation machines
+    - "49"                      # transports terrestres
+    - "52"                      # entreposage / services auxiliaires transports
+    - "53"                      # activités de poste/courrier
+    - "70.10"                   # sièges sociaux (NAF 70.10Z)
+  naf_exclus: []
+
+volume:
+  cible: 400
+  max_par_secteur: null
+
+budget:
+  max_eur: 60.0                 # couvre L3.5 Dropcontact (~0,5 €/lead) + marge
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

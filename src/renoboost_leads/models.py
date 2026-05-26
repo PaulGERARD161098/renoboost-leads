@@ -90,6 +90,17 @@ class FiltresEntreprise(BaseModel):
     forme_juridique_inclus: list[str] = Field(default_factory=list)
     forme_juridique_exclus: list[str] = Field(default_factory=list)
 
+    # Chiffre d'affaires (€). Source : API gouv (bloc `finances`, comptes publiés).
+    ca_min: int | None = Field(default=None, ge=0)
+    ca_max: int | None = Field(default=None, ge=0)
+    # CA inconnu (comptes non publiés, fréquent en PME) : par défaut on n'évince
+    # PAS (cohérent avec rejeter_effectif_inconnu) — on s'appuie sur effectif/catégorie.
+    rejeter_ca_inconnu: bool = False
+
+    # Catégorie entreprise INSEE : ex ["PME","ETI"]. Vide = pas de filtre.
+    # Catégorie inconnue → jamais évincée (même logique que le CA).
+    categorie_entreprise_inclus: list[str] = Field(default_factory=list)
+
     # Sites
     multi_sites_only: bool = False
 
@@ -271,6 +282,12 @@ class LeadStage2(LeadStage1):
 
     # Nombre d'établissements de l'unité légale (multi-sites)
     nb_etablissements: int | None = None
+
+    # Données financières (API gouv, présentes si comptes publiés)
+    chiffre_affaires: int | None = None  # CA dernière année dispo (€)
+    resultat_net: int | None = None  # résultat net même année (€)
+    annee_finances: str | None = None  # ex "2024"
+    categorie_entreprise: str | None = None  # "PME" / "ETI" / "GE" (INSEE)
 
     # Métadonnées de matching
     score_matching: float | None = None  # 0-100
