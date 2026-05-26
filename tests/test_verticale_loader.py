@@ -18,6 +18,7 @@ from renoboost_leads.verticale import (
 SLUGS_ATTENDUS = {
     "irve-flottes-b2b",
     "ombrieres-parkings-grandes-surfaces",
+    "rossini",
     "solaire-pme-toitures",
 }
 
@@ -61,11 +62,11 @@ def _ecrire(base: Path, slug: str, data: dict) -> Path:
 # ─── verticales réelles ───
 
 
-def test_list_verticales_retourne_les_trois() -> None:
+def test_list_verticales_retourne_toutes() -> None:
     assert set(list_verticales()) == SLUGS_ATTENDUS
 
 
-def test_charge_les_trois_verticales_reelles() -> None:
+def test_charge_toutes_les_verticales_reelles() -> None:
     for slug in SLUGS_ATTENDUS:
         v = load_verticale(slug)
         assert isinstance(v, Verticale)
