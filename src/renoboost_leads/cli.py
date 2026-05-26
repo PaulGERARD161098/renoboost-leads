@@ -1178,6 +1178,11 @@ from .cli_cold_mail import cold_mail_group  # noqa: E402
 
 cli.add_command(cold_mail_group)
 
+# Sous-groupe verticales (offres pivotables)
+from .cli_verticales import verticales_group  # noqa: E402
+
+cli.add_command(verticales_group)
+
 
 if __name__ == "__main__":
     cli()
