@@ -16,6 +16,7 @@ from renoboost_leads.verticale import (
 )
 
 SLUGS_ATTENDUS = {
+    "clim-pro-b2b",
     "irve-flottes-b2b",
     "ombrieres-parkings-grandes-surfaces",
     "rossini",
