@@ -52,7 +52,10 @@ budget_typique: {volume_cible, cout_pipeline_eur, cout_avec_l3_5_eur}
 ```
 
 Contraintes : `slug` en minuscules/tirets et identique au paramètre `slug` ;
-`signaux` et `qualification` non vides ; aucun champ hors schéma.
+`signaux` et `qualification` non vides ; aucun champ hors schéma. En V0,
+`enrichissements.detection_terrain` reste **`false`** (la détection terrain par
+imagerie arrive en V1). N'invente pas non plus de zone géographique : elle sera
+choisie au lancement de la campagne, pas dans la verticale.
 
 ## Boucle de création
 
