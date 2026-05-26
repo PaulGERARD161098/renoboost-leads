@@ -8,7 +8,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from .campagne import composer_campaign_config, list_campagnes, load_campagne
+from .campagne import (
+    composer_campaign_config,
+    list_campagnes,
+    load_campagne,
+    persister_config_lancable,
+)
 from .verticale import VerticaleHorsV0Error, load_verticale
 
 console = Console()
@@ -83,3 +88,42 @@ def show_cmd(campagne_id: str) -> None:
     console.print(f"  secteurs    : {', '.join(s.query for s in cfg.secteurs)}")
     console.print(f"  seuil top   : {cfg.claude_scoring.seuil_top_lead}")
     console.print(f"  L3.5 actif  : {cfg.stages.enable_stage_3_5_enrichment}")
+
+
+@campagnes_group.command(name="run")
+@click.argument("campagne_id")
+@click.option(
+    "--stages",
+    default="1,2,3,3.5,4",
+    help="Étages à exécuter, séparés par virgule (défaut : pipeline complet).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Simulation gratuite : aucun appel API payant.",
+)
+def run_cmd(campagne_id: str, stages: str, dry_run: bool) -> None:
+    """Lance le pipeline depuis une campagne (compose la config puis run)."""
+    try:
+        c = load_campagne(campagne_id)
+        v = load_verticale(c.verticale_slug)
+    except FileNotFoundError as e:
+        console.print(f"[red]✗ {e}[/red]")
+        sys.exit(1)
+    except VerticaleHorsV0Error as e:
+        console.print(f"[yellow]⚠ {e}[/yellow]")
+        sys.exit(1)
+
+    chemin = persister_config_lancable(c, v)
+    console.print(f"[cyan]Config lançable écrite : {chemin}[/cyan]")
+    if not dry_run:
+        console.print(
+            f"[yellow]⚠ Lancement réel — budget plafonné à {c.budget.max_eur:g} €.[/yellow]"
+        )
+
+    # Réutilise la commande `run` existante (pipeline complet, budget guard, snapshots).
+    from .cli import run as run_pipeline
+
+    run_pipeline.callback(
+        config_path=chemin, stages=stages, from_csv_path=None, dry_run=dry_run
+    )

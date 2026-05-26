@@ -1277,7 +1277,11 @@ with tab_campagne:
         "pour quel budget*. Génère une `campagne.yaml` (le lancement se fait ensuite)."
     )
 
-    from renoboost_leads.campagne import composer_campaign_config, save_campagne
+    from renoboost_leads.campagne import (
+        composer_campaign_config,
+        persister_config_lancable,
+        save_campagne,
+    )
     from renoboost_leads.campagne.schema import Campagne, IdentiteCampagne
     from renoboost_leads.models import Budget, Volume, Zone
     from renoboost_leads.verticale import (
@@ -1373,16 +1377,29 @@ with tab_campagne:
             else:
                 st.warning("Renseigne au moins un code de zone.")
 
-            if st.button("💾 Générer la campagne", disabled=not apercu_ok):
+            b1, b2 = st.columns(2)
+            if b1.button("💾 Générer la campagne", disabled=not apercu_ok):
                 try:
                     chemin = save_campagne(_camp_preview)
                     st.success(f"Campagne générée : `{chemin}`")
-                    st.caption(
-                        "Le lancement du pipeline depuis cette campagne arrive "
-                        "dans une prochaine étape."
-                    )
                 except Exception as e:  # noqa: BLE001
                     st.error(f"Échec de génération : {e}")
+
+            if b2.button("🚀 Préparer le lancement", disabled=not apercu_ok):
+                try:
+                    cfg_path = persister_config_lancable(_camp_preview, v_camp)
+                    st.success(f"Config lançable écrite : `{cfg_path}`")
+                    st.caption(
+                        f"Budget plafonné à {float(budget_max):g} €. Lance le run "
+                        "depuis le terminal (simulation : ajoute `--dry-run`) :"
+                    )
+                    st.code(
+                        f"python -m renoboost_leads.cli campagnes run "
+                        f"{id_camp} --dry-run",
+                        language="bash",
+                    )
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Échec de préparation : {e}")
 
 
 st.caption(

@@ -9,6 +9,8 @@
 
 # === DONNÉES SENSIBLES ===
 data/output/
+# Config lançable régénérée à chaque `campagnes run` (dérivée campagne+verticale)
+config/campagne-*.yaml
 data/cache/
 data/veille/
 data/agent/
