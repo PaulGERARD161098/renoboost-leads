@@ -16,8 +16,8 @@ stages:
   enable_stage_1_decouverte: true
   enable_stage_2_entreprises: true
   enable_stage_3_contacts: true
-  enable_stage_3_5_enrichment: true
-  enable_stage_4_prospection: false
+  enable_stage_3_5_enrichment: false   # crédits Dropcontact épuisés — réactiver après recharge
+  enable_stage_4_prospection: true     # scoring + email perso (Claude Haiku)
 
 secteurs:
   - type: "industrie"
@@ -77,11 +77,11 @@ filtres_entreprise:
   naf_exclus: []
 
 volume:
-  cible: 400
+  cible: 1500
   max_par_secteur: null
 
 budget:
-  max_eur: 60.0                 # couvre L3.5 Dropcontact (~0,5 €/lead) + marge
+  max_eur: 70.0                 # ~45€ Google Places (1500 leads) + L4 Claude (~1€) + marge
 
 sortie:
   format: ["csv"]
