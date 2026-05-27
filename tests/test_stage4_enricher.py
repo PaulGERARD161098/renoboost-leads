@@ -24,6 +24,35 @@ def _lead(place_id: str, nom: str = "Test") -> LeadStage3:
     )
 
 
+class TestFiltreLeadsAScorer:
+    """D2 : L4 ne score que les qualifiés par défaut."""
+
+    @staticmethod
+    def _l2(place_id: str, hors_filtre: bool):
+        from renoboost_leads.models import LeadStage2
+
+        return LeadStage2(
+            place_id=place_id,
+            extraction_date=datetime.now(timezone.utc),
+            nom=place_id,
+            hors_filtre_entreprise=hors_filtre,
+        )
+
+    def test_defaut_ne_score_que_qualifies(self):
+        from renoboost_leads.cli import _filtrer_leads_a_scorer
+
+        leads = [self._l2("A", False), self._l2("B", True), self._l2("C", False)]
+        res = _filtrer_leads_a_scorer(leads, scorer_hors_filtre=False)
+        assert [lead.place_id for lead in res] == ["A", "C"]
+
+    def test_flag_actif_score_tout(self):
+        from renoboost_leads.cli import _filtrer_leads_a_scorer
+
+        leads = [self._l2("A", False), self._l2("B", True)]
+        res = _filtrer_leads_a_scorer(leads, scorer_hors_filtre=True)
+        assert len(res) == 2
+
+
 @dataclass
 class _FakeUsage:
     input_tokens: int = 100
@@ -126,6 +155,44 @@ class TestEnricherFluxNominal:
         assert l4b.email_objet == "Audit de vos ateliers"
         assert l4b.email_corps == l4.email_corps
         assert enricher.cache_hits == 1
+
+    def test_changement_donnees_lead_invalide_cache(self, tmp_path):
+        # Même place_id mais données entreprise différentes (NAF) → re-scoring,
+        # pas de hit obsolète (D3 : le hash du prompt entre dans la clé de cache).
+        client, sdk = _build_client(
+            [
+                '{"score_interet": 40, "raison_score": "naf A"}',
+                '{"score_interet": 90, "raison_score": "naf B"}',
+            ]
+        )
+        cache = CacheStage4(tmp_path / "l4.sqlite")
+        config = ClaudeScoring(inclure_pitch=False)
+        enr = EnricheurStage4(client=client, config=config, cache=cache)
+
+        lead_a = _lead("ChIJ_x")
+        lead_a.code_naf = "10.71A"
+        assert enr.enrichir([lead_a])[0].score_interet == 40
+
+        lead_b = _lead("ChIJ_x")  # même place_id
+        lead_b.code_naf = "25.62A"  # mais NAF différent
+        r2 = enr.enrichir([lead_b])[0]
+        assert r2.score_interet == 90  # re-scoré, pas le 40 en cache
+        assert enr.cache_hits == 0
+        assert sdk.calls == 2
+
+    def test_memes_donnees_lead_hit_cache(self, tmp_path):
+        # Même place_id ET mêmes données → hit (D3 ne casse pas le cache normal).
+        client, sdk = _build_client(['{"score_interet": 55, "raison_score": "x"}'])
+        cache = CacheStage4(tmp_path / "l4.sqlite")
+        enr = EnricheurStage4(client=client, config=ClaudeScoring(inclure_pitch=False), cache=cache)
+        lead = _lead("ChIJ_y")
+        lead.code_naf = "25.62A"
+        enr.enrichir([lead])
+        lead2 = _lead("ChIJ_y")
+        lead2.code_naf = "25.62A"
+        enr.enrichir([lead2])
+        assert enr.cache_hits == 1
+        assert sdk.calls == 1
 
     def test_score_sous_seuil_pas_top(self, tmp_path):
         client, _ = _build_client(['{"score_interet": 30, "raison_score": "faible"}'])

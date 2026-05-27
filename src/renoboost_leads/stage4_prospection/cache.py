@@ -1,11 +1,14 @@
 """Cache L4 — stocke les réponses Claude pour éviter de re-payer.
 
 Stratégie d'invalidation :
-- La clé de cache contient un hash de
-  (prompt_version, modèle, contexte_client, inclure_pitch).
-- Si l'un de ces paramètres change, le cache est considéré invalide
-  pour les leads concernés (cache miss → nouvel appel).
-- Pas de TTL : un score est valable tant que le prompt ne bouge pas.
+- La clé de cache combine deux hashs :
+  1. calcul_cache_key(prompt_version, modèle, contexte_client, inclure_pitch)
+  2. hash_prompt(prompt) — capture les DONNÉES du lead (NAF, CA, effectif,
+     dirigeant...) qui influencent le score.
+- Donc un ré-enrichissement L2 (ex. CA/NAF qui apparaissent après une panne
+  data.gouv) invalide automatiquement le cache du lead concerné : pas besoin
+  de purger cache_l4.sqlite à la main.
+- Pas de TTL : un score est valable tant que prompt et paramètres ne bougent pas.
 """
 
 from __future__ import annotations
@@ -43,6 +46,17 @@ def calcul_cache_key(
         ensure_ascii=False,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def hash_prompt(prompt: str) -> str:
+    """Hash court du prompt construit pour un lead.
+
+    Le prompt encode toutes les données du lead qui pèsent sur le score
+    (activité, taille, CA, dirigeant, localisation...). Inclure ce hash dans
+    la clé de cache garantit qu'un changement de ces données → cache miss
+    → re-scoring, sans purge manuelle.
+    """
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:12]
 
 
 class CacheStage4:

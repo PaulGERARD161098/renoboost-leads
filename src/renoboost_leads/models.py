@@ -182,6 +182,11 @@ class ClaudeScoring(BaseModel):
     # complet (objet + corps) en plus du score/raison/pitch.
     max_tokens_sortie: int = Field(default=800, ge=50, le=4096)
 
+    # Par défaut, L4 ne score que les leads qualifiés (hors_filtre_entreprise=False) :
+    # inutile de dépenser des tokens pour des leads déjà écartés par les filtres.
+    # Passer à True pour scorer aussi les hors-filtre (diagnostic / calibration).
+    scorer_hors_filtre: bool = False
+
 
 class CampaignConfig(BaseModel):
     """Représente le contenu d'un fichier `config/<client>.yaml`."""

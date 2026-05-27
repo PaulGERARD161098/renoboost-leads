@@ -17,7 +17,7 @@ from typing import Any
 from ..common.budget_guard import BudgetExceededError
 from ..common.logger import get_logger
 from ..models import ClaudeScoring, LeadStage3, LeadStage4
-from .cache import CacheStage4, calcul_cache_key
+from .cache import CacheStage4, calcul_cache_key, hash_prompt
 from .client import ClaudeClient, ClaudeParseError
 from .prompt_template import CONTEXTE_CLIENT_DEFAUT, PROMPT_VERSION, construire_prompt
 
@@ -85,9 +85,19 @@ class EnricheurStage4:
         qui veut afficher une progress bar). Pour l'enrichissement batch
         standard, utiliser `enrichir(leads)`.
         """
+        # On construit le prompt d'abord : son hash entre dans la clé de cache,
+        # ce qui invalide automatiquement le cache si les données du lead ont
+        # changé (ex. ré-enrichissement L2 après panne data.gouv).
+        prompt = construire_prompt(
+            lead=lead,
+            contexte_client=self.contexte_client,
+            inclure_pitch=self.config.inclure_pitch,
+        )
+        lead_cache_key = f"{self._cache_key}:{hash_prompt(prompt)}"
+
         # 1) Cache lookup
         if self.cache:
-            cached = self.cache.get(lead.place_id, self._cache_key)
+            cached = self.cache.get(lead.place_id, lead_cache_key)
             if cached is not None:
                 self.cache_hits += 1
                 return self._build_lead_l4(
@@ -103,11 +113,6 @@ class EnricheurStage4:
 
         # 2) Cache miss → appel API
         self.cache_misses += 1
-        prompt = construire_prompt(
-            lead=lead,
-            contexte_client=self.contexte_client,
-            inclure_pitch=self.config.inclure_pitch,
-        )
 
         try:
             reponse = self.client.scorer(prompt)
@@ -153,7 +158,7 @@ class EnricheurStage4:
             "scoring_erreur": None,
         }
         if self.cache:
-            self.cache.store(lead.place_id, self._cache_key, payload)
+            self.cache.store(lead.place_id, lead_cache_key, payload)
 
         return self._build_lead_l4(
             lead_l3=lead,
