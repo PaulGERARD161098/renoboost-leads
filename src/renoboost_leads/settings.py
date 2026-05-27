@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # ─── Étage 2 : Pappers (optionnel pour L1) ───
     pappers_api_key: SecretStr | None = Field(default=None)
     pappers_plan: Literal["starter", "pro", "business"] = Field(default="starter")
+    # Coût estimé par appel /v2/recherche (jetons Pappers). Sert au BudgetGuard
+    # du fallback L2. Valeur par défaut prudente, à ajuster selon le tarif réel.
+    pappers_cout_par_appel_eur: float = Field(default=0.02, ge=0)
 
     # ─── Étage 3 : Dropcontact (optionnel pour L1) ───
     dropcontact_api_key: SecretStr | None = Field(default=None)
