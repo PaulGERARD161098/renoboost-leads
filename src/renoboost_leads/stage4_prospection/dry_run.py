@@ -53,16 +53,29 @@ class ClaudeClientDryRun:
             raison = f"[DRY-RUN] {nom} : hors ICP probable."
 
         pitch = None
+        email_objet = None
+        email_corps = None
         if self.inclure_pitch:
             pitch = (
                 f"[DRY-RUN] Bonjour, j'ai repéré {nom}. "
                 "Auriez-vous 15 min pour parler audit énergétique ?"
+            )
+            email_objet = f"[DRY-RUN] {nom} — audit énergétique de vos bâtiments"
+            email_corps = (
+                "Madame, Monsieur,\n\n"
+                f"[DRY-RUN] Je me permets de vous contacter au sujet de {nom}. "
+                "RénoBoost accompagne les entreprises dans la rénovation énergétique "
+                "de leurs bâtiments avec financement CEE.\n\n"
+                "Seriez-vous disponible 15 minutes pour en échanger ?\n\n"
+                "Cordialement,\nL'équipe RénoBoost"
             )
 
         return ClaudeReponse(
             score_interet=score,
             raison_score=raison,
             pitch_propose=pitch,
+            email_objet=email_objet,
+            email_corps=email_corps,
             tokens_in=0,
             tokens_out=0,
             cout_eur=0.0,

@@ -62,12 +62,21 @@ class TestClaudeClientDryRun:
         client = ClaudeClientDryRun(inclure_pitch=False)
         rep = client.scorer("prompt-X\n- Nom : X")
         assert rep.pitch_propose is None
+        assert rep.email_objet is None
+        assert rep.email_corps is None
 
     def test_inclure_pitch_true_genere_pitch(self):
         client = ClaudeClientDryRun(inclure_pitch=True)
         rep = client.scorer("prompt-X\n- Nom : X")
         assert rep.pitch_propose is not None
         assert "DRY-RUN" in rep.pitch_propose
+
+    def test_inclure_pitch_true_genere_email(self):
+        client = ClaudeClientDryRun(inclure_pitch=True)
+        rep = client.scorer("prompt-X\n- Nom : Acme")
+        assert rep.email_objet is not None and "Acme" in rep.email_objet
+        assert rep.email_corps is not None
+        assert "Cordialement" in rep.email_corps
 
     def test_cout_eur_nul_en_dry_run(self):
         client = ClaudeClientDryRun()

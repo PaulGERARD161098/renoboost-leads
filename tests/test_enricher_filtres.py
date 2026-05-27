@@ -11,6 +11,7 @@ from renoboost_leads.exporter import export_stage3_csv_separe_hors_filtre
 from renoboost_leads.models import FiltresEntreprise, LeadStage1, LeadStage3
 from renoboost_leads.stage2_entreprises.enricher import EnricheurStage2
 from renoboost_leads.stage2_entreprises.mapper import (
+    _extraire_finances,
     _extraire_nb_etablissements,
     candidat_to_l2_fields,
 )
@@ -46,6 +47,41 @@ class TestExtractionNbEtablissements:
         }
         fields = candidat_to_l2_fields(candidat)
         assert fields["nb_etablissements"] == 3
+
+
+class TestExtractionFinances:
+    def test_annee_la_plus_recente_choisie(self):
+        finances = {
+            "2022": {"ca": 100, "resultat_net": 10},
+            "2024": {"ca": 300, "resultat_net": 30},
+            "2023": {"ca": 200, "resultat_net": 20},
+        }
+        ca, res, annee = _extraire_finances({"finances": finances})
+        assert (ca, res, annee) == (300, 30, "2024")
+
+    def test_finances_absentes_retourne_none(self):
+        assert _extraire_finances({}) == (None, None, None)
+
+    def test_finances_vides_retourne_none(self):
+        assert _extraire_finances({"finances": {}}) == (None, None, None)
+
+    def test_floats_convertis_en_int(self):
+        ca, res, _ = _extraire_finances({"finances": {"2024": {"ca": 1278355060.0}}})
+        assert ca == 1278355060
+        assert res is None
+
+    def test_candidat_to_l2_fields_inclut_finances_et_categorie(self):
+        candidat = {
+            "siren": "123456789",
+            "siege": {},
+            "categorie_entreprise": "ETI",
+            "finances": {"2024": {"ca": 5_000_000, "resultat_net": 250_000}},
+        }
+        fields = candidat_to_l2_fields(candidat)
+        assert fields["chiffre_affaires"] == 5_000_000
+        assert fields["resultat_net"] == 250_000
+        assert fields["annee_finances"] == "2024"
+        assert fields["categorie_entreprise"] == "ETI"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -141,9 +177,12 @@ class TestEnricherAvecFiltres:
 
     def test_lead_sans_match_api_flag_si_filtres_actifs(self):
         """Lead pour lequel l'API ne renvoie rien : pas de SIREN, donc les
-        filtres qui exigent des données entreprise déclenchent le flag."""
+        filtres qui exigent des données entreprise déclenchent le flag.
+
+        On active `rejeter_effectif_inconnu` car par défaut un effectif inconnu
+        n'évince plus (établissements secondaires Sirene sans tranche)."""
         client = _FakeRechercheClient({})  # aucun candidat
-        filtres = FiltresEntreprise(effectif_min=50)
+        filtres = FiltresEntreprise(effectif_min=50, rejeter_effectif_inconnu=True)
         enr = EnricheurStage2(client=client, filtres_entreprise=filtres)
         leads_l2 = enr.enrichir([_lead_l1("Inconnue")])
 
@@ -227,6 +266,10 @@ class TestRoundTripCSVStage2:
             forme_juridique="1000",
             tranche_effectif="01",
             nb_etablissements=2,
+            chiffre_affaires=5_000_000,
+            resultat_net=250_000,
+            annee_finances="2024",
+            categorie_entreprise="ETI",
             hors_filtre_entreprise=True,
             raison_hors_filtre="naf=56.10A pas dans [25]",
         )
@@ -242,5 +285,9 @@ class TestRoundTripCSVStage2:
         assert len(leads) == 1
         lead = leads[0]
         assert lead.nb_etablissements == 2
+        assert lead.chiffre_affaires == 5_000_000
+        assert lead.resultat_net == 250_000
+        assert lead.annee_finances == "2024"
+        assert lead.categorie_entreprise == "ETI"
         assert lead.hors_filtre_entreprise is True
         assert lead.raison_hors_filtre == "naf=56.10A pas dans [25]"

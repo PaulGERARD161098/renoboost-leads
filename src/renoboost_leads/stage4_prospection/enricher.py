@@ -62,6 +62,8 @@ class EnricheurStage4:
         pitch: str | None,
         modele: str | None,
         erreur: str | None,
+        email_objet: str | None = None,
+        email_corps: str | None = None,
     ) -> LeadStage4:
         top = score is not None and score >= self.config.seuil_top_lead
         return LeadStage4(
@@ -69,6 +71,8 @@ class EnricheurStage4:
             score_interet=score,
             raison_score=raison,
             pitch_propose=pitch,
+            email_objet=email_objet,
+            email_corps=email_corps,
             top_lead=top,
             scoring_modele=modele,
             scoring_erreur=erreur,
@@ -91,6 +95,8 @@ class EnricheurStage4:
                     score=cached.get("score_interet"),
                     raison=cached.get("raison_score"),
                     pitch=cached.get("pitch_propose"),
+                    email_objet=cached.get("email_objet"),
+                    email_corps=cached.get("email_corps"),
                     modele=cached.get("scoring_modele") or self.config.modele,
                     erreur=cached.get("scoring_erreur"),
                 )
@@ -138,6 +144,8 @@ class EnricheurStage4:
             "score_interet": reponse.score_interet,
             "raison_score": reponse.raison_score,
             "pitch_propose": reponse.pitch_propose,
+            "email_objet": reponse.email_objet,
+            "email_corps": reponse.email_corps,
             "scoring_modele": reponse.modele,
             "tokens_in": reponse.tokens_in,
             "tokens_out": reponse.tokens_out,
@@ -152,6 +160,8 @@ class EnricheurStage4:
             score=reponse.score_interet,
             raison=reponse.raison_score,
             pitch=reponse.pitch_propose,
+            email_objet=reponse.email_objet,
+            email_corps=reponse.email_corps,
             modele=reponse.modele,
             erreur=None,
         )

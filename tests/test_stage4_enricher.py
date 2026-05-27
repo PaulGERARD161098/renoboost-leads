@@ -106,6 +106,27 @@ class TestEnricherFluxNominal:
         assert l4.scoring_modele == "claude-haiku-4-5"
         assert l4.scoring_erreur is None
 
+    def test_email_objet_corps_propages_et_caches(self, tmp_path):
+        reponse = (
+            '{"score_interet": 75, "raison_score": "ICP", "pitch_propose": "Hi", '
+            '"email_objet": "Audit de vos ateliers", '
+            '"email_corps": "Madame, Monsieur,\\n\\nRénoBoost...\\n\\nCordialement, RénoBoost"}'
+        )
+        client, sdk = _build_client([reponse])
+        cache = CacheStage4(tmp_path / "l4.sqlite")
+        config = ClaudeScoring(modele="claude-haiku-4-5")
+        enricher = EnricheurStage4(client=client, config=config, cache=cache)
+
+        l4 = enricher.enrichir([_lead("A")])[0]
+        assert l4.email_objet == "Audit de vos ateliers"
+        assert l4.email_corps.startswith("Madame, Monsieur,")
+
+        # Second passage : hit cache, l'email doit être restitué sans appel API
+        l4b = enricher.enrichir([_lead("A")])[0]
+        assert l4b.email_objet == "Audit de vos ateliers"
+        assert l4b.email_corps == l4.email_corps
+        assert enricher.cache_hits == 1
+
     def test_score_sous_seuil_pas_top(self, tmp_path):
         client, _ = _build_client(['{"score_interet": 30, "raison_score": "faible"}'])
         cache = CacheStage4(tmp_path / "l4.sqlite")

@@ -78,6 +78,9 @@ class FiltresEntreprise(BaseModel):
     effectif_min: int | None = Field(default=None, ge=0)
     effectif_max: int | None = Field(default=None, ge=0)
     tranche_effectif_inclus: list[str] = Field(default_factory=list)
+    # Effectif inconnu (tranche absente, fréquent sur établissements secondaires
+    # Sirene) : par défaut on n'évince PAS, sinon le filtre mange tous ces leads.
+    rejeter_effectif_inconnu: bool = False
 
     # NAF : préfixe libre. "25" matche "25.62A" ; "25.62A" ne matche que ce code.
     naf_inclus: list[str] = Field(default_factory=list)
@@ -86,6 +89,17 @@ class FiltresEntreprise(BaseModel):
     # Forme juridique : labels (SAS, SARL, ...) ou codes INSEE bruts (5710, ...)
     forme_juridique_inclus: list[str] = Field(default_factory=list)
     forme_juridique_exclus: list[str] = Field(default_factory=list)
+
+    # Chiffre d'affaires (€). Source : API gouv (bloc `finances`, comptes publiés).
+    ca_min: int | None = Field(default=None, ge=0)
+    ca_max: int | None = Field(default=None, ge=0)
+    # CA inconnu (comptes non publiés, fréquent en PME) : par défaut on n'évince
+    # PAS (cohérent avec rejeter_effectif_inconnu) — on s'appuie sur effectif/catégorie.
+    rejeter_ca_inconnu: bool = False
+
+    # Catégorie entreprise INSEE : ex ["PME","ETI"]. Vide = pas de filtre.
+    # Catégorie inconnue → jamais évincée (même logique que le CA).
+    categorie_entreprise_inclus: list[str] = Field(default_factory=list)
 
     # Sites
     multi_sites_only: bool = False
@@ -155,16 +169,18 @@ class ClaudeScoring(BaseModel):
     # Seuil au-delà duquel un lead est marqué `top_lead=True`.
     seuil_top_lead: int = Field(default=70, ge=0, le=100)
 
-    # Inclure (ou non) la génération du pitch_propose.
-    # Si False, on économise ~30% de tokens de sortie.
+    # Inclure (ou non) la génération du contenu commercial (pitch + email
+    # objet/corps prêt à envoyer). Si False, on économise ~50% de tokens de sortie
+    # (score + raison seulement).
     inclure_pitch: bool = True
 
     # Contexte client à injecter dans le prompt (description offre + ICP).
     # None → CONTEXTE_CLIENT_DEFAUT (RénoBoost).
     contexte_client: str | None = None
 
-    # Plafond max de tokens de sortie par lead.
-    max_tokens_sortie: int = Field(default=400, ge=50, le=4096)
+    # Plafond max de tokens de sortie par lead. Défaut 800 pour loger l'email
+    # complet (objet + corps) en plus du score/raison/pitch.
+    max_tokens_sortie: int = Field(default=800, ge=50, le=4096)
 
 
 class CampaignConfig(BaseModel):
@@ -269,6 +285,12 @@ class LeadStage2(LeadStage1):
     # Nombre d'établissements de l'unité légale (multi-sites)
     nb_etablissements: int | None = None
 
+    # Données financières (API gouv, présentes si comptes publiés)
+    chiffre_affaires: int | None = None  # CA dernière année dispo (€)
+    resultat_net: int | None = None  # résultat net même année (€)
+    annee_finances: str | None = None  # ex "2024"
+    categorie_entreprise: str | None = None  # "PME" / "ETI" / "GE" (INSEE)
+
     # Métadonnées de matching
     score_matching: float | None = None  # 0-100
     match_incertain: bool = False  # True si score < 60
@@ -368,6 +390,8 @@ class LeadStage4(LeadStage35):
     score_interet: int | None = None
     raison_score: str | None = None
     pitch_propose: str | None = None
+    email_objet: str | None = None  # objet de l'email prêt à envoyer
+    email_corps: str | None = None  # corps complet (formule + accroche + CTA + signature)
     top_lead: bool = False
     scoring_modele: str | None = None
     scoring_erreur: str | None = None

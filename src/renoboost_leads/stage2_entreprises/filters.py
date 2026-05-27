@@ -8,6 +8,8 @@ Filtres supportés :
 - effectif (min/max ou codes tranche INSEE bruts)
 - NAF (préfixe libre, inclus + exclus)
 - forme juridique (labels SAS/SARL... ou codes INSEE)
+- chiffre d'affaires (ca_min/ca_max, source API gouv `finances`)
+- catégorie entreprise (PME/ETI/GE)
 - multi_sites_only (nb_etablissements > 1)
 """
 
@@ -122,7 +124,7 @@ def _verifier_effectif(lead: LeadStage2, filtres: FiltresEntreprise) -> str | No
     # Priorité aux codes explicites
     if filtres.tranche_effectif_inclus:
         if tranche is None:
-            return "effectif inconnu"
+            return "effectif inconnu" if filtres.rejeter_effectif_inconnu else None
         if tranche not in filtres.tranche_effectif_inclus:
             return f"tranche_effectif={tranche} pas dans {filtres.tranche_effectif_inclus}"
         return None
@@ -131,7 +133,7 @@ def _verifier_effectif(lead: LeadStage2, filtres: FiltresEntreprise) -> str | No
     if filtres.effectif_min is None and filtres.effectif_max is None:
         return None
     if tranche is None:
-        return "effectif inconnu"
+        return "effectif inconnu" if filtres.rejeter_effectif_inconnu else None
     if not _tranche_overlap_range(tranche, filtres.effectif_min, filtres.effectif_max):
         bornes = _TRANCHES_INSEE.get(tranche, ("?", "?"))
         return (
@@ -165,6 +167,31 @@ def _verifier_forme_juridique(lead: LeadStage2, filtres: FiltresEntreprise) -> s
     return None
 
 
+def _verifier_ca(lead: LeadStage2, filtres: FiltresEntreprise) -> str | None:
+    if filtres.ca_min is None and filtres.ca_max is None:
+        return None
+    ca = lead.chiffre_affaires
+    if ca is None:
+        return "CA inconnu" if filtres.rejeter_ca_inconnu else None
+    if filtres.ca_min is not None and ca < filtres.ca_min:
+        return f"CA={ca} < min {filtres.ca_min}"
+    if filtres.ca_max is not None and ca > filtres.ca_max:
+        return f"CA={ca} > max {filtres.ca_max}"
+    return None
+
+
+def _verifier_categorie(lead: LeadStage2, filtres: FiltresEntreprise) -> str | None:
+    if not filtres.categorie_entreprise_inclus:
+        return None
+    cat = lead.categorie_entreprise
+    if cat is None:
+        return None  # catégorie inconnue → on n'évince pas (cohérent CA)
+    autorisees = {c.upper() for c in filtres.categorie_entreprise_inclus}
+    if cat.upper() not in autorisees:
+        return f"catégorie={cat} pas dans {filtres.categorie_entreprise_inclus}"
+    return None
+
+
 def _verifier_multi_sites(lead: LeadStage2, filtres: FiltresEntreprise) -> str | None:
     if not filtres.multi_sites_only:
         return None
@@ -189,6 +216,8 @@ def evaluer_filtres_entreprise(lead: LeadStage2, filtres: FiltresEntreprise) -> 
         _verifier_effectif,
         _verifier_naf,
         _verifier_forme_juridique,
+        _verifier_ca,
+        _verifier_categorie,
         _verifier_multi_sites,
     ):
         r = check(lead, filtres)

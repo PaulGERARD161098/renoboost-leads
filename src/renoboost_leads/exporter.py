@@ -56,6 +56,10 @@ COLONNES_STAGE2 = COLONNES_STAGE1 + [
     "adresse_normalisee",
     "date_creation",
     "nb_etablissements",
+    "chiffre_affaires",
+    "resultat_net",
+    "annee_finances",
+    "categorie_entreprise",
     "score_matching",
     "match_incertain",
     "flag_chaine",
@@ -93,6 +97,8 @@ COLONNES_STAGE4 = COLONNES_STAGE3_5 + [
     "score_interet",
     "raison_score",
     "pitch_propose",
+    "email_objet",
+    "email_corps",
     "top_lead",
     "scoring_modele",
     "scoring_erreur",
@@ -416,6 +422,8 @@ def lire_stage2_csv(csv_path: Path) -> list[LeadStage2]:
         flag_chaine_raw = row.get("flag_chaine") or ""
         statut_actif_raw = row.get("statut_actif") or ""
         nb_etabs_raw = row.get("nb_etablissements") or ""
+        ca_raw = row.get("chiffre_affaires") or ""
+        resultat_raw = row.get("resultat_net") or ""
         hors_filtre_raw = row.get("hors_filtre_entreprise") or ""
 
         leads_l2.append(
@@ -435,6 +443,10 @@ def lire_stage2_csv(csv_path: Path) -> list[LeadStage2]:
                 adresse_normalisee=row.get("adresse_normalisee") or None,
                 date_creation=row.get("date_creation") or None,
                 nb_etablissements=(int(nb_etabs_raw) if nb_etabs_raw not in ("", "None") else None),
+                chiffre_affaires=(int(ca_raw) if ca_raw not in ("", "None") else None),
+                resultat_net=(int(resultat_raw) if resultat_raw not in ("", "None") else None),
+                annee_finances=row.get("annee_finances") or None,
+                categorie_entreprise=row.get("categorie_entreprise") or None,
                 score_matching=float(score) if score not in (None, "", "None") else None,
                 match_incertain=(match_incertain_raw == "VRAI"),
                 flag_chaine=(flag_chaine_raw == "VRAI"),
@@ -549,6 +561,8 @@ def lire_stage4_csv(csv_path: Path) -> list[LeadStage4]:
                 ),
                 raison_score=row.get("raison_score") or None,
                 pitch_propose=row.get("pitch_propose") or None,
+                email_objet=row.get("email_objet") or None,
+                email_corps=row.get("email_corps") or None,
                 top_lead=(top_raw == "VRAI"),
                 scoring_modele=row.get("scoring_modele") or None,
                 scoring_erreur=row.get("scoring_erreur") or None,

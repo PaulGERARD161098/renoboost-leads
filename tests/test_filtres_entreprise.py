@@ -136,11 +136,25 @@ class TestEvaluationFiltres:
         ok, _ = evaluer_filtres_entreprise(lead, FiltresEntreprise(effectif_min=50))
         assert ok is True
 
-    def test_effectif_inconnu_rejete_si_filtre_actif(self):
+    def test_effectif_inconnu_rejete_si_option_active(self):
         lead = _lead(tranche_effectif=None)
-        ok, raison = evaluer_filtres_entreprise(lead, FiltresEntreprise(effectif_min=50))
+        ok, raison = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(effectif_min=50, rejeter_effectif_inconnu=True)
+        )
         assert ok is False
         assert "inconnu" in raison
+
+    def test_effectif_inconnu_accepte_par_defaut(self):
+        lead = _lead(tranche_effectif=None)
+        ok, _ = evaluer_filtres_entreprise(lead, FiltresEntreprise(effectif_min=50))
+        assert ok is True
+
+    def test_effectif_inconnu_accepte_par_defaut_avec_tranche_inclus(self):
+        lead = _lead(tranche_effectif=None)
+        ok, _ = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(tranche_effectif_inclus=["22"])
+        )
+        assert ok is True
 
     def test_tranche_explicite_prioritaire_sur_min_max(self):
         # filtre min=50 (qui accepterait tranche 21) MAIS codes restreints à ["22"]
@@ -212,6 +226,58 @@ class TestEvaluationFiltres:
         ok, raison = evaluer_filtres_entreprise(lead, FiltresEntreprise(multi_sites_only=True))
         assert ok is False
         assert "inconnu" in raison
+
+    def test_ca_min_lead_au_dessus_passe(self):
+        lead = _lead(chiffre_affaires=5_000_000)
+        ok, _ = evaluer_filtres_entreprise(lead, FiltresEntreprise(ca_min=1_000_000))
+        assert ok is True
+
+    def test_ca_min_lead_en_dessous_rejete(self):
+        lead = _lead(chiffre_affaires=200_000)
+        ok, raison = evaluer_filtres_entreprise(lead, FiltresEntreprise(ca_min=1_000_000))
+        assert ok is False
+        assert "CA" in raison
+
+    def test_ca_max_lead_au_dessus_rejete(self):
+        lead = _lead(chiffre_affaires=500_000_000)
+        ok, raison = evaluer_filtres_entreprise(lead, FiltresEntreprise(ca_max=50_000_000))
+        assert ok is False
+        assert "CA" in raison
+
+    def test_ca_inconnu_accepte_par_defaut(self):
+        lead = _lead(chiffre_affaires=None)
+        ok, _ = evaluer_filtres_entreprise(lead, FiltresEntreprise(ca_min=1_000_000))
+        assert ok is True
+
+    def test_ca_inconnu_rejete_si_option_active(self):
+        lead = _lead(chiffre_affaires=None)
+        ok, raison = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(ca_min=1_000_000, rejeter_ca_inconnu=True)
+        )
+        assert ok is False
+        assert "CA inconnu" in raison
+
+    def test_categorie_inclus_passe(self):
+        lead = _lead(categorie_entreprise="PME")
+        ok, _ = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(categorie_entreprise_inclus=["PME", "ETI"])
+        )
+        assert ok is True
+
+    def test_categorie_hors_liste_rejete(self):
+        lead = _lead(categorie_entreprise="GE")
+        ok, raison = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(categorie_entreprise_inclus=["PME", "ETI"])
+        )
+        assert ok is False
+        assert "catégorie" in raison
+
+    def test_categorie_inconnue_accepte_par_defaut(self):
+        lead = _lead(categorie_entreprise=None)
+        ok, _ = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(categorie_entreprise_inclus=["PME"])
+        )
+        assert ok is True
 
     def test_multiples_raisons_agregees(self):
         # Effectif trop faible + mauvais NAF → 2 raisons agrégées

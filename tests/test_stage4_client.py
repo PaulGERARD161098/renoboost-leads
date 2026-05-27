@@ -131,6 +131,20 @@ class TestClaudeClientScorer:
         client, _ = self._build('{"score_interet": 50, "raison_score": "moyen"}')
         rep = client.scorer("prompt")
         assert rep.pitch_propose is None
+        assert rep.email_objet is None
+        assert rep.email_corps is None
+
+    def test_reponse_avec_email(self):
+        client, _ = self._build(
+            '{"score_interet": 80, "raison_score": "ICP", '
+            '"pitch_propose": "Bonjour...", '
+            '"email_objet": "Audit énergétique de vos ateliers", '
+            '"email_corps": "Madame, Monsieur,\\n\\nRénoBoost...\\n\\nCordialement, RénoBoost"}'
+        )
+        rep = client.scorer("prompt")
+        assert rep.email_objet == "Audit énergétique de vos ateliers"
+        assert rep.email_corps.startswith("Madame, Monsieur,")
+        assert "\n" in rep.email_corps
 
     def test_score_borne_a_100(self):
         client, _ = self._build('{"score_interet": 250, "raison_score": "wow"}')

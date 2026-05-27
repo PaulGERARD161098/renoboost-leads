@@ -54,6 +54,8 @@ class ClaudeReponse:
     tokens_out: int
     cout_eur: float
     modele: str
+    email_objet: str | None = None
+    email_corps: str | None = None
 
 
 @dataclass
@@ -153,6 +155,10 @@ class ClaudeClient:
         raison = str(data["raison_score"]).strip()
         pitch_brut = data.get("pitch_propose")
         pitch = str(pitch_brut).strip() if pitch_brut else None
+        objet_brut = data.get("email_objet")
+        email_objet = str(objet_brut).strip() if objet_brut else None
+        corps_brut = data.get("email_corps")
+        email_corps = str(corps_brut).strip() if corps_brut else None
 
         tokens_in = int(getattr(message.usage, "input_tokens", 0) or 0)
         tokens_out = int(getattr(message.usage, "output_tokens", 0) or 0)
@@ -168,6 +174,8 @@ class ClaudeClient:
             score_interet=score,
             raison_score=raison,
             pitch_propose=pitch,
+            email_objet=email_objet,
+            email_corps=email_corps,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             cout_eur=cout,
