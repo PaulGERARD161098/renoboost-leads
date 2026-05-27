@@ -18,12 +18,14 @@ import re
 import time
 from typing import Any
 
+from ..common.budget_guard import BudgetExceededError
 from ..common.cache import SessionCache
 from ..common.logger import get_logger
 from ..models import FiltresEntreprise, LeadStage1, LeadStage2
 from .filters import evaluer_filtres_entreprise
 from .mapper import candidat_to_l2_fields
 from .matcher import selectionner_meilleur_candidat
+from .pappers_client import PappersClient, PappersError
 from .recherche_client import RechercheEntreprisesClient
 from .referentiel_chaines import detecter_chaine, note_chaine_standard
 
@@ -60,6 +62,7 @@ class EnricheurStage2:
         cache: SessionCache | None = None,
         callback_save_incremental=None,
         filtres_entreprise: FiltresEntreprise | None = None,
+        pappers_client: PappersClient | None = None,
     ):
         """
         Args:
@@ -68,11 +71,21 @@ class EnricheurStage2:
             callback_save_incremental: fonction appelée tous les 20 leads (pour sauvegarde)
             filtres_entreprise: filtres B3 à appliquer après enrichissement
                 (default = FiltresEntreprise() vide → aucun flag posé)
+            pappers_client: client Pappers optionnel. Si fourni, il est interrogé
+                en fallback PAYANT quand le matching gratuit échoue ou reste
+                incertain. Absent → aucun appel Pappers.
         """
         self.client = client
         self.cache = cache
         self.callback_save = callback_save_incremental
         self.filtres_entreprise = filtres_entreprise or FiltresEntreprise()
+        self.pappers_client = pappers_client
+        # Métriques fallback Pappers (lues par le CLI pour les stats/budget).
+        self.nb_fallback_pappers = 0
+        self.cout_pappers_eur = 0.0
+        # Coupe-circuit : passe à True dès que le budget Pappers est épuisé,
+        # pour ne plus retenter d'appels sur les leads suivants.
+        self._pappers_budget_epuise = False
 
     def _chercher_avec_cache(self, lead: LeadStage1) -> list[dict[str, Any]]:
         """Recherche entreprise avec cache (évite re-paiement)."""
@@ -138,6 +151,58 @@ class EnricheurStage2:
             lead_l2.raison_hors_filtre = raison
         return lead_l2
 
+    def _fallback_pappers(
+        self,
+        lead: LeadStage1,
+        best: dict[str, Any] | None,
+        score: float,
+        incertain: bool,
+    ) -> tuple[dict[str, Any] | None, float, bool]:
+        """Interroge Pappers en repli et garde le MEILLEUR des deux scores.
+
+        Ne fait rien (renvoie l'entrée inchangée) si aucun client Pappers n'est
+        fourni ou si le budget Pappers est déjà épuisé. Best-effort : toute
+        erreur Pappers est loguée sans interrompre le run.
+        """
+        if self.pappers_client is None or self._pappers_budget_epuise:
+            return best, score, incertain
+
+        query = nettoyer_nom_pour_recherche(lead.nom) or (lead.nom or "")
+        if lead.ville:
+            query = f"{query} {lead.ville}".strip()
+
+        try:
+            candidats_pappers = self.pappers_client.rechercher(
+                query=query,
+                code_postal=lead.code_postal,
+            )
+        except BudgetExceededError as e:
+            logger.warning("Budget Pappers épuisé, fallback désactivé : %s", e)
+            self._pappers_budget_epuise = True
+            return best, score, incertain
+        except PappersError as e:
+            logger.warning("Échec fallback Pappers pour %r : %s", lead.nom, e)
+            return best, score, incertain
+
+        # L'appel a été facturé (budget débité côté client) → on comptabilise.
+        self.nb_fallback_pappers += 1
+        self.cout_pappers_eur += self.pappers_client.config.cout_par_appel_eur
+
+        if not candidats_pappers:
+            return best, score, incertain
+
+        p_best, p_score, p_incertain = selectionner_meilleur_candidat(
+            candidats=candidats_pappers,
+            nom_cible=lead.nom,
+            code_postal_cible=lead.code_postal,
+            ville_cible=lead.ville,
+        )
+
+        # On ne remplace que si Pappers fait STRICTEMENT mieux.
+        if p_best is not None and p_score > score:
+            return p_best, p_score, p_incertain
+        return best, score, incertain
+
     def _enrichir_un_lead(self, lead: LeadStage1) -> LeadStage2:
         """Enrichit un lead L1 → L2."""
         # Étape 1 — Détection chaîne
@@ -152,7 +217,7 @@ class EnricheurStage2:
                 )
             )
 
-        # Étape 2 — Recherche API
+        # Étape 2 — Recherche API gratuite (data.gouv)
         candidats = self._chercher_avec_cache(lead)
 
         # Étape 3 — Scoring
@@ -162,6 +227,10 @@ class EnricheurStage2:
             code_postal_cible=lead.code_postal,
             ville_cible=lead.ville,
         )
+
+        # Étape 3 bis — Fallback Pappers (PAYANT) si le gratuit échoue/doute.
+        if best is None or incertain:
+            best, score, incertain = self._fallback_pappers(lead, best, score, incertain)
 
         # Étape 4 — Mapping
         if best is None:

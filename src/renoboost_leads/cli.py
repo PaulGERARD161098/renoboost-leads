@@ -45,6 +45,7 @@ from .stage1_decouverte.places_client import (
     PlacesClientConfig,
 )
 from .stage2_entreprises.enricher import EnricheurStage2
+from .stage2_entreprises.pappers_client import PappersClient, PappersClientConfig
 from .stage2_entreprises.recherche_client import (
     RechercheClientConfig,
     RechercheEntreprisesClient,
@@ -389,6 +390,7 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
 
         leads_l2 = _executer_stage2(
             cfg=cfg,
+            settings=settings,
             leads_l1=leads_l1,
             cache=cache,
             output_dir=output_dir,
@@ -629,7 +631,7 @@ def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
     return leads
 
 
-def _executer_stage2(cfg, leads_l1, cache, output_dir, stats):
+def _executer_stage2(cfg, settings, leads_l1, cache, output_dir, stats):
     """Exécute l'étage 2."""
     csv_path = output_dir / "etage2_entreprises.csv"
     t0 = datetime.now(timezone.utc)
@@ -639,11 +641,29 @@ def _executer_stage2(cfg, leads_l1, cache, output_dir, stats):
 
     limiter = RateLimiter(60)  # 60 req/min, largement sous la limite de 7 req/s
     rech_client = RechercheEntreprisesClient(RechercheClientConfig(rate_limiter=limiter))
+
+    # Fallback Pappers (PAYANT) : activé uniquement si une clé est présente.
+    pappers_client = None
+    if settings.has_pappers():
+        budget_pappers = BudgetGuard(
+            plafond_eur=max(0.01, cfg.budget.max_eur - stats.cout_total_eur)
+        )
+        pappers_client = PappersClient(
+            PappersClientConfig(
+                api_key=settings.pappers_api_key.get_secret_value(),
+                cout_par_appel_eur=settings.pappers_cout_par_appel_eur,
+                rate_limiter=RateLimiter(settings.max_requests_per_minute),
+                budget=budget_pappers,
+            )
+        )
+        console.print("[cyan]ℹ  Fallback Pappers activé pour les matches incertains.[/cyan]")
+
     enricheur = EnricheurStage2(
         client=rech_client,
         cache=cache,
         callback_save_incremental=callback_save,
         filtres_entreprise=cfg.filtres_entreprise,
+        pappers_client=pappers_client,
     )
 
     leads_l2 = enricheur.enrichir(leads_l1)
@@ -655,6 +675,7 @@ def _executer_stage2(cfg, leads_l1, cache, output_dir, stats):
 
     # Stats
     stats_e2 = enricheur.stats_l2(leads_l2)
+    stats.cout_total_eur += enricheur.cout_pappers_eur
     stats.etages_executes.append(
         StageStats(
             nom_etage="stage2_entreprises",
@@ -666,16 +687,23 @@ def _executer_stage2(cfg, leads_l1, cache, output_dir, stats):
                 - stats_e2.get("siren_trouve", 0)
                 - stats_e2.get("chaines", 0)
             ),
-            cout_eur_estime=0.0,
+            cout_eur_estime=enricheur.cout_pappers_eur,
             leads_collectes=len(leads_l2),
         )
     )
 
+    msg_pappers = ""
+    if enricheur.nb_fallback_pappers:
+        msg_pappers = (
+            f"\n   Fallback Pappers : {enricheur.nb_fallback_pappers} appels "
+            f"({enricheur.cout_pappers_eur:.2f} €)"
+        )
     console.print(
         f"\n[green]✓ Étage 2 : {len(leads_l2)} leads enrichis → {csv_path.name}[/green]\n"
         f"   SIREN trouvé : {stats_e2.get('siren_pct', 0)}% — "
         f"Dirigeant trouvé : {stats_e2.get('dirigeant_pct', 0)}% — "
         f"Chaînes : {stats_e2.get('chaines_pct', 0)}%"
+        f"{msg_pappers}"
     )
     return leads_l2
 
