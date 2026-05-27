@@ -414,6 +414,7 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
             logger.info("L2 chargé depuis CSV existant : %d leads", len(leads_l2))
 
         leads_l3 = _executer_stage3(
+            cfg=cfg,
             leads_l2=leads_l2,
             cache=cache,
             output_dir=output_dir,
@@ -679,7 +680,7 @@ def _executer_stage2(cfg, leads_l1, cache, output_dir, stats):
     return leads_l2
 
 
-def _executer_stage3(leads_l2, cache, output_dir, stats):
+def _executer_stage3(cfg, leads_l2, cache, output_dir, stats):
     """Exécute l'étage 3."""
     csv_path = output_dir / "etage3_contacts.csv"
     t0 = datetime.now(timezone.utc)
@@ -726,6 +727,14 @@ def _executer_stage3(leads_l2, cache, output_dir, stats):
         f"Patterns nominatifs : {stats_e3.get('dirigeant_pattern_pct', 0)}%"
         f"{msg_hf}"
     )
+
+    if "html" in cfg.sortie.format:
+        from .exporter_html import export_html_leads
+
+        html_path = output_dir / "leads_qualifies.html"
+        export_html_leads(csv_path, html_path, sous_titre=cfg.run.description or "")
+        console.print(f"   📄 Rapport HTML leads : {html_path}")
+
     return leads_l3
 
 
@@ -811,6 +820,18 @@ def _executer_stage3_5(cfg, settings, leads_l3, output_dir, stats, dry_run: bool
     return leads_l35
 
 
+def _filtrer_leads_a_scorer(leads, scorer_hors_filtre: bool):
+    """Sélectionne les leads à envoyer à L4.
+
+    Par défaut (scorer_hors_filtre=False) : seuls les qualifiés
+    (hors_filtre_entreprise=False) — inutile de payer des tokens pour des leads
+    déjà écartés. À True : tous les leads (diagnostic / calibration).
+    """
+    if scorer_hors_filtre:
+        return list(leads)
+    return [lead for lead in leads if not getattr(lead, "hors_filtre_entreprise", False)]
+
+
 def _executer_stage4(cfg, settings, leads_l3, output_dir, stats, dry_run: bool = False):
     """Exécute l'étage 4 (scoring Claude + pitch).
 
@@ -854,8 +875,20 @@ def _executer_stage4(cfg, settings, leads_l3, output_dir, stats, dry_run: bool =
         callback_save_incremental=callback_save,
     )
 
+    # Par défaut on ne score que les qualifiés (économie de tokens). Les leads
+    # hors-filtre restent disponibles dans etage3_contacts_hors_filtre.csv.
+    leads_a_scorer = _filtrer_leads_a_scorer(
+        leads_l3, cfg.claude_scoring.scorer_hors_filtre
+    )
+    nb_skip = len(leads_l3) - len(leads_a_scorer)
+    if nb_skip:
+        console.print(
+            f"[cyan]L4 : {nb_skip} leads hors-filtre ignorés "
+            f"(scorer_hors_filtre=false) — {len(leads_a_scorer)} qualifiés à scorer.[/cyan]"
+        )
+
     try:
-        leads_l4 = enricher.enrichir(leads_l3)
+        leads_l4 = enricher.enrichir(leads_a_scorer)
     except BudgetExceededError as e:
         console.print(f"[red]✗ Budget L4 dépassé : {e}[/red]")
         leads_l4 = []
@@ -863,6 +896,13 @@ def _executer_stage4(cfg, settings, leads_l3, output_dir, stats, dry_run: bool =
     duree = (datetime.now(timezone.utc) - t0).total_seconds()
     export_stage4_csv(leads_l4, csv_path)
     backup_csv(csv_path)
+
+    if "html" in cfg.sortie.format:
+        from .exporter_html import export_html_emails
+
+        html_path = output_dir / "emails_prospection.html"
+        export_html_emails(csv_path, html_path, sous_titre=cfg.run.description or "")
+        console.print(f"   📄 Rapport HTML emails : {html_path}")
 
     stats_e4 = enricher.stats_l4(leads_l4)
     stats.cout_total_eur += enricher.cout_total_eur
