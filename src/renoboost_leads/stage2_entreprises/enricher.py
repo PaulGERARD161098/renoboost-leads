@@ -14,6 +14,7 @@ Logique :
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
@@ -27,6 +28,27 @@ from .recherche_client import RechercheEntreprisesClient
 from .referentiel_chaines import detecter_chaine, note_chaine_standard
 
 logger = get_logger(__name__)
+
+# Sépare la "marque" des qualificatifs de site Google (" - Siège social",
+# " | Logistique", " — Usine"...). On exige des espaces autour du séparateur
+# pour ne PAS couper les noms à trait d'union collé (Saint-Gobain, Neuville-en-F).
+_SEP_QUALIFICATIF = re.compile(r"\s+[-–—|]\s+.*$")
+
+
+def nettoyer_nom_pour_recherche(nom: str | None) -> str:
+    """Nettoie un nom Google pour une recherche SIREN de repli.
+
+    Retire le contenu entre parenthèses, coupe au 1er séparateur de qualificatif
+    de site, et enlève quelques mots parasites ('France', 'siège social').
+    Sert UNIQUEMENT au fallback : ne remplace pas la requête primaire.
+    """
+    if not nom:
+        return ""
+    s = re.sub(r"\([^)]*\)", " ", nom)
+    s = _SEP_QUALIFICATIF.sub("", s)
+    s = re.sub(r"\b(france|si[èe]ge social)\b", " ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s or nom.strip()
 
 
 class EnricheurStage2:
@@ -66,6 +88,8 @@ class EnricheurStage2:
         query = lead.nom or ""
         if lead.ville:
             query = f"{query} {lead.ville}"
+        query = query.strip()
+        nom_clean = nettoyer_nom_pour_recherche(lead.nom)
 
         try:
             results = self.client.rechercher(
@@ -73,11 +97,24 @@ class EnricheurStage2:
                 code_postal=lead.code_postal,
                 per_page=10,
             )
+            # Fallback ADDITIF : si la requête primaire ne renvoie rien, on retente
+            # avec le nom nettoyé (sans ville ni qualificatif de site). Ne se
+            # déclenche que sur résultat vide → ne peut pas faire régresser.
+            if not results and nom_clean and nom_clean != query:
+                results = self.client.rechercher(
+                    query=nom_clean,
+                    code_postal=lead.code_postal,
+                    per_page=10,
+                )
         except Exception as e:  # noqa: BLE001
-            logger.warning("Erreur API pour %r : %s", lead.nom, e)
-            results = []
+            # Échec API (5xx/429/réseau, déjà retryé côté client) : on NE cache PAS.
+            # Sinon une relance après panne data.gouv lirait un résultat vide en
+            # cache et n'interrogerait jamais l'API rétablie.
+            logger.warning("Erreur API pour %r : %s — non mis en cache", lead.nom, e)
+            return []
 
-        # Stockage en cache
+        # Stockage en cache : uniquement les réponses réussies (y compris une
+        # liste vide légitime = "aucune entreprise trouvée" pour cette query).
         if self.cache:
             self.cache.store_place(
                 place_id=cache_key,

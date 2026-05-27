@@ -99,6 +99,17 @@ class _FakeRechercheClient:
         return self.candidats_par_query.get(query, [])
 
 
+class _RaisingRechercheClient:
+    """Stub qui simule une panne API (5xx) après épuisement des retries."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def rechercher(self, query: str, code_postal: str | None = None, per_page: int = 10):
+        self.calls += 1
+        raise RuntimeError("HTTP 503 (panne simulée)")
+
+
 def _lead_l1(nom: str, cp: str = "59000") -> LeadStage1:
     return LeadStage1(
         place_id=f"ChIJ_{nom}",
@@ -107,6 +118,90 @@ def _lead_l1(nom: str, cp: str = "59000") -> LeadStage1:
         code_postal=cp,
         ville="Lille",
     )
+
+
+class _CountingRechercheClient:
+    """Stub qui répond par query exacte et compte les appels (test fallback D5)."""
+
+    def __init__(self, par_query: dict[str, list[dict]]):
+        self.par_query = par_query
+        self.queries: list[str] = []
+
+    def rechercher(self, query: str, code_postal: str | None = None, per_page: int = 10):
+        self.queries.append(query)
+        return self.par_query.get(query, [])
+
+
+class TestNettoyageNomRecherche:
+    """D5 : nettoyage du nom pour la recherche de repli."""
+
+    def test_coupe_qualificatif_site(self):
+        from renoboost_leads.stage2_entreprises.enricher import nettoyer_nom_pour_recherche
+
+        got = nettoyer_nom_pour_recherche("Chaussures Maniet - Siège social")
+        assert got == "Chaussures Maniet"
+
+    def test_preserve_trait_union_colle(self):
+        from renoboost_leads.stage2_entreprises.enricher import nettoyer_nom_pour_recherche
+
+        # Pas d'espaces autour du tiret → on ne coupe pas
+        assert nettoyer_nom_pour_recherche("Saint-Gobain") == "Saint-Gobain"
+
+    def test_retire_parentheses_et_france(self):
+        from renoboost_leads.stage2_entreprises.enricher import nettoyer_nom_pour_recherche
+
+        got = nettoyer_nom_pour_recherche("Auchan Logistique (Plateforme) France")
+        assert got == "Auchan Logistique"
+
+
+class TestFallbackRechercheSIREN:
+    """D5 : fallback additif quand la requête primaire est vide."""
+
+    def test_fallback_declenche_si_primaire_vide(self):
+        candidat = {"siren": "123456789", "siege": {}}
+        # La requête primaire (nom + ville) ne renvoie rien ; le nom nettoyé oui.
+        client = _CountingRechercheClient({"Daunat Nord": [candidat]})
+        enr = EnricheurStage2(client=client)
+        enr.enrichir([_lead_l1("Daunat Nord")])  # _lead_l1 ajoute ville="Lille"
+        assert client.queries[0] == "Daunat Nord Lille"  # primaire (vide)
+        assert client.queries[1] == "Daunat Nord"  # fallback (trouve)
+
+    def test_pas_de_fallback_si_primaire_trouve(self):
+        candidat = {"siren": "123456789", "siege": {}}
+        client = _CountingRechercheClient({"Daunat Nord Lille": [candidat]})
+        enr = EnricheurStage2(client=client)
+        enr.enrichir([_lead_l1("Daunat Nord")])
+        assert client.queries == ["Daunat Nord Lille"]  # un seul appel
+
+
+class TestEnricherCacheEchecAPI:
+    """D1 : un échec API ne doit jamais être mis en cache."""
+
+    def test_echec_api_non_cache_et_reinterroge(self, tmp_path):
+        from renoboost_leads.common.cache import SessionCache
+
+        cache = SessionCache(tmp_path / "cache.sqlite")
+        client = _RaisingRechercheClient()
+        enr = EnricheurStage2(client=client, cache=cache)
+
+        enr.enrichir([_lead_l1("Bonduelle")])
+        assert client.calls == 1
+        # L'échec n'a PAS été mémorisé
+        assert cache.get_place(place_id="bonduelle|59000", stage="stage2_search") is None
+        # Une relance ré-interroge l'API (pas de hit vide obsolète)
+        enr.enrichir([_lead_l1("Bonduelle")])
+        assert client.calls == 2
+
+    def test_succes_vide_est_cache(self, tmp_path):
+        from renoboost_leads.common.cache import SessionCache
+
+        cache = SessionCache(tmp_path / "cache.sqlite")
+        client = _FakeRechercheClient({})  # renvoie [] = succès sans résultat
+        enr = EnricheurStage2(client=client, cache=cache)
+
+        enr.enrichir([_lead_l1("Inconnu")])
+        # Une réponse vide LÉGITIME (200, aucun match) est bien cachée
+        assert cache.get_place(place_id="inconnu|59000", stage="stage2_search") is not None
 
 
 class TestEnricherAvecFiltres:
