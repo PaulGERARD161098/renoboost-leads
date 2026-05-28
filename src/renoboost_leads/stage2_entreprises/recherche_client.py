@@ -140,8 +140,8 @@ class RechercheEntreprisesClient:
         retry=retry_if_exception_type(
             (RechercheEntreprisesTransientError, requests.RequestException)
         ),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        stop=stop_after_attempt(6),
         reraise=True,
     )
     def _search_page(self, params: dict[str, Any]) -> dict[str, Any]:

@@ -14,7 +14,10 @@ from __future__ import annotations
 from ..common.logger import get_logger
 from ..models import CampaignConfig, LeadStage2
 from ..stage2_entreprises.filters import _TRANCHES_INSEE
-from ..stage2_entreprises.recherche_client import RechercheEntreprisesClient
+from ..stage2_entreprises.recherche_client import (
+    RechercheEntreprisesClient,
+    RechercheEntreprisesTransientError,
+)
 from .mapper import entreprise_to_lead_stage2
 
 logger = get_logger(__name__)
@@ -90,8 +93,11 @@ class ExtracteurStage0:
         leads_par_siren: dict[str, LeadStage2] = {}
         nb_vus = 0
         nb_rejets_mapping = 0
+        coupure_api = False
 
-        for entreprise in self.client.decouvrir(
+        # On itère sur le générateur dans un try/except pour qu'une coupure
+        # API en cours de pagination préserve les leads déjà collectés.
+        iterateur = self.client.decouvrir(
             departements=zone.codes,
             activite_principale=filtres.naf_inclus or None,
             tranche_effectif_salarie=tranches or None,
@@ -101,28 +107,39 @@ class ExtracteurStage0:
             etat_administratif="A",
             siege_only=True,
             max_results=max_results,
-        ):
-            nb_vus += 1
-            lead = entreprise_to_lead_stage2(
-                entreprise,
-                secteur_recherche="sirene_decouverte",
-                requete_origine=f"dpt={','.join(zone.codes)}",
-            )
-            if lead is None:
-                nb_rejets_mapping += 1
-                continue
-            if lead.siren in leads_par_siren:
-                continue
-            leads_par_siren[lead.siren] = lead
+        )
 
-            if len(leads_par_siren) >= cible:
-                break
+        try:
+            for entreprise in iterateur:
+                nb_vus += 1
+                lead = entreprise_to_lead_stage2(
+                    entreprise,
+                    secteur_recherche="sirene_decouverte",
+                    requete_origine=f"dpt={','.join(zone.codes)}",
+                )
+                if lead is None:
+                    nb_rejets_mapping += 1
+                    continue
+                if lead.siren in leads_par_siren:
+                    continue
+                leads_par_siren[lead.siren] = lead
+
+                if len(leads_par_siren) >= cible:
+                    break
+        except RechercheEntreprisesTransientError as e:
+            coupure_api = True
+            logger.warning(
+                "API recherche-entreprises indisponible (retries épuisés) : %s — "
+                "on continue avec les %d leads déjà collectés.",
+                e, len(leads_par_siren),
+            )
 
         leads = list(leads_par_siren.values())
         logger.info(
-            "=== Étage 0 terminé : %d leads (sur %d vus, %d rejets mapping) ===",
+            "=== Étage 0 terminé : %d leads (sur %d vus, %d rejets mapping%s) ===",
             len(leads),
             nb_vus,
             nb_rejets_mapping,
+            ", coupure API" if coupure_api else "",
         )
         return leads
