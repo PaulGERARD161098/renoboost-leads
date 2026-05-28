@@ -8,5 +8,11 @@ puis produit directement des LeadStage2 (données identité + financier).
 
 from .extractor import ExtracteurStage0
 from .mapper import entreprise_to_lead_stage2
+from .places_enricher import EnrichisseurPlaces, villes_correspondent
 
-__all__ = ["ExtracteurStage0", "entreprise_to_lead_stage2"]
+__all__ = [
+    "EnrichisseurPlaces",
+    "ExtracteurStage0",
+    "entreprise_to_lead_stage2",
+    "villes_correspondent",
+]
