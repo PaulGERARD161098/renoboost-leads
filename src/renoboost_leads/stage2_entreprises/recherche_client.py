@@ -10,6 +10,7 @@ Limites :
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -134,6 +135,135 @@ class RechercheEntreprisesClient:
             return []
 
         return data.get("results", []) or []
+
+    @retry(
+        retry=retry_if_exception_type(
+            (RechercheEntreprisesTransientError, requests.RequestException)
+        ),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(3),
+        reraise=True,
+    )
+    def _search_page(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Appel /search une page. Lève sur 5xx/429 (retry tenacity)."""
+        self.config.rate_limiter.acquire()
+        try:
+            resp = self.session.get(
+                RECHERCHE_URL,
+                params=params,
+                timeout=self.config.timeout_seconds,
+            )
+        except requests.RequestException as e:
+            raise RechercheEntreprisesTransientError(f"Erreur réseau: {e}") from e
+
+        if 500 <= resp.status_code < 600:
+            raise RechercheEntreprisesTransientError(f"HTTP {resp.status_code}")
+        if resp.status_code == 429:
+            raise RechercheEntreprisesTransientError("HTTP 429 rate-limited")
+        if resp.status_code != 200:
+            logger.warning("HTTP %s pour params=%r", resp.status_code, params)
+            return {"results": [], "total_pages": 0, "total_results": 0}
+
+        try:
+            return resp.json()
+        except ValueError:
+            logger.warning("Réponse non-JSON pour params=%r", params)
+            return {"results": [], "total_pages": 0, "total_results": 0}
+
+    def decouvrir(
+        self,
+        departements: list[str],
+        *,
+        activite_principale: list[str] | None = None,
+        tranche_effectif_salarie: list[str] | None = None,
+        ca_min: int | None = None,
+        ca_max: int | None = None,
+        categorie_entreprise: list[str] | None = None,
+        etat_administratif: str = "A",
+        siege_only: bool = True,
+        max_results: int = 1000,
+        per_page: int = 25,
+    ) -> Iterator[dict[str, Any]]:
+        """Découverte SIRENE-first : itère sur les entreprises matchant les filtres.
+
+        Utilise l'API recherche-entreprises avec ses filtres natifs (CA, NAF,
+        tranche d'effectif, catégorie, état administratif) + filtre post-réception
+        sur le département du siège si `siege_only=True` (l'API filtre les
+        ÉTABLISSEMENTS sinon, ce qui ramène les entreprises nationales).
+
+        Pagination automatique jusqu'à `max_results` ou épuisement.
+
+        Args:
+            departements: codes INSEE département (filtre établissement + siège).
+            activite_principale: codes NAF/APE (préfixes pas supportés par
+                l'API ; passer les codes exacts ex "49.41A").
+            tranche_effectif_salarie: codes INSEE tranche ex ["02","03","11","12"]
+                pour 3-49 salariés.
+            ca_min, ca_max: bornes du chiffre d'affaires en €.
+            categorie_entreprise: ["PME"], ["PME","ETI"], etc.
+            etat_administratif: "A" actif, "C" cessé.
+            siege_only: si True, écarte les entreprises dont le siège n'est pas
+                dans `departements`. Recommandé pour le profil PME locale.
+            max_results: plafond global du nombre de résultats yieldés.
+            per_page: taille de page API (max 25).
+
+        Yields:
+            Le dict résultat brut de l'API pour chaque entreprise matchant.
+        """
+        if not departements:
+            return
+        if max_results <= 0:
+            return
+
+        base_params: dict[str, Any] = {
+            "departement": ",".join(departements),
+            "etat_administratif": etat_administratif,
+            "per_page": min(per_page, 25),
+        }
+        if activite_principale:
+            base_params["activite_principale"] = ",".join(activite_principale)
+        if tranche_effectif_salarie:
+            base_params["tranche_effectif_salarie"] = ",".join(tranche_effectif_salarie)
+        if ca_min is not None:
+            base_params["ca_min"] = ca_min
+        if ca_max is not None:
+            base_params["ca_max"] = ca_max
+        if categorie_entreprise:
+            base_params["categorie_entreprise"] = ",".join(categorie_entreprise)
+
+        siege_set = set(departements) if siege_only else None
+        yielded = 0
+        page = 1
+        total_pages: int | None = None
+
+        while yielded < max_results:
+            params = {**base_params, "page": page}
+            data = self._search_page(params)
+            results = data.get("results") or []
+            if total_pages is None:
+                total_pages = data.get("total_pages") or 0
+                logger.info(
+                    "Découverte SIRENE : %s entreprises matchant (%s pages)",
+                    data.get("total_results"),
+                    total_pages,
+                )
+
+            if not results:
+                break
+
+            for r in results:
+                if siege_set is not None:
+                    siege_dept = (r.get("siege") or {}).get("departement")
+                    if siege_dept not in siege_set:
+                        continue
+                yield r
+                yielded += 1
+                if yielded >= max_results:
+                    return
+
+            if total_pages and page >= total_pages:
+                break
+            page += 1
 
     def health_check(self) -> tuple[bool, str]:
         """Test rapide de connectivité (gratuit)."""
