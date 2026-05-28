@@ -37,6 +37,8 @@ from .exporter import (
 )
 from .models import CampaignConfig, RunStats, StageStats
 from .settings import PROJECT_ROOT, get_settings
+from .stage0_sirene_first.extractor import ExtracteurStage0
+from .stage0_sirene_first.places_enricher import EnrichisseurPlaces
 from .stage1_decouverte.extractor import ExtracteurStage1
 from .stage1_decouverte.geo_grid import grille_pour_zone
 from .stage1_decouverte.places_client import (
@@ -301,11 +303,11 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         console.print(f"[red]✗ Format --stages invalide : '{stages}'.[/red]")
         sys.exit(2)
 
-    if any(s not in (1, 2, 3, 3.5, 4) for s in stages_demandes):
+    if any(s not in (0, 1, 2, 3, 3.5, 4) for s in stages_demandes):
         console.print(
-            "[yellow]⚠  Étages valides : 1, 2, 3, 3.5, 4. Étages inconnus ignorés.[/yellow]"
+            "[yellow]⚠  Étages valides : 0, 1, 2, 3, 3.5, 4. Étages inconnus ignorés.[/yellow]"
         )
-        stages_demandes = [s for s in stages_demandes if s in (1, 2, 3, 3.5, 4)]
+        stages_demandes = [s for s in stages_demandes if s in (0, 1, 2, 3, 3.5, 4)]
 
     if not stages_demandes:
         console.print("[red]✗ Aucun étage valide demandé.[/red]")
@@ -361,9 +363,30 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
     cache = SessionCache(output_dir / "cache.sqlite")
     sources_rgpd: list[str] = []
 
-    # ─── Étage 1 ───
+    # ─── Étage 0 — Découverte SIRENE-first (alternative à 1+2) ───
     leads_l1 = None
-    if 1 in stages_demandes and cfg.stages.enable_stage_1_decouverte:
+    leads_l2 = None
+    stage0_a_tourne = False
+    if 0 in stages_demandes:
+        leads_l2 = _executer_stage0(
+            cfg=cfg,
+            settings=settings,
+            output_dir=output_dir,
+            stats=stats,
+            enrichir_avec_places=(1 in stages_demandes),
+            dry_run=dry_run,
+        )
+        stage0_a_tourne = True
+        sources_rgpd.append(
+            "API recherche-entreprises.api.gouv.fr — découverte SIRENE-first (open data)"
+        )
+        if 1 in stages_demandes:
+            sources_rgpd.append(
+                "Google Places API (New) — enrichissement ciblé par nom + ville"
+            )
+
+    # ─── Étage 1 (mode Places-first uniquement, exclusif de stage 0) ───
+    if 1 in stages_demandes and not stage0_a_tourne and cfg.stages.enable_stage_1_decouverte:
         leads_l1 = _executer_stage1(
             cfg=cfg,
             settings=settings,
@@ -375,8 +398,9 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         sources_rgpd.append("Google Places API (New) — données publiques")
 
     # ─── Étage 2 ───
-    leads_l2 = None
-    if 2 in stages_demandes:
+    if 2 in stages_demandes and stage0_a_tourne:
+        logger.info("Stage 2 demandé mais déjà couvert par stage 0 (SIRENE-first) — skip")
+    elif 2 in stages_demandes:
         # Charger L1 depuis le CSV si pas déjà en mémoire
         if leads_l1 is None:
             csv_l1 = from_csv_path or (output_dir / "etage1_decouverte.csv")
@@ -573,6 +597,108 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
 # ════════════════════════════════════════════════════════════════
 # Sous-fonctions par étage (pour clarté)
 # ════════════════════════════════════════════════════════════════
+
+
+def _executer_stage0(cfg, settings, output_dir, stats, *, enrichir_avec_places: bool, dry_run: bool):
+    """Découverte SIRENE-first : recherche-entreprises.api.gouv + (optionnel) enrichissement Places.
+
+    Renvoie une liste de LeadStage2 (déjà enrichis SIREN/NAF/CA/effectif/etc.).
+    Écrit `etage2_entreprises.csv` directement (les leads sont stage2 dès la sortie de stage 0).
+    Écrit aussi `etage0_decouverte_sirene.csv` pour traçabilité.
+    """
+    if dry_run:
+        from .models import LeadStage2
+        leads: list[LeadStage2] = [
+            LeadStage2(
+                place_id=f"sirene:{i:09d}",
+                extraction_date=datetime.now(timezone.utc),
+                nom=f"Test PME {i} SAS",
+                ville="Lille",
+                code_postal="59000",
+                pays="France",
+                siren=f"{i:09d}",
+                siret=f"{i:09d}00015",
+                code_naf="49.41A",
+                tranche_effectif="11",
+                categorie_entreprise="PME",
+                chiffre_affaires=1_500_000,
+                statut_actif=True,
+                score_matching=100.0,
+            )
+            for i in range(min(10, cfg.volume.cible))
+        ]
+        cout_eur = 0.0
+        nb_appels = 0
+    else:
+        t0 = datetime.now(timezone.utc)
+        limiter = RateLimiter(settings.max_requests_per_minute)
+        recherche_client = RechercheEntreprisesClient(
+            RechercheClientConfig(rate_limiter=limiter)
+        )
+        extracteur = ExtracteurStage0(client=recherche_client, config=cfg)
+        leads = extracteur.extraire()
+
+        cout_eur = 0.0  # API recherche-entreprises = gratuite
+        nb_appels = 0  # non instrumenté ici (côté wrapper si besoin)
+
+        duree = (datetime.now(timezone.utc) - t0).total_seconds()
+        stats.etages_executes.append(
+            StageStats(
+                nom_etage="stage0_sirene_decouverte",
+                duree_secondes=duree,
+                nb_appels_api=nb_appels,
+                nb_succes=len(leads),
+                nb_echecs=0,
+                cout_eur_estime=cout_eur,
+                leads_collectes=len(leads),
+            )
+        )
+
+    # Traçabilité : CSV brut de la découverte SIRENE
+    csv_decouverte = output_dir / "etage0_decouverte_sirene.csv"
+    export_stage2_csv(leads, csv_decouverte)
+    backup_csv(csv_decouverte)
+    console.print(f"[green]✓ Étage 0 (SIRENE) : {len(leads)} leads → {csv_decouverte.name}[/green]")
+
+    # Enrichissement Places ciblé (optionnel)
+    if enrichir_avec_places and not dry_run and leads:
+        t0 = datetime.now(timezone.utc)
+        api_key = _check_google_key_or_exit()
+        budget = BudgetGuard(plafond_eur=cfg.budget.max_eur)
+        places_limiter = RateLimiter(settings.max_requests_per_minute)
+        places_client = PlacesClient(
+            PlacesClientConfig(api_key=api_key, rate_limiter=places_limiter, budget=budget)
+        )
+        enrichisseur = EnrichisseurPlaces(client=places_client)
+
+        leads_enrichis = enrichisseur.enrichir_lot(leads)
+        nb_avec_site = sum(1 for l in leads_enrichis if l.site_web)
+        leads = leads_enrichis
+
+        duree = (datetime.now(timezone.utc) - t0).total_seconds()
+        stats.cout_total_eur += budget.cout_actuel_eur
+        stats.etages_executes.append(
+            StageStats(
+                nom_etage="stage0_places_enrichissement",
+                duree_secondes=duree,
+                nb_appels_api=budget.nb_appels,
+                nb_succes=nb_avec_site,
+                nb_echecs=len(leads) - nb_avec_site,
+                cout_eur_estime=budget.cout_actuel_eur,
+                leads_collectes=len(leads),
+            )
+        )
+        console.print(
+            f"[green]✓ Enrichissement Places : {nb_avec_site}/{len(leads)} leads "
+            f"avec site web ({budget.cout_actuel_eur:.2f} €)[/green]"
+        )
+
+    # CSV principal pour la suite du pipeline (équivalent stage 2)
+    csv_l2 = output_dir / "etage2_entreprises.csv"
+    export_stage2_csv(leads, csv_l2)
+    backup_csv(csv_l2)
+    console.print(f"[green]✓ Étage 0 → CSV stage2 : {csv_l2.name}[/green]")
+    return leads
 
 
 def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
