@@ -10,7 +10,7 @@ from ..models import LeadStage3
 
 # Bump ce numéro à chaque modification du prompt (structure, instructions, JSON shape).
 # Le cache L4 utilise cette valeur comme partie de sa clé de hachage.
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 
 
 CONTEXTE_CLIENT_DEFAUT = """\
@@ -104,6 +104,10 @@ def construire_prompt(
         lignes_lead.append(
             f"- ⚠ Hors filtre entreprise : {lead.raison_hors_filtre or 'critères non remplis'}"
         )
+    if lead.signaux_ve:
+        lignes_lead.append(
+            f"- 🔋 Signaux flotte / véhicule électrique détectés : {', '.join(lead.signaux_ve)}"
+        )
 
     desc_lead = "\n".join(lignes_lead) if lignes_lead else "- (aucune donnée enrichie)"
 
@@ -131,7 +135,11 @@ def construire_prompt(
             "« Cordialement, » suivie du nom de l'entreprise émettrice (issu de l'offre "
             "commerciale ci-dessus). Sauts de ligne encodés en \\n.\n"
             "6. Aucune invention de chiffres (CA, économies, montants CEE) ni de fausse "
-            "référence client. Reste factuel et sobre."
+            "référence client. Reste factuel et sobre.\n"
+            "7. Si des signaux flotte / véhicule électrique sont détectés, traite-les "
+            "comme un indicateur d'achat POSITIF uniquement s'ils sont pertinents pour "
+            "l'offre commerciale ci-dessus (ex. ombrières, bornes IRVE, transition "
+            "énergétique) ; sinon ignore-les. N'invente aucun signal absent."
         )
     else:
         format_json = (
@@ -142,7 +150,10 @@ def construire_prompt(
         )
         regles = (
             "1. `score_interet` : 0-100 (0 = aucun intérêt, 100 = lead idéal).\n"
-            "2. `raison_score` : UNE phrase, en français, qui justifie le score."
+            "2. `raison_score` : UNE phrase, en français, qui justifie le score.\n"
+            "3. Si des signaux flotte / véhicule électrique sont détectés, traite-les "
+            "comme un indicateur d'achat POSITIF uniquement s'ils sont pertinents pour "
+            "l'offre commerciale ci-dessus ; sinon ignore-les."
         )
 
     return (

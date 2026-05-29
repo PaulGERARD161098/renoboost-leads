@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 import urllib.parse
 import urllib.robotparser
 from dataclasses import dataclass, field
@@ -95,6 +96,46 @@ LOCAUX_SUSPECTS = {
     "admin@admin", "root@root",
 }
 
+# Signaux "flotte / véhicule électrique" : marqueurs d'un intérêt pour la
+# transition VE (cible des verticales ombrières/IRVE). Détectés à coût nul sur
+# les pages déjà téléchargées pour le scraping d'emails, puis remontés jusqu'à
+# L4 pour enrichir le scoring Claude.
+# Libellé affiché → motif regex appliqué sur le texte normalisé (minuscule,
+# sans accents). Les acronymes utilisent des frontières de mot `\b` pour éviter
+# les faux positifs (ex. "aper" dans "aperçu").
+MOTS_CLES_VE: dict[str, str] = {
+    "IRVE": r"\birve\b",
+    "borne de recharge": r"\bbornes? de recharge\b",
+    "flotte électrique": r"\bflottes? electriques?\b",
+    "véhicule électrique": r"\bvehicules? electriques?\b",
+    "mobilité électrique": r"\bmobilite electrique\b",
+    "ZFE": r"\bzfe\b",
+    "APER": r"\baper\b",
+}
+_VE_REGEX = {label: re.compile(motif) for label, motif in MOTS_CLES_VE.items()}
+
+
+def _normaliser_texte(texte: str) -> str:
+    """Minuscule + suppression des accents, pour un matching robuste."""
+    nfkd = unicodedata.normalize("NFKD", texte)
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
+
+
+def detecter_signaux_ve(html: str | None) -> list[str]:
+    """Détecte les signaux 'flotte / véhicule électrique' dans une page HTML.
+
+    Recherche sur le texte visible (balises script/style retirées),
+    insensible à la casse et aux accents. Retourne les libellés trouvés sans
+    doublon, dans l'ordre de `MOTS_CLES_VE`.
+    """
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "html.parser")
+    for balise in soup(["script", "style"]):
+        balise.decompose()
+    norm = _normaliser_texte(soup.get_text(separator=" "))
+    return [label for label, rx in _VE_REGEX.items() if rx.search(norm)]
+
 
 # ════════════════════════════════════════════════════════════════
 # Modèles internes
@@ -108,6 +149,7 @@ class ResultatScraping:
     page_source: str | None = None  # URL d'où viennent les emails
     raison_echec: str | None = None
     pages_visitees: list[str] = field(default_factory=list)
+    signaux_ve: list[str] = field(default_factory=list)  # signaux flotte/VE détectés
 
 
 # ════════════════════════════════════════════════════════════════
@@ -298,12 +340,19 @@ class ScraperContact:
         domaine = extraire_domaine(base_url)
         result = ResultatScraping(domaine=domaine)
 
+        def _accumuler_signaux_ve(html: str) -> None:
+            """Ajoute les signaux VE de cette page sans doublon (ordre stable)."""
+            for signal in detecter_signaux_ve(html):
+                if signal not in result.signaux_ve:
+                    result.signaux_ve.append(signal)
+
         # Test de connectivité de base
         homepage_html = self._fetch(base_url)
         if homepage_html is None:
             result.raison_echec = "site_inaccessible"
             return result
         result.pages_visitees.append(base_url)
+        _accumuler_signaux_ve(homepage_html)
 
         # Cherche dans la homepage
         emails_home = extraire_emails_du_html(homepage_html, domaine_attendu=domaine)
@@ -323,6 +372,7 @@ class ScraperContact:
             if html is None:
                 continue
             result.pages_visitees.append(url)
+            _accumuler_signaux_ve(html)
 
             emails = extraire_emails_du_html(html, domaine_attendu=domaine)
             if emails:
