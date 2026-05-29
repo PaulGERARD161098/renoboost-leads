@@ -335,6 +335,11 @@ class LeadStage3(LeadStage2):
     ] = "aucun_email"
     contient_dirigeant_pattern: bool = False  # True si patterns nominatifs générés
 
+    # Signaux "flotte / véhicule électrique" détectés au scraping L3 (libellés
+    # lisibles, ex. ["IRVE", "borne de recharge"]). Indicateur d'achat remonté
+    # au scoring L4. Vide si rien détecté ou site non scrapé.
+    signaux_ve: list[str] = []
+
 
 # ════════════════════════════════════════════════════════════════
 # ÉTAGE 3.5 — Enrichissement contacts vérifiés (Dropcontact)

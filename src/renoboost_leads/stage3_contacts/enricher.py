@@ -52,6 +52,7 @@ class EnricheurStage3:
                     page_source=cached.get("page_source"),
                     raison_echec=cached.get("raison_echec"),
                     pages_visitees=cached.get("pages_visitees", []) or [],
+                    signaux_ve=cached.get("signaux_ve", []) or [],
                 )
 
         try:
@@ -70,6 +71,7 @@ class EnricheurStage3:
                     "page_source": result.page_source,
                     "raison_echec": result.raison_echec,
                     "pages_visitees": list(result.pages_visitees),
+                    "signaux_ve": list(result.signaux_ve),
                 },
             )
         return result
@@ -93,12 +95,14 @@ class EnricheurStage3:
         domaine_extrait: str | None = None
         emails_scrapes: list[str] = []
         page_source: str | None = None
+        signaux_ve: list[str] = []
 
         if site_web:
             scraping = self._scraper_avec_cache(site_web)
             domaine_extrait = scraping.domaine
             emails_scrapes = scraping.emails
             page_source = scraping.page_source
+            signaux_ve = scraping.signaux_ve
 
         # Si pas de domaine via scraping, on tente l'extraction directe
         if domaine_extrait is None and site_web:
@@ -139,6 +143,7 @@ class EnricheurStage3:
             nb_emails_candidats=len(emails_candidats),
             source_globale=source,
             contient_dirigeant_pattern=contient_dirigeant,
+            signaux_ve=signaux_ve,
         )
 
     def enrichir(self, leads_l2: list[LeadStage2]) -> list[LeadStage3]:

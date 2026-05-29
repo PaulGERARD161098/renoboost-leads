@@ -122,3 +122,14 @@ class TestConstruirePrompt:
         prompt = construire_prompt(lead)
         # On affiche jusqu'à 3 emails + un "+N autres"
         assert "+7 autres" in prompt
+
+    def test_prompt_signaux_ve_affiches(self):
+        lead = _lead_minimal()
+        lead.signaux_ve = ["IRVE", "borne de recharge"]
+        prompt = construire_prompt(lead)
+        assert "IRVE" in prompt
+        assert "borne de recharge" in prompt
+
+    def test_prompt_sans_signaux_ve_n_affiche_pas_la_ligne(self):
+        prompt = construire_prompt(_lead_minimal())
+        assert "Signaux flotte" not in prompt
