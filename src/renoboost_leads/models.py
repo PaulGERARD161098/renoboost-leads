@@ -440,6 +440,74 @@ class LeadVeille(LeadStage4):
 
 
 # ════════════════════════════════════════════════════════════════
+# SOCIETEINFO — enrichissement firmographique alternatif / complément L2
+# ════════════════════════════════════════════════════════════════
+
+
+class LeadSocieteinfo(LeadStage2):
+    """LeadStage2 + données enrichies via l'API Societeinfo (étage optionnel).
+
+    Societeinfo s'appuie sur les registres officiels FR (INSEE / BODACC / INPI)
+    et fournit un meilleur taux de match SIREN + firmographie que le L2 gratuit
+    (data.gouv). On l'utilise soit en **alternative** au L2 gratuit, soit en
+    **complément ciblé** sur les leads dont le match SIREN reste incertain.
+
+    Flag-not-drop : tous les champs sont optionnels. Si le lead n'a pas été
+    envoyé à l'API (filtré / étage désactivé) ou si l'API n'a rien trouvé, les
+    champs restent à `None` / `[]` et le lead poursuit le pipeline normalement.
+    """
+
+    societeinfo_siren: str | None = None
+    societeinfo_naf: str | None = None
+    societeinfo_libelle_naf: str | None = None
+    societeinfo_effectif: str | None = None  # tranche ou effectif exact selon le plan
+    societeinfo_chiffre_affaires: int | None = None
+    societeinfo_dirigeant: str | None = None
+    societeinfo_email: str | None = None  # email principal (pattern vérifié côté SI)
+    societeinfo_emails: list[str] = []  # emails additionnels
+    societeinfo_telephone: str | None = None
+    societeinfo_site_web: str | None = None
+    societeinfo_linkedin: str | None = None
+
+    # Métadonnées
+    enrichi_societeinfo: bool = False  # True si lead envoyé à l'API (succès ou pas)
+    societeinfo_erreur: str | None = None  # raison textuelle si KO
+    cout_societeinfo_eur: float = 0.0
+
+
+# ════════════════════════════════════════════════════════════════
+# PARKINGS APER — lead issu d'un parc de stationnement soumis à la loi APER
+# ════════════════════════════════════════════════════════════════
+
+
+class LeadAper(LeadStage4):
+    """LeadStage4 + colonnes spécifiques « ombrière obligatoire loi APER ».
+
+    Pose le contexte commercial : ce lead exploite un parc de stationnement
+    extérieur > 1 500 m² → soumis à l'obligation de solarisation (art. 40 loi
+    APER, décret n°2024-1023). C'est un prospect *contraint* et *daté* pour
+    l'installation d'ombrières photovoltaïques + bornes de recharge.
+    """
+
+    # Source (`aper_osm`, `aper_ign`, `aper_manuel`, ...)
+    source_aper: str | None = None
+    date_run_aper: str | None = None  # YYYY-MM-DD du run
+
+    # Données parking
+    identifiant_parking: str | None = None  # id source (OSM way id, etc.)
+    surface_parking_m2: float | None = None
+    nb_places_estime: int | None = None
+
+    # Calculé à partir de la surface (calendrier réglementaire)
+    echeance_aper: str | None = None  # "2026-07-01" ou "2028-07-01"
+    priorite_aper: str | None = None  # "haute" (>10 000 m²) / "standard"
+    surface_ombrable_m2: float | None = None  # 50 % de la surface (obligation)
+
+    # Flag historique (n'EXCLUT pas le lead — informationnel)
+    deja_vu_parking: bool = False
+
+
+# ════════════════════════════════════════════════════════════════
 # Stats & résultats du run
 # ════════════════════════════════════════════════════════════════
 

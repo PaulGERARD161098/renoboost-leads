@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     # ─── Étage 3 : Dropcontact (optionnel pour L1) ───
     dropcontact_api_key: SecretStr | None = Field(default=None)
 
+    # ─── Enrichissement firmographique : Societeinfo (optionnel) ───
+    societeinfo_api_key: SecretStr | None = Field(default=None)
+
     # ─── Étage 4 : Anthropic Claude (optionnel pour L1) ───
     anthropic_api_key: SecretStr | None = Field(default=None)
     claude_model: str = Field(default="claude-sonnet-4-6")
@@ -145,6 +148,11 @@ class Settings(BaseSettings):
     def has_dropcontact(self) -> bool:
         return self.dropcontact_api_key is not None and bool(
             self.dropcontact_api_key.get_secret_value()
+        )
+
+    def has_societeinfo(self) -> bool:
+        return self.societeinfo_api_key is not None and bool(
+            self.societeinfo_api_key.get_secret_value()
         )
 
     def has_anthropic(self) -> bool:

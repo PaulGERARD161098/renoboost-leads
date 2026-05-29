@@ -178,6 +178,33 @@ python -m renoboost_leads.cli veille run --fichier exemple_aaa.csv --dry-run
 python -m renoboost_leads.cli veille run --fichier exemple_aaa.csv --budget 2.0
 ```
 
+### Parkings loi APER (prospects ombrières contraints)
+
+Module dédié pour ingérer un inventaire de parcs de stationnement, isoler ceux
+soumis à l'obligation de solarisation (loi APER, parkings > 1 500 m²) et les
+passer dans le pipeline RénoBoost. Voir [PARKINGS_APER.md](./PARKINGS_APER.md).
+
+```bash
+# Dry-run (pas de clé Anthropic nécessaire)
+python -m renoboost_leads.cli aper run \
+  --fichier tests/fixtures_parkings/echantillon_parkings_demo.csv --dry-run
+
+# Mode normal
+python -m renoboost_leads.cli aper run --fichier inventaire_parkings.csv --budget 2.0
+```
+
+### Enrichissement Societeinfo (firmographie FR)
+
+Commande autonome pour enrichir un CSV de leads (match SIREN, CA, dirigeant,
+contacts) via l'API Societeinfo — ciblage intelligent sur les leads dont le
+match gratuit a échoué. Voir [SOCIETEINFO.md](./SOCIETEINFO.md).
+
+```bash
+# Dry-run (données simulées si SOCIETEINFO_API_KEY absente)
+python -m renoboost_leads.cli enrich-societeinfo \
+  --from-csv data/output/<session>/etage2_entreprises.csv --dry-run
+```
+
 ### Interface Streamlit (visualisation + déclenchement L4)
 
 ```bash
