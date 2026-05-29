@@ -125,7 +125,7 @@ class TestExtraireFiltres:
         assert client.captured["etat_administratif"] == "A"
         assert client.captured["siege_only"] is True
 
-    def test_pas_de_naf_passe_None(self):
+    def test_pas_de_naf_passe_none(self):
         client = _FakeClient([])
         cfg = _config(naf_inclus=[])
         ExtracteurStage0(client, cfg).extraire()  # type: ignore[arg-type]
@@ -162,7 +162,7 @@ class TestExtraireResultats:
         client = _FakeClient([_entreprise("111"), _entreprise("111"), _entreprise("222")])
         cfg = _config(volume_cible=10)
         leads = ExtracteurStage0(client, cfg).extraire()  # type: ignore[arg-type]
-        assert [l.siren for l in leads] == ["111", "222"]
+        assert [lead.siren for lead in leads] == ["111", "222"]
 
     def test_max_results_marge_par_rapport_a_cible(self):
         client = _FakeClient([])
@@ -178,7 +178,7 @@ class TestExtraireResultats:
         ])
         cfg = _config(volume_cible=10)
         leads = ExtracteurStage0(client, cfg).extraire()  # type: ignore[arg-type]
-        assert [l.siren for l in leads] == ["222"]
+        assert [lead.siren for lead in leads] == ["222"]
 
 
 class TestZoneSupport:

@@ -599,7 +599,9 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
 # ════════════════════════════════════════════════════════════════
 
 
-def _executer_stage0(cfg, settings, output_dir, stats, *, enrichir_avec_places: bool, dry_run: bool):
+def _executer_stage0(
+    cfg, settings, output_dir, stats, *, enrichir_avec_places: bool, dry_run: bool
+):
     """Découverte SIRENE-first : recherche-entreprises.api.gouv + (optionnel) enrichissement Places.
 
     Renvoie une liste de LeadStage2 (déjà enrichis SIREN/NAF/CA/effectif/etc.).
@@ -672,7 +674,7 @@ def _executer_stage0(cfg, settings, output_dir, stats, *, enrichir_avec_places: 
         enrichisseur = EnrichisseurPlaces(client=places_client)
 
         leads_enrichis = enrichisseur.enrichir_lot(leads)
-        nb_avec_site = sum(1 for l in leads_enrichis if l.site_web)
+        nb_avec_site = sum(1 for lead in leads_enrichis if lead.site_web)
         leads = leads_enrichis
 
         duree = (datetime.now(timezone.utc) - t0).total_seconds()

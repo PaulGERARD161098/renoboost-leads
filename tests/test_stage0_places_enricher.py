@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-import pytest
-
 from renoboost_leads.common.budget_guard import BudgetExceededError
 from renoboost_leads.models import LeadStage2
 from renoboost_leads.stage0_sirene_first.places_enricher import (
@@ -161,8 +159,8 @@ class TestEnrichirLot:
         sortie = e.enrichir_lot(leads)
         assert len(sortie) == 3
         # Tous enrichis (même réponse Places, mais sont différents leads SIRENE)
-        for l in sortie:
-            assert l.place_id == "ChIJabc"
+        for lead in sortie:
+            assert lead.place_id == "ChIJabc"
 
     def test_budget_exceeded_garde_le_reste_non_enrichi(self):
         """Si le budget casse au 2e lead, les leads suivants restent dans la liste."""

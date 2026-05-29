@@ -10,8 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
-
 from renoboost_leads.common.rate_limiter import RateLimiter
 from renoboost_leads.stage2_entreprises.recherche_client import (
     RechercheClientConfig,
@@ -42,7 +40,9 @@ class _PagedSessionMock:
         page = int(params.get("page", 1))
         idx = page - 1
         if idx >= len(self.pages):
-            return _FakeResponse(200, {"results": [], "total_pages": len(self.pages), "total_results": 0})
+            return _FakeResponse(
+                200, {"results": [], "total_pages": len(self.pages), "total_results": 0}
+            )
         return _FakeResponse(200, self.pages[idx])
 
 
@@ -113,8 +113,16 @@ class TestDecouvrirParams:
 
 class TestPagination:
     def test_parcourt_les_pages_jusqua_total_pages(self):
-        page1 = {"results": [_entreprise("111", "59"), _entreprise("222", "59")], "total_pages": 2, "total_results": 4}
-        page2 = {"results": [_entreprise("333", "59"), _entreprise("444", "59")], "total_pages": 2, "total_results": 4}
+        page1 = {
+            "results": [_entreprise("111", "59"), _entreprise("222", "59")],
+            "total_pages": 2,
+            "total_results": 4,
+        }
+        page2 = {
+            "results": [_entreprise("333", "59"), _entreprise("444", "59")],
+            "total_pages": 2,
+            "total_results": 4,
+        }
         session = _PagedSessionMock(pages=[page1, page2])
         client = _client(session)
 
@@ -124,8 +132,16 @@ class TestPagination:
         assert [c["params"]["page"] for c in session.calls] == [1, 2]
 
     def test_arret_a_max_results(self):
-        page1 = {"results": [_entreprise(f"{i:03d}", "59") for i in range(25)], "total_pages": 10, "total_results": 250}
-        page2 = {"results": [_entreprise(f"{i:03d}", "59") for i in range(25, 50)], "total_pages": 10, "total_results": 250}
+        page1 = {
+            "results": [_entreprise(f"{i:03d}", "59") for i in range(25)],
+            "total_pages": 10,
+            "total_results": 250,
+        }
+        page2 = {
+            "results": [_entreprise(f"{i:03d}", "59") for i in range(25, 50)],
+            "total_pages": 10,
+            "total_results": 250,
+        }
         session = _PagedSessionMock(pages=[page1, page2])
         client = _client(session)
 

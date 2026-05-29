@@ -41,8 +41,17 @@ def _entreprise_complete() -> dict[str, Any]:
             "2022": {"ca": 2_100_000, "resultat_net": 150_000},
         },
         "dirigeants": [
-            {"type_dirigeant": "personne morale", "denomination": "HOLDING SAS", "qualite": "Président"},
-            {"type_dirigeant": "personne physique", "nom": "Dupont", "prenom": "Marie", "qualite": "Gérante"},
+            {
+                "type_dirigeant": "personne morale",
+                "denomination": "HOLDING SAS",
+                "qualite": "Président",
+            },
+            {
+                "type_dirigeant": "personne physique",
+                "nom": "Dupont",
+                "prenom": "Marie",
+                "qualite": "Gérante",
+            },
         ],
     }
 
@@ -136,7 +145,7 @@ class TestMappingMinimal:
         assert lead.statut_business == "CLOSED"
         assert lead.statut_actif is False
 
-    def test_coordonnees_invalides_None(self):
+    def test_coordonnees_invalides_none(self):
         e = _entreprise_complete()
         e["siege"]["latitude"] = "pas_un_nombre"
         e["siege"]["longitude"] = None
@@ -148,7 +157,9 @@ class TestMappingMinimal:
 
 class TestHelpers:
     def test_derniere_annee_finances_prend_la_plus_recente(self):
-        annee, fin = _derniere_annee_finances({"2020": {"ca": 100}, "2023": {"ca": 999}, "2021": {"ca": 200}})
+        annee, fin = _derniere_annee_finances(
+            {"2020": {"ca": 100}, "2023": {"ca": 999}, "2021": {"ca": 200}}
+        )
         assert annee == "2023"
         assert fin["ca"] == 999
 

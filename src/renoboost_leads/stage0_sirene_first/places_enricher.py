@@ -71,7 +71,11 @@ class EnrichisseurPlaces:
 
         # Garde-fou : la ville Places doit matcher la ville SIRENE pour
         # éviter de récupérer un homonyme à l'autre bout de la France.
-        if lead.ville and lead_places.ville and not villes_correspondent(lead.ville, lead_places.ville):
+        if (
+            lead.ville
+            and lead_places.ville
+            and not villes_correspondent(lead.ville, lead_places.ville)
+        ):
             logger.debug(
                 "Mismatch ville pour %s : sirene=%s places=%s — pas d'enrichissement",
                 lead.nom, lead.ville, lead_places.ville,
