@@ -1,0 +1,111 @@
+# ════════════════════════════════════════════════════════════════
+# Rossini — pilote PME Hauts-de-France (50 leads)
+# Cible : PME locales 5-50 salariés, CA 500k-5M, signal flotte VE
+# Zone : 59, 62, 80, 02, 60
+# ════════════════════════════════════════════════════════════════
+#
+# ⚠️  APPRENTISSAGE — RUN DU 28/05/2026
+# Ce profil tourné en mode "places-first" (pipeline actuel) ne fonctionne PAS :
+# sur 50 leads remontés par Google Places, 47 sortent hors-filtre entreprise
+# (effectif > 50 ou CA > 5 M€ ou NAF inconnu). Diagnostic :
+#   - Les queries Places (usine, entrepôt, siège, transport routier, etc.)
+#     remontent par construction des sites industriels VISIBLES = quasi
+#     exclusivement de grosses structures (effectifs 100-2000+, CA 20-500 M€).
+#   - Une PME locale 5-50 salariés n'a généralement pas de fiche Maps
+#     qualifiée → introuvable par découverte Places-first.
+#   - 21/47 hors-filtre = NAF inconnu (data.gouv n'a pas matché le SIREN).
+#
+# → Ce profil n'est exploitable QUE via une pipeline "SIRENE-first" :
+#   commencer par recherche-entreprises.api.gouv.fr (filtres natifs zone +
+#   effectif + CA + NAF), puis croiser avec Places pour enrichir le site web
+#   et le téléphone. Chantier suivi dans une PR dédiée.
+# ════════════════════════════════════════════════════════════════
+
+run:
+  client_name: "rossini-pme-hdf"
+  description: "Pilote 50 leads — PME locales Hauts-de-France, profil flotte / parking (offre ombrières + IRVE)"
+  campaign_date: "2026-05-28"
+
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_4_prospection: true     # Haiku scoring ~0.25 € sur 50 leads
+
+# 6 queries — 3 axes "site avec parking" (industrie/logistique/siège) + 3 axes "flotte"
+# Le signal flotte VE proprement dit (boost scoring) viendra en Phase 2.
+secteurs:
+  - type: "industrie"
+    query: "usine"
+  - type: "logistique"
+    query: "entrepôt logistique"
+  - type: "sieges_sociaux"
+    query: "siège social"
+  - type: "flotte_transport"
+    query: "transport routier"
+  - type: "flotte_location"
+    query: "location véhicules entreprise"
+  - type: "flotte_gestion"
+    query: "gestion de flotte"
+
+zone:
+  type: "departement"
+  codes: ["59", "62", "80", "02", "60"]
+  rayon_par_point_km: 12
+  pas_grille_km: 15
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  note_min: null
+  nb_avis_min: null
+  nb_avis_max: null
+  exiger_telephone: false
+  exiger_site_web: true                  # nécessaire pour L3 scraping (signal VE en Phase 2)
+  dedup_chaines: false
+
+# Filtres entreprise — appliqués post-L2 (data.gouv finances + INSEE)
+# Leads hors-filtre conservés dans etage3_contacts_hors_filtre.csv
+filtres_entreprise:
+  effectif_min: 5
+  effectif_max: 50
+  ca_min: 500000                         # 500 k€
+  ca_max: 5000000                        # 5 M€
+  # NAF élargi : industrie + transport/logistique + commerce auto + location véhicules + sièges
+  naf_inclus:
+    # Industries manufacturières (cible "site avec parking")
+    - "10"   # alimentaire
+    - "20"   # chimie
+    - "22"   # caoutchouc/plastiques
+    - "23"   # autres produits minéraux
+    - "24"   # métallurgie
+    - "25"   # produits métalliques
+    - "26"   # produits informatiques/électroniques
+    - "27"   # équipements électriques
+    - "28"   # machines/équipements
+    - "29"   # automobile
+    - "30"   # autres matériels de transport
+    - "31"   # meubles
+    - "32"   # autres industries manufacturières
+    - "33"   # réparation/installation machines
+    # Transport / logistique (cible "flotte")
+    - "49"   # transports terrestres (incl. 49.41 transport routier marchandises, 49.42 déménagement)
+    - "52"   # entreposage / services auxiliaires transports
+    - "53"   # activités de poste/courrier
+    # Commerce auto / location véhicules (cible "flotte")
+    - "45"   # commerce et réparation auto/moto
+    - "77.11"   # location voitures particulières
+    - "77.12"   # location véhicules utilitaires/poids lourds
+    # Sièges sociaux
+    - "70.10"
+  naf_exclus: []
+
+volume:
+  cible: 50
+  max_par_secteur: 12                    # 50 / 6 secteurs × ~1.5 marge
+
+budget:
+  max_eur: 15                            # marge confortable, stage1 coupé bien avant si volume atteint
+
+sortie:
+  format: ["csv"]
+  langue: "fr"
