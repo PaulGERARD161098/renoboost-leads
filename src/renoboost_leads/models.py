@@ -109,6 +109,12 @@ class FiltresEntreprise(BaseModel):
 class Volume(BaseModel):
     cible: int = Field(gt=0, le=10_000)
     max_par_secteur: int | None = Field(default=None, ge=1)
+    # Pagination Text Search : nombre de pages récupérées par recherche
+    # (point × secteur). 1 = comportement historique (≤ 20 leads/cellule).
+    # L'API Places plafonne le Text Search à 3 pages (~60 résultats). Chaque
+    # page supplémentaire = 1 appel facturé (cf. budget guard). Sans effet sur
+    # les types natifs (Nearby Search, non paginable).
+    max_pages: int = Field(default=1, ge=1, le=3)
 
 
 class Budget(BaseModel):

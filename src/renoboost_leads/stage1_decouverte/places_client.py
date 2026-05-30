@@ -148,10 +148,14 @@ class PlacesClient:
         longitude: float | None = None,
         rayon_metres: int | None = None,
         max_results: int = 20,
+        page_token: str | None = None,
     ) -> dict[str, Any]:
         """Lance un Text Search.
 
         Si lat/lng/rayon fournis → bias géographique + restriction à un cercle.
+        Si `page_token` fourni → récupère la page suivante (cf. `nextPageToken`
+        de la réponse précédente). Les autres paramètres doivent rester
+        identiques à l'appel d'origine (contrainte API Places).
         """
         payload: dict[str, Any] = {
             "textQuery": query,
@@ -168,6 +172,9 @@ class PlacesClient:
                     "radius": float(rayon_metres),
                 }
             }
+
+        if page_token:
+            payload["pageToken"] = page_token
 
         # Rate limit + Budget
         self.config.rate_limiter.acquire()

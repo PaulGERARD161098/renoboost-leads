@@ -192,7 +192,9 @@ class ExtracteurStage1:
 
         try:
             if secteur_type in _TYPES_PLACES_NATIFS:
-                # Nearby Search : plus précis car par type officiel
+                # Nearby Search : plus précis car par type officiel.
+                # Non paginable (l'API Places ne renvoie pas de nextPageToken) :
+                # une seule page, `max_pages` est sans effet ici.
                 resp = self.client.nearby_search(
                     latitude=lat,
                     longitude=lng,
@@ -200,20 +202,28 @@ class ExtracteurStage1:
                     included_types=[secteur_type],
                     max_results=20,
                 )
+                places = resp.get("places", [])
             else:
-                # Text Search (fallback)
-                resp = self.client.text_search(
-                    query=secteur_query,
-                    latitude=lat,
-                    longitude=lng,
-                    rayon_metres=rayon_metres,
-                    max_results=20,
-                )
+                # Text Search (fallback) — pagination via nextPageToken jusqu'à
+                # `volume.max_pages` (l'API plafonne à 3 pages / ~60 résultats).
+                places = []
+                page_token: str | None = None
+                for _ in range(self.config.volume.max_pages):
+                    resp = self.client.text_search(
+                        query=secteur_query,
+                        latitude=lat,
+                        longitude=lng,
+                        rayon_metres=rayon_metres,
+                        max_results=20,
+                        page_token=page_token,
+                    )
+                    places.extend(resp.get("places", []))
+                    page_token = resp.get("nextPageToken")
+                    if not page_token:
+                        break
         except PlacesAPIError as e:
             logger.warning("Erreur API à %s : %s", cache_key, e)
             return []
-
-        places = resp.get("places", [])
 
         if self.cache:
             self.cache.mark_search_done(cache_key, len(places))
