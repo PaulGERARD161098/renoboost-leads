@@ -7,12 +7,22 @@ puis produit directement des LeadStage2 (données identité + financier).
 """
 
 from .extractor import ExtracteurStage0
+from .geocoder import (
+    AdresseIntrouvableError,
+    BANGeocoder,
+    GeocoderConfig,
+    ResultatGeocodage,
+)
 from .mapper import entreprise_to_lead_stage2
 from .places_enricher import EnrichisseurPlaces, villes_correspondent
 
 __all__ = [
+    "AdresseIntrouvableError",
+    "BANGeocoder",
     "EnrichisseurPlaces",
     "ExtracteurStage0",
+    "GeocoderConfig",
+    "ResultatGeocodage",
     "entreprise_to_lead_stage2",
     "villes_correspondent",
 ]

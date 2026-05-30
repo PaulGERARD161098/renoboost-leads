@@ -44,6 +44,7 @@ from .exporter import (
 from .models import CampaignConfig, RunStats, StageStats
 from .settings import PROJECT_ROOT, get_settings
 from .stage0_sirene_first.extractor import ExtracteurStage0
+from .stage0_sirene_first.geocoder import BANGeocoder, GeocoderConfig
 from .stage0_sirene_first.places_enricher import EnrichisseurPlaces
 from .stage1_decouverte.extractor import ExtracteurStage1
 from .stage1_decouverte.geo_grid import grille_pour_zone
@@ -699,7 +700,15 @@ def _executer_stage0(
         recherche_client = RechercheEntreprisesClient(
             RechercheClientConfig(rate_limiter=limiter)
         )
-        extracteur = ExtracteurStage0(client=recherche_client, config=cfg)
+        # Géocodeur BAN : utilisé seulement si zone='point' est définie par une
+        # adresse en clair (sans latitude/longitude). Construit dans tous les cas
+        # (sans coût ni appel réseau tant que .geocoder() n'est pas invoqué).
+        geocoder = BANGeocoder(
+            GeocoderConfig(rate_limiter=RateLimiter(settings.max_requests_per_minute))
+        )
+        extracteur = ExtracteurStage0(
+            client=recherche_client, config=cfg, geocoder=geocoder
+        )
         leads = extracteur.extraire()
 
         cout_eur = 0.0  # API recherche-entreprises = gratuite

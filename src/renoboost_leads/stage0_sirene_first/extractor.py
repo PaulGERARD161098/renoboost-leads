@@ -18,6 +18,7 @@ from ..stage2_entreprises.recherche_client import (
     RechercheEntreprisesClient,
     RechercheEntreprisesTransientError,
 )
+from .geocoder import BANGeocoder
 from .mapper import entreprise_to_lead_stage2
 
 logger = get_logger(__name__)
@@ -55,9 +56,33 @@ class ExtracteurStage0:
         self,
         client: RechercheEntreprisesClient,
         config: CampaignConfig,
+        geocoder: BANGeocoder | None = None,
     ):
         self.client = client
         self.config = config
+        # Géocodeur optionnel : requis uniquement si zone='point' est définie
+        # par une adresse en clair (sans latitude/longitude).
+        self.geocoder = geocoder
+
+    def _resoudre_centre(self) -> tuple[float, float]:
+        """Renvoie (latitude, longitude) du centre en mode zone='point'.
+
+        Utilise les coordonnées si fournies, sinon géocode l'adresse via la BAN.
+        """
+        zone = self.config.zone
+        if zone.latitude is not None and zone.longitude is not None:
+            return zone.latitude, zone.longitude
+        if not zone.adresse:
+            raise ValueError(
+                "zone='point' sans coordonnées ni adresse — configuration invalide."
+            )
+        if self.geocoder is None:
+            raise ValueError(
+                "zone='point' définie par adresse mais aucun géocodeur fourni "
+                "à l'extracteur."
+            )
+        res = self.geocoder.geocoder(zone.adresse)
+        return res.latitude, res.longitude
 
     def extraire(self) -> list[LeadStage2]:
         """Exécute la découverte et renvoie la liste plafonnée des LeadStage2."""
@@ -78,9 +103,13 @@ class ExtracteurStage0:
         # Marge pour absorber dédup + dirigeants/CA manquants éventuels
         max_results = max(cible * 2, cible + 50)
 
+        centre_lat: float | None = None
+        centre_lon: float | None = None
         if zone.type == "point":
-            zone_label = f"point=({zone.latitude},{zone.longitude}) r={zone.rayon_par_point_km}km"
-            requete_origine = zone_label
+            centre_lat, centre_lon = self._resoudre_centre()
+            origine = zone.adresse or f"{centre_lat},{centre_lon}"
+            zone_label = f"point=({centre_lat},{centre_lon}) r={zone.rayon_par_point_km}km"
+            requete_origine = f"point={origine}"
         else:
             zone_label = ",".join(zone.codes)
             requete_origine = f"dpt={zone_label}"
@@ -106,8 +135,8 @@ class ExtracteurStage0:
         # API en cours de pagination préserve les leads déjà collectés.
         if zone.type == "point":
             iterateur = self.client.decouvrir_near_point(
-                latitude=zone.latitude,
-                longitude=zone.longitude,
+                latitude=centre_lat,
+                longitude=centre_lon,
                 radius_km=zone.rayon_par_point_km,
                 activite_principale=filtres.naf_inclus or None,
                 tranche_effectif_salarie=tranches or None,

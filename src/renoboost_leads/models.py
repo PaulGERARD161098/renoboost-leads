@@ -54,15 +54,24 @@ class Zone(BaseModel):
     pas_grille_km: float = Field(default=15.0, gt=0, le=100)
     # Mode `point` uniquement : centre du cercle de recherche (parc d'activités,
     # adresse de zone). Le rayon réutilise `rayon_par_point_km`.
+    # Deux façons de définir le centre :
+    #  - latitude + longitude (coordonnées directes), OU
+    #  - adresse en clair (ex « Allée de l'Ecopark, Wambrechies ») géocodée via
+    #    la Base Adresse Nationale au lancement de l'étage 0.
+    # Si les deux sont fournis, les coordonnées priment (pas d'appel BAN).
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    adresse: str | None = None
 
     @model_validator(mode="after")
     def _verifier_coherence(self) -> Zone:
         if self.type == "point":
-            if self.latitude is None or self.longitude is None:
+            a_coords = self.latitude is not None and self.longitude is not None
+            a_adresse = bool(self.adresse and self.adresse.strip())
+            if not a_coords and not a_adresse:
                 raise ValueError(
-                    "zone type='point' exige latitude et longitude."
+                    "zone type='point' exige soit latitude+longitude, "
+                    "soit une adresse à géocoder."
                 )
         elif not self.codes:
             raise ValueError(

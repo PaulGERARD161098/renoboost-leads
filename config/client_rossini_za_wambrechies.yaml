@@ -36,6 +36,11 @@ secteurs:
 
 zone:
   type: "point"
+  # Centre du cercle, au choix :
+  #  - coordonnées directes (ci-dessous), OU
+  #  - adresse en clair géocodée via la Base Adresse Nationale, ex :
+  #      adresse: "Allée de l'Ecopark, Wambrechies"
+  #    (nécessite api-adresse.data.gouv.fr dans l'allowlist réseau)
   latitude: 50.6758                      # centre Ecopark Wambrechies
   longitude: 3.0473
   rayon_par_point_km: 0.4                # cercle serré sur le parc
