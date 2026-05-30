@@ -1,0 +1,69 @@
+# ════════════════════════════════════════════════════════════════
+# Rossini — ciblage zone d'activité par point GPS (Ecopark Wambrechies)
+# Cible : PME-sièges d'un parc d'activités précis (bâtiments mutualisés
+#         + parking), profil offre ombrières / IRVE.
+# ════════════════════════════════════════════════════════════════
+#
+# GABARIT RÉUTILISABLE — "viser une zone vue sur le terrain"
+# ----------------------------------------------------------------
+# Mode découverte SIRENE-first GÉOGRAPHIQUE (étage 0, endpoint near_point) :
+# au lieu de balayer un département, on cercle une zone d'activité par son
+# centre (latitude/longitude) + un rayon. On ne garde que les entreprises
+# dont le SIÈGE est dans le cercle (les antennes de gros groupes décidant
+# ailleurs sont écartées nativement).
+#
+# Point d'ancrage de ce profil : Allée de l'Ecopark, 59118 Wambrechies
+# (repéré via l'enseigne ICESTREAM / société SONUPAC, bâtiment E).
+# Pour viser une autre zone : dupliquer ce fichier, remplacer latitude/
+# longitude (relevés sur une carte) et le rayon.
+
+run:
+  client_name: "rossini-za-wambrechies"
+  description: "Ciblage parc d'activités Ecopark Wambrechies — PME-sièges (offre ombrières + IRVE)"
+  campaign_date: "2026-05-30"
+
+stages:
+  enable_stage_1_decouverte: true        # déclenche l'étage 0 SIRENE-first
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_4_prospection: true
+
+# Secteurs requis par le schéma (≥1) ; non utilisés en découverte SIRENE-first
+# géographique (l'API near_point fait le filtrage), conservés pour cohérence.
+secteurs:
+  - type: "parc_activites"
+    query: "parc d'activités"
+
+zone:
+  type: "point"
+  latitude: 50.6758                      # centre Ecopark Wambrechies
+  longitude: 3.0473
+  rayon_par_point_km: 0.4                # cercle serré sur le parc
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  exiger_site_web: true                  # nécessaire pour L3 scraping
+
+# Filtres entreprise — on exclut le bruit immobilier/financier d'une ZA :
+# holdings (64.20), SCI / activités immobilières (68.20), gestion de parc /
+# syndic (68.32). Reste le vrai signal opérationnel (négoce, industrie, R&D…).
+filtres_entreprise:
+  effectif_min: 1
+  effectif_max: 250
+  naf_exclus:
+    - "64.20"   # holdings
+    - "68.20"   # location/exploitation biens immobiliers (SCI)
+    - "68.32"   # gestion de biens immobiliers / syndic
+  forme_juridique_exclus:
+    - "SCI"
+  naf_inclus: []                         # pas de whitelist : on prend large puis on exclut
+
+volume:
+  cible: 30
+
+budget:
+  max_eur: 10                            # near_point gratuit ; marge pour enrich Places
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

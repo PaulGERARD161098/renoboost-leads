@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ════════════════════════════════════════════════════════════════
 # Configuration YAML (campagne)
@@ -45,10 +45,30 @@ class SecteurCible(BaseModel):
 
 
 class Zone(BaseModel):
-    type: Literal["ville", "departement", "region", "france"]
-    codes: list[str] = Field(min_length=1)
+    type: Literal["ville", "departement", "region", "france", "point"]
+    # `codes` est requis pour les zones administratives (ville/departement/...).
+    # En mode `point` (ciblage d'une zone d'activité par coordonnées), il est
+    # optionnel : la zone est définie par latitude/longitude/rayon.
+    codes: list[str] = Field(default_factory=list)
     rayon_par_point_km: float = Field(default=10.0, gt=0, le=50)
     pas_grille_km: float = Field(default=15.0, gt=0, le=100)
+    # Mode `point` uniquement : centre du cercle de recherche (parc d'activités,
+    # adresse de zone). Le rayon réutilise `rayon_par_point_km`.
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def _verifier_coherence(self) -> Zone:
+        if self.type == "point":
+            if self.latitude is None or self.longitude is None:
+                raise ValueError(
+                    "zone type='point' exige latitude et longitude."
+                )
+        elif not self.codes:
+            raise ValueError(
+                f"zone type='{self.type}' exige au moins un code dans `codes`."
+            )
+        return self
 
 
 class Filtres(BaseModel):

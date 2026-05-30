@@ -62,10 +62,10 @@ class ExtracteurStage0:
     def extraire(self) -> list[LeadStage2]:
         """Exécute la découverte et renvoie la liste plafonnée des LeadStage2."""
         zone = self.config.zone
-        if zone.type != "departement":
+        if zone.type not in ("departement", "point"):
             raise NotImplementedError(
                 f"Stage 0 SIRENE-first : zone type='{zone.type}' non supporté "
-                "(seul 'departement' est câblé)."
+                "(seuls 'departement' et 'point' sont câblés)."
             )
 
         filtres = self.config.filtres_entreprise
@@ -78,11 +78,18 @@ class ExtracteurStage0:
         # Marge pour absorber dédup + dirigeants/CA manquants éventuels
         max_results = max(cible * 2, cible + 50)
 
+        if zone.type == "point":
+            zone_label = f"point=({zone.latitude},{zone.longitude}) r={zone.rayon_par_point_km}km"
+            requete_origine = zone_label
+        else:
+            zone_label = ",".join(zone.codes)
+            requete_origine = f"dpt={zone_label}"
+
         logger.info(
             "=== Étage 0 — Découverte SIRENE-first ===\n"
             "  Zone : %s  /  NAF : %s  /  Effectif : %s-%s (tranches=%s)\n"
             "  CA : %s-%s  /  Catégorie : %s  /  Cible : %d",
-            zone.codes,
+            zone_label,
             filtres.naf_inclus or "tous",
             filtres.effectif_min, filtres.effectif_max, tranches or "tous",
             filtres.ca_min, filtres.ca_max,
@@ -97,17 +104,32 @@ class ExtracteurStage0:
 
         # On itère sur le générateur dans un try/except pour qu'une coupure
         # API en cours de pagination préserve les leads déjà collectés.
-        iterateur = self.client.decouvrir(
-            departements=zone.codes,
-            activite_principale=filtres.naf_inclus or None,
-            tranche_effectif_salarie=tranches or None,
-            ca_min=filtres.ca_min,
-            ca_max=filtres.ca_max,
-            categorie_entreprise=filtres.categorie_entreprise_inclus or None,
-            etat_administratif="A",
-            siege_only=True,
-            max_results=max_results,
-        )
+        if zone.type == "point":
+            iterateur = self.client.decouvrir_near_point(
+                latitude=zone.latitude,
+                longitude=zone.longitude,
+                radius_km=zone.rayon_par_point_km,
+                activite_principale=filtres.naf_inclus or None,
+                tranche_effectif_salarie=tranches or None,
+                ca_min=filtres.ca_min,
+                ca_max=filtres.ca_max,
+                categorie_entreprise=filtres.categorie_entreprise_inclus or None,
+                etat_administratif="A",
+                siege_only=True,
+                max_results=max_results,
+            )
+        else:
+            iterateur = self.client.decouvrir(
+                departements=zone.codes,
+                activite_principale=filtres.naf_inclus or None,
+                tranche_effectif_salarie=tranches or None,
+                ca_min=filtres.ca_min,
+                ca_max=filtres.ca_max,
+                categorie_entreprise=filtres.categorie_entreprise_inclus or None,
+                etat_administratif="A",
+                siege_only=True,
+                max_results=max_results,
+            )
 
         try:
             for entreprise in iterateur:
@@ -115,7 +137,7 @@ class ExtracteurStage0:
                 lead = entreprise_to_lead_stage2(
                     entreprise,
                     secteur_recherche="sirene_decouverte",
-                    requete_origine=f"dpt={','.join(zone.codes)}",
+                    requete_origine=requete_origine,
                 )
                 if lead is None:
                     nb_rejets_mapping += 1
