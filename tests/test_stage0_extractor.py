@@ -187,3 +187,26 @@ class TestZoneSupport:
         cfg = _config(zone_type="ville", departements=["34000"])
         with pytest.raises(NotImplementedError, match="ville"):
             ExtracteurStage0(client, cfg).extraire()  # type: ignore[arg-type]
+
+
+class TestFiltresEntreprise:
+    def test_naf_exclus_flague_hors_filtre(self):
+        # Une SCI (NAF 68.20B) doit être conservée mais flaguée hors-filtre,
+        # pas droppée (pattern flag-not-drop). Sans ce câblage, naf_exclus
+        # serait sans effet en mode SIRENE-first.
+        sci = _entreprise("111")
+        sci["siege"]["code_postal"] = "59118"
+        sci["activite_principale"] = "68.20B"
+        pme = _entreprise("222")
+        pme["activite_principale"] = "46.90Z"
+        client = _FakeClient([sci, pme])
+        cfg = _config(volume_cible=10)
+        cfg.filtres_entreprise.naf_exclus = ["68.20"]
+
+        leads = ExtracteurStage0(client, cfg).extraire()  # type: ignore[arg-type]
+
+        par_siren = {lead.siren: lead for lead in leads}
+        assert len(leads) == 2  # aucun drop
+        assert par_siren["111"].hors_filtre_entreprise is True
+        assert "68.20" in (par_siren["111"].raison_hors_filtre or "")
+        assert par_siren["222"].hors_filtre_entreprise is False

@@ -49,6 +49,7 @@ from .societeinfo_enrichment.client import (
     SocieteinfoClientDryRun,
 )
 from .stage0_sirene_first.extractor import ExtracteurStage0
+from .stage0_sirene_first.geocoder import BANGeocoder, GeocoderConfig
 from .stage0_sirene_first.places_enricher import EnrichisseurPlaces
 from .stage1_decouverte.extractor import ExtracteurStage1
 from .stage1_decouverte.geo_grid import grille_pour_zone
@@ -386,7 +387,7 @@ def run(
         output_dir = from_csv_path.parent
         session_id = output_dir.name
         console.print(f"[cyan]Mode reprise depuis : {from_csv_path}[/cyan]")
-    elif 1 not in stages_demandes:
+    elif 1 not in stages_demandes and 0 not in stages_demandes:
         # On veut juste L2/L3 — on cherche le dernier dossier avec un CSV L1 pour ce client
         existant = _trouver_dossier_existant(cfg.run.client_name)
         if existant is None or not (existant / "etage1_decouverte.csv").exists():
@@ -766,7 +767,15 @@ def _executer_stage0(
         recherche_client = RechercheEntreprisesClient(
             RechercheClientConfig(rate_limiter=limiter)
         )
-        extracteur = ExtracteurStage0(client=recherche_client, config=cfg)
+        # Géocodeur BAN : utilisé seulement si zone='point' est définie par une
+        # adresse en clair (sans latitude/longitude). Construit dans tous les cas
+        # (sans coût ni appel réseau tant que .geocoder() n'est pas invoqué).
+        geocoder = BANGeocoder(
+            GeocoderConfig(rate_limiter=RateLimiter(settings.max_requests_per_minute))
+        )
+        extracteur = ExtracteurStage0(
+            client=recherche_client, config=cfg, geocoder=geocoder
+        )
         leads = extracteur.extraire()
 
         cout_eur = 0.0  # API recherche-entreprises = gratuite

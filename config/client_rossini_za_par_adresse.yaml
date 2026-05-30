@@ -1,0 +1,85 @@
+# ════════════════════════════════════════════════════════════════
+# Rossini — ciblage zone d'activité par ADRESSE EN CLAIR
+# Variante de client_rossini_za_wambrechies.yaml : au lieu de fournir des
+# coordonnées GPS, on saisit l'adresse du parc. Elle est géocodée au
+# lancement via la Base Adresse Nationale (api-adresse.data.gouv.fr) → le
+# centre du cercle near_point en découle.
+#
+# ⚠ Prérequis réseau : api-adresse.data.gouv.fr doit figurer dans l'allowlist
+#    de l'environnement (sinon HTTP 403 « Host not in allowlist »).
+#
+# GABARIT : pour viser une zone vue sur le terrain, dupliquer ce fichier et
+# remplacer simplement `adresse`.
+# ════════════════════════════════════════════════════════════════
+
+run:
+  client_name: "rossini-za-adresse"
+  description: "Ciblage parc d'activités par adresse (géocodage BAN) — PME-sièges (ombrières + IRVE)"
+  campaign_date: "2026-05-30"
+
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_4_prospection: true
+
+secteurs:
+  - type: "parc_activites"
+    query: "parc d'activités"
+
+zone:
+  type: "point"
+  adresse: "Allée de l'Ecopark, Wambrechies"   # géocodée via la BAN au lancement
+  rayon_par_point_km: 0.4
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  exiger_site_web: true
+
+filtres_entreprise:
+  effectif_min: 1
+  effectif_max: 250
+  naf_exclus:
+    - "64.20"   # holdings
+    - "68.20"   # SCI / immobilier
+    - "68.32"   # syndic / gestion de biens
+  forme_juridique_exclus:
+    - "SCI"
+  naf_inclus: []
+
+# Signaux « flotte en transition VE » (cf. client_rossini_za_wambrechies.yaml)
+scraping_l3:
+  signaux_ve:
+    "flotte electrique": "\\bflottes? (de )?(vehicules? )?electriques?\\b"
+    "passage aux VE": "\\b(passage|passer|passons|passe|transition|electrification) (a l'|aux |de (la|notre) flotte )?electriques?\\b|\\belectrification\\b"
+    "bornes de recharge": "\\bbornes? de recharge\\b|\\birve\\b|\\bwallbox\\b|\\bpoints? de charge\\b"
+    "vehicule electrique": "\\bvehicules? electriques?\\b"
+    "engagement ZFE/decarbonation": "\\bzfe\\b|\\bzone a faibles emissions\\b|\\bdecarbonation\\b|\\bbilan carbone\\b"
+
+claude_scoring:
+  contexte_client: |
+    Tu travailles pour RénoBoost, courtier B2B en travaux de rénovation
+    énergétique : ombrières photovoltaïques de parking, bornes de recharge
+    (IRVE), panneaux solaires en toiture.
+
+    CIBLE IDÉALE (à scorer haut) : le SIÈGE d'une PME qui possède ses locaux
+    dans une zone d'activité (parking + toiture exploitables) ET qui est en
+    pleine transition vers les véhicules électriques — soit elle prévoit d'y
+    passer, soit elle vient de franchir le pas et commence à constituer sa
+    flotte. Ces entreprises ont un besoin imminent de bornes de recharge et
+    d'ombrières pour alimenter/abriter leurs VE.
+
+    Signaux forts (priorité) : mention d'une flotte qui s'électrifie, bornes
+    récemment installées ou en projet, engagement ZFE / décarbonation, parc de
+    véhicules d'entreprise. Un siège local (décideur joignable) prime sur une
+    antenne de grand groupe.
+
+volume:
+  cible: 30
+
+budget:
+  max_eur: 10
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

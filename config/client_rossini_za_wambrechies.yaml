@@ -1,0 +1,115 @@
+# ════════════════════════════════════════════════════════════════
+# Rossini — ciblage zone d'activité par point GPS (Ecopark Wambrechies)
+# Cible : PME-sièges d'un parc d'activités précis (bâtiments mutualisés
+#         + parking), profil offre ombrières / IRVE.
+# ════════════════════════════════════════════════════════════════
+#
+# GABARIT RÉUTILISABLE — "viser une zone vue sur le terrain"
+# ----------------------------------------------------------------
+# Mode découverte SIRENE-first GÉOGRAPHIQUE (étage 0, endpoint near_point) :
+# au lieu de balayer un département, on cercle une zone d'activité par son
+# centre (latitude/longitude) + un rayon. On ne garde que les entreprises
+# dont le SIÈGE est dans le cercle (les antennes de gros groupes décidant
+# ailleurs sont écartées nativement).
+#
+# Point d'ancrage de ce profil : Allée de l'Ecopark, 59118 Wambrechies
+# (repéré via l'enseigne ICESTREAM / société SONUPAC, bâtiment E).
+# Pour viser une autre zone : dupliquer ce fichier, remplacer latitude/
+# longitude (relevés sur une carte) et le rayon.
+#
+# ── BILAN RUN RÉEL (30/05/2026, pipeline 0,1,3,4) ──────────────────
+# 30 sièges dans 400 m → 22 qualifiés (8 SCI/holdings écartés). 15/30 avec
+# site web (Places). Scoring L4 : moyenne ~20, AUCUN top lead, ZÉRO signal VE
+# détecté. Enseignement : l'Ecopark est un parc TERTIAIRE (distillerie, paie,
+# écoles, conseil) → faible rendement pour l'ICP "flotte en transition".
+# Pour un bon rendement, viser des zones INDUSTRIELLES / LOGISTIQUES (sites
+# avec flotte de véhicules) plutôt qu'un parc de bureaux. Le moteur est bon ;
+# c'est le CHOIX DE ZONE qui fait le rendement.
+
+run:
+  client_name: "rossini-za-wambrechies"
+  description: "Ciblage parc d'activités Ecopark Wambrechies — PME-sièges (offre ombrières + IRVE)"
+  campaign_date: "2026-05-30"
+
+stages:
+  enable_stage_1_decouverte: true        # déclenche l'étage 0 SIRENE-first
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_4_prospection: true
+
+# Secteurs requis par le schéma (≥1) ; non utilisés en découverte SIRENE-first
+# géographique (l'API near_point fait le filtrage), conservés pour cohérence.
+secteurs:
+  - type: "parc_activites"
+    query: "parc d'activités"
+
+zone:
+  type: "point"
+  # Centre du cercle, au choix :
+  #  - coordonnées directes (ci-dessous), OU
+  #  - adresse en clair géocodée via la Base Adresse Nationale, ex :
+  #      adresse: "Allée de l'Ecopark, Wambrechies"
+  #    (nécessite api-adresse.data.gouv.fr dans l'allowlist réseau)
+  latitude: 50.6758                      # centre Ecopark Wambrechies
+  longitude: 3.0473
+  rayon_par_point_km: 0.4                # cercle serré sur le parc
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  exiger_site_web: true                  # nécessaire pour L3 scraping
+
+# Filtres entreprise — on exclut le bruit immobilier/financier d'une ZA :
+# holdings (64.20), SCI / activités immobilières (68.20), gestion de parc /
+# syndic (68.32). Reste le vrai signal opérationnel (négoce, industrie, R&D…).
+filtres_entreprise:
+  effectif_min: 1
+  effectif_max: 250
+  naf_exclus:
+    - "64.20"   # holdings
+    - "68.20"   # location/exploitation biens immobiliers (SCI)
+    - "68.32"   # gestion de biens immobiliers / syndic
+  forme_juridique_exclus:
+    - "SCI"
+  naf_inclus: []                         # pas de whitelist : on prend large puis on exclut
+
+# ─── Étage 3 — signaux « flotte en transition VE » ────────────────
+# Le client idéal est un SIÈGE de PME qui veut passer aux VE, ou vient de
+# passer et commence à constituer sa flotte (fenêtre d'achat ombrières/IRVE).
+# Ces motifs (regex sur texte normalisé minuscule SANS accents) repèrent ce
+# signal sur le site du lead en L3 ; il est ensuite remonté au scoring L4.
+scraping_l3:
+  signaux_ve:
+    "flotte electrique": "\\bflottes? (de )?(vehicules? )?electriques?\\b"
+    "passage aux VE": "\\b(passage|passer|passons|passe|transition|electrification) (a l'|aux |de (la|notre) flotte )?electriques?\\b|\\belectrification\\b"
+    "bornes de recharge": "\\bbornes? de recharge\\b|\\birve\\b|\\bwallbox\\b|\\bpoints? de charge\\b"
+    "vehicule electrique": "\\bvehicules? electriques?\\b"
+    "engagement ZFE/decarbonation": "\\bzfe\\b|\\bzone a faibles emissions\\b|\\bdecarbonation\\b|\\bbilan carbone\\b"
+
+# ─── Étage 4 — contexte scoring orienté ICP « transition VE » ─────
+claude_scoring:
+  contexte_client: |
+    Tu travailles pour RénoBoost, courtier B2B en travaux de rénovation
+    énergétique : ombrières photovoltaïques de parking, bornes de recharge
+    (IRVE), panneaux solaires en toiture.
+
+    CIBLE IDÉALE (à scorer haut) : le SIÈGE d'une PME qui possède ses locaux
+    dans une zone d'activité (parking + toiture exploitables) ET qui est en
+    pleine transition vers les véhicules électriques — soit elle prévoit d'y
+    passer, soit elle vient de franchir le pas et commence à constituer sa
+    flotte. Ces entreprises ont un besoin imminent de bornes de recharge et
+    d'ombrières pour alimenter/abriter leurs VE.
+
+    Signaux forts (priorité) : mention d'une flotte qui s'électrifie, bornes
+    récemment installées ou en projet, engagement ZFE / décarbonation, parc de
+    véhicules d'entreprise. Un siège local (décideur joignable) prime sur une
+    antenne de grand groupe.
+
+volume:
+  cible: 30
+
+budget:
+  max_eur: 10                            # near_point gratuit ; marge pour enrich Places
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

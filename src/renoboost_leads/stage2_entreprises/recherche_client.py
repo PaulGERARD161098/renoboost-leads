@@ -27,8 +27,10 @@ from ..common.rate_limiter import RateLimiter
 
 logger = get_logger(__name__)
 
-# Endpoint principal
+# Endpoints
 RECHERCHE_URL = "https://recherche-entreprises.api.gouv.fr/search"
+# Recherche géographique autour d'un point (lat/long/radius en km).
+NEAR_POINT_URL = "https://recherche-entreprises.api.gouv.fr/near_point"
 
 
 # ════════════════════════════════════════════════════════════════
@@ -144,12 +146,14 @@ class RechercheEntreprisesClient:
         stop=stop_after_attempt(6),
         reraise=True,
     )
-    def _search_page(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Appel /search une page. Lève sur 5xx/429 (retry tenacity)."""
+    def _search_page(
+        self, params: dict[str, Any], url: str = RECHERCHE_URL
+    ) -> dict[str, Any]:
+        """Appel d'une page (/search ou /near_point). Lève sur 5xx/429 (retry tenacity)."""
         self.config.rate_limiter.acquire()
         try:
             resp = self.session.get(
-                RECHERCHE_URL,
+                url,
                 params=params,
                 timeout=self.config.timeout_seconds,
             )
@@ -220,16 +224,14 @@ class RechercheEntreprisesClient:
             "etat_administratif": etat_administratif,
             "per_page": min(per_page, 25),
         }
-        if activite_principale:
-            base_params["activite_principale"] = ",".join(activite_principale)
-        if tranche_effectif_salarie:
-            base_params["tranche_effectif_salarie"] = ",".join(tranche_effectif_salarie)
-        if ca_min is not None:
-            base_params["ca_min"] = ca_min
-        if ca_max is not None:
-            base_params["ca_max"] = ca_max
-        if categorie_entreprise:
-            base_params["categorie_entreprise"] = ",".join(categorie_entreprise)
+        self._appliquer_filtres(
+            base_params,
+            activite_principale=activite_principale,
+            tranche_effectif_salarie=tranche_effectif_salarie,
+            ca_min=ca_min,
+            ca_max=ca_max,
+            categorie_entreprise=categorie_entreprise,
+        )
 
         siege_set = set(departements) if siege_only else None
         yielded = 0
@@ -256,6 +258,126 @@ class RechercheEntreprisesClient:
                     siege_dept = (r.get("siege") or {}).get("departement")
                     if siege_dept not in siege_set:
                         continue
+                yield r
+                yielded += 1
+                if yielded >= max_results:
+                    return
+
+            if total_pages and page >= total_pages:
+                break
+            page += 1
+
+    @staticmethod
+    def _appliquer_filtres(
+        params: dict[str, Any],
+        *,
+        activite_principale: list[str] | None,
+        tranche_effectif_salarie: list[str] | None,
+        ca_min: int | None,
+        ca_max: int | None,
+        categorie_entreprise: list[str] | None,
+    ) -> None:
+        """Ajoute en place les filtres entreprise natifs aux params API."""
+        if activite_principale:
+            params["activite_principale"] = ",".join(activite_principale)
+        if tranche_effectif_salarie:
+            params["tranche_effectif_salarie"] = ",".join(tranche_effectif_salarie)
+        if ca_min is not None:
+            params["ca_min"] = ca_min
+        if ca_max is not None:
+            params["ca_max"] = ca_max
+        if categorie_entreprise:
+            params["categorie_entreprise"] = ",".join(categorie_entreprise)
+
+    @staticmethod
+    def _siege_dans_zone(entreprise: dict[str, Any]) -> bool:
+        """True si le siège de l'entreprise est l'un des établissements du rayon.
+
+        L'endpoint near_point renvoie pour chaque entreprise la liste
+        `matching_etablissements` (ceux situés dans le cercle). On considère le
+        siège « dans la zone » si l'un de ces établissements porte `est_siege`.
+        Élimine les antennes locales de groupes dont le siège est ailleurs.
+        """
+        for etab in entreprise.get("matching_etablissements") or []:
+            if etab.get("est_siege"):
+                return True
+        return False
+
+    def decouvrir_near_point(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_km: float,
+        *,
+        activite_principale: list[str] | None = None,
+        tranche_effectif_salarie: list[str] | None = None,
+        ca_min: int | None = None,
+        ca_max: int | None = None,
+        categorie_entreprise: list[str] | None = None,
+        etat_administratif: str = "A",
+        siege_only: bool = True,
+        max_results: int = 1000,
+        per_page: int = 25,
+    ) -> Iterator[dict[str, Any]]:
+        """Découverte géographique : entreprises dans un rayon autour d'un point.
+
+        Cible une zone d'activité précise (parc, adresse) via l'endpoint
+        `near_point` et ses filtres natifs (NAF, effectif, CA, catégorie).
+
+        Args:
+            latitude, longitude: centre du cercle (degrés décimaux).
+            radius_km: rayon en kilomètres.
+            siege_only: si True, ne yield que les entreprises dont le SIÈGE est
+                dans le rayon (via `matching_etablissements[].est_siege`), pour
+                écarter les antennes locales de groupes décidant ailleurs.
+            (autres args : cf. `decouvrir`).
+
+        Yields:
+            Le dict résultat brut de l'API pour chaque entreprise matchant.
+        """
+        if max_results <= 0:
+            return
+
+        base_params: dict[str, Any] = {
+            "lat": latitude,
+            "long": longitude,
+            "radius": radius_km,
+            "etat_administratif": etat_administratif,
+            "per_page": min(per_page, 25),
+        }
+        self._appliquer_filtres(
+            base_params,
+            activite_principale=activite_principale,
+            tranche_effectif_salarie=tranche_effectif_salarie,
+            ca_min=ca_min,
+            ca_max=ca_max,
+            categorie_entreprise=categorie_entreprise,
+        )
+
+        yielded = 0
+        page = 1
+        total_pages: int | None = None
+
+        while yielded < max_results:
+            params = {**base_params, "page": page}
+            data = self._search_page(params, url=NEAR_POINT_URL)
+            results = data.get("results") or []
+            if total_pages is None:
+                total_pages = data.get("total_pages") or 0
+                logger.info(
+                    "Découverte géo (near_point) : %s entreprises dans %s km "
+                    "(%s pages)",
+                    data.get("total_results"),
+                    radius_km,
+                    total_pages,
+                )
+
+            if not results:
+                break
+
+            for r in results:
+                if siege_only and not self._siege_dans_zone(r):
+                    continue
                 yield r
                 yielded += 1
                 if yielded >= max_results:

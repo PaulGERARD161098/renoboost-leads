@@ -120,6 +120,12 @@ def _match_naf_prefixe(code_naf: str | None, prefixes: list[str]) -> bool:
 def _verifier_effectif(lead: LeadStage2, filtres: FiltresEntreprise) -> str | None:
     """Renvoie une raison de rejet, ou None si OK."""
     tranche = lead.tranche_effectif
+    # INSEE code l'effectif NON RENSEIGNÉ par la tranche "NN" (et parfois "").
+    # Très fréquent pour les PME et les établissements secondaires. On le traite
+    # comme « inconnu » (cf. None) : pas de rejet sauf rejeter_effectif_inconnu,
+    # sinon le filtre éjecterait à tort la majorité des PME ciblées.
+    if tranche in ("NN", ""):
+        tranche = None
 
     # Priorité aux codes explicites
     if filtres.tranche_effectif_inclus:
