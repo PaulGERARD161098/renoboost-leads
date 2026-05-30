@@ -46,6 +46,12 @@ def aper_group() -> None:
               help="Plafond budget € pour le scoring L4 (Claude).")
 @click.option("--dry-run", is_flag=True,
               help="Simulation L4 (scores factices, pas d'appel Anthropic).")
+@click.option("--vers-staging", is_flag=True,
+              help="Pousse les top leads dans le staging cold-mail Instantly (validation N2).")
+@click.option("--min-score", "min_score", type=int, default=None,
+              help="Avec --vers-staging : élargit aux leads de score ≥ N (défaut : top leads).")
+@click.option("--from-email", "from_email", default="",
+              help="Avec --vers-staging : adresse expéditeur du staging.")
 def aper_run(
     fichier_parkings: Path,
     config_path: Path | None,
@@ -53,6 +59,9 @@ def aper_run(
     surface_min: float | None,
     budget_eur: float,
     dry_run: bool,
+    vers_staging: bool,
+    min_score: int | None,
+    from_email: str,
 ) -> None:
     """Lance un run parkings APER sur un CSV inventaire."""
     settings = get_settings()
@@ -119,4 +128,84 @@ def aper_run(
         f"  Top leads (score ≥ {claude_scoring.seuil_top_lead}) : {resultat.nb_top_leads}\n"
         f"  Coût L4                   : {resultat.cout_l4_eur:.4f} €\n"
         f"  CSV final                 : {csv_final}"
+    )
+
+    _staging_post_run(vers_staging, resultat, source, output_dir, from_email, min_score)
+
+
+def _staging_post_run(vers_staging, resultat, source, output_dir, from_email, min_score):
+    if not vers_staging:
+        return
+    from .staging_instantly import stager_leads_aper
+
+    res_stg = stager_leads_aper(
+        resultat.leads,
+        secteur=source,
+        session_id=output_dir.name,
+        from_email=from_email,
+        min_score=min_score,
+    )
+    console.print(
+        f"\n[green]✓ Staging cold-mail créé : {res_stg.staging_id}[/green]\n"
+        f"  Leads stagés (à valider) : {res_stg.nb_stages}\n"
+        f"  Écartés (sans email)     : {res_stg.nb_sans_email}\n"
+        f"  Écartés (sous le seuil)  : {res_stg.nb_sous_seuil}\n"
+        f"  → Valider : [cyan]cold-mail show {res_stg.staging_id}[/cyan] "
+        f"puis [cyan]cold-mail validate / send[/cyan]"
+    )
+
+
+@aper_group.command(name="geo")
+@click.option("--bbox", required=True,
+              help="Boîte géographique 'sud,ouest,nord,est' (degrés). "
+                   "Ex. '50.40,2.80,50.55,2.95' (bassin de Lens).")
+@click.option("--out", "out_path", type=click.Path(dir_okay=False, path_type=Path),
+              required=True, help="CSV d'inventaire à générer (consommable par `aper run`).")
+@click.option("--surface-min", "surface_min", type=float, default=None,
+              help="Seuil de surface m² (défaut 1500 = seuil légal APER).")
+@click.option("--dry-run", is_flag=True,
+              help="Données OSM simulées, aucun appel réseau (test du flux).")
+def aper_geo(bbox: str, out_path: Path, surface_min: float | None, dry_run: bool) -> None:
+    """Génère un CSV d'inventaire parkings depuis OpenStreetMap (Overpass)."""
+    from .connecteur_geo import (
+        Bbox,
+        OverpassClient,
+        OverpassClientDryRun,
+        OverpassError,
+        ecrire_inventaire_csv,
+        recuperer_parkings,
+    )
+    from .models import SEUIL_APER_M2
+
+    try:
+        boite = Bbox.depuis_str(bbox)
+    except ValueError as e:
+        console.print(f"[red]✗ {e}[/red]")
+        raise SystemExit(2) from e
+
+    seuil = surface_min if surface_min is not None else SEUIL_APER_M2
+    client = OverpassClientDryRun() if dry_run else OverpassClient()
+    if dry_run:
+        console.print("[yellow]⚠  Mode dry-run : parkings OSM simulés.[/yellow]")
+
+    console.print(f"[cyan]Overpass — bbox {boite.as_overpass()} (seuil {seuil:.0f} m²)…[/cyan]")
+    try:
+        lignes = recuperer_parkings(boite, client=client, surface_min_m2=seuil)
+    except OverpassError as e:
+        msg = str(e)
+        if "allowlist" in msg.lower() or "host_not_allowed" in msg.lower():
+            console.print(
+                "[red]✗ Hôte Overpass bloqué par l'allowlist réseau.[/red]\n"
+                "  Ajoute `overpass-api.de` aux domaines autorisés (nouvelle session), "
+                "ou relance avec --dry-run."
+            )
+        else:
+            console.print(f"[red]✗ Overpass KO : {msg}[/red]")
+        raise SystemExit(1) from e
+
+    ecrire_inventaire_csv(lignes, out_path)
+    console.print(
+        f"\n[green]✓ Inventaire généré : {out_path}[/green]\n"
+        f"  Parkings ≥ {seuil:.0f} m² : {len(lignes)}\n"
+        f"  → Lancer : [cyan]aper run --fichier {out_path}[/cyan]"
     )

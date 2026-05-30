@@ -43,6 +43,11 @@ from .exporter import (
 )
 from .models import CampaignConfig, RunStats, StageStats
 from .settings import PROJECT_ROOT, get_settings
+from .societeinfo_enrichment.client import (
+    SocieteinfoClient,
+    SocieteinfoClientConfig,
+    SocieteinfoClientDryRun,
+)
 from .stage0_sirene_first.extractor import ExtracteurStage0
 from .stage0_sirene_first.places_enricher import EnrichisseurPlaces
 from .stage1_decouverte.extractor import ExtracteurStage1
@@ -58,6 +63,7 @@ from .stage2_entreprises.recherche_client import (
     RechercheClientConfig,
     RechercheEntreprisesClient,
 )
+from .stage2_entreprises.societeinfo_l2_client import SocieteinfoL2Client
 from .stage3_5_enrichment.cache import CacheStage35
 from .stage3_5_enrichment.client import DropcontactClient, DropcontactClientConfig
 from .stage3_5_enrichment.dry_run import DropcontactClientDryRun
@@ -292,7 +298,21 @@ def estimate(config_path: Path) -> None:
     is_flag=True,
     help="Simulation : ne fait aucun appel API payant, retourne des leads factices.",
 )
-def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: bool) -> None:
+@click.option(
+    "--l2-provider",
+    "l2_provider",
+    type=click.Choice(["datagouv", "societeinfo"]),
+    default="datagouv",
+    show_default=True,
+    help="Provider étage 2 : data.gouv (gratuit) ou societeinfo (payant, registres officiels).",
+)
+def run(
+    config_path: Path,
+    stages: str,
+    from_csv_path: Path | None,
+    dry_run: bool,
+    l2_provider: str,
+) -> None:
     """Lance un run de prospection."""
     cfg = _load_config_or_exit(config_path)
 
@@ -427,10 +447,17 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
             cache=cache,
             output_dir=output_dir,
             stats=stats,
+            l2_provider=l2_provider,
+            dry_run=dry_run,
         )
-        sources_rgpd.append(
-            "API recherche-entreprises.api.gouv.fr — registre du commerce (open data)"
-        )
+        if l2_provider == "societeinfo":
+            sources_rgpd.append(
+                "Societeinfo API — appariement SIREN (registres officiels FR)"
+            )
+        else:
+            sources_rgpd.append(
+                "API recherche-entreprises.api.gouv.fr — registre du commerce (open data)"
+            )
 
     # ─── Étage 3 ───
     leads_l3 = None
@@ -821,8 +848,33 @@ def _executer_stage1(cfg, settings, cache, output_dir, stats, dry_run):
     return leads
 
 
-def _executer_stage2(cfg, settings, leads_l1, cache, output_dir, stats):
-    """Exécute l'étage 2."""
+def _construire_client_l2_societeinfo(cfg, settings, stats, dry_run: bool) -> SocieteinfoL2Client:
+    """Fabrique l'adaptateur L2 Societeinfo (réel ou dry-run selon clé/flag)."""
+    use_dry = dry_run or not settings.has_societeinfo()
+    if use_dry and not dry_run:
+        console.print(
+            "[yellow]⚠  SOCIETEINFO_API_KEY absente → L2 Societeinfo en dry-run "
+            "(données simulées).[/yellow]"
+        )
+    if use_dry:
+        si_client: SocieteinfoClient = SocieteinfoClientDryRun()
+    else:
+        budget_eur = max(0.01, cfg.budget.max_eur - stats.cout_total_eur)
+        si_client = SocieteinfoClient(
+            SocieteinfoClientConfig(
+                api_key=settings.societeinfo_api_key.get_secret_value(),
+                rate_limiter=RateLimiter(settings.max_requests_per_minute),
+                budget=BudgetGuard(plafond_eur=budget_eur),
+            )
+        )
+    return SocieteinfoL2Client(si_client)
+
+
+def _executer_stage2(
+    cfg, settings, leads_l1, cache, output_dir, stats,
+    l2_provider: str = "datagouv", dry_run: bool = False,
+):
+    """Exécute l'étage 2 (provider data.gouv par défaut, ou Societeinfo)."""
     csv_path = output_dir / "etage2_entreprises.csv"
     t0 = datetime.now(timezone.utc)
 
@@ -830,7 +882,11 @@ def _executer_stage2(cfg, settings, leads_l1, cache, output_dir, stats):
         export_stage2_csv(leads_partial, csv_path)
 
     limiter = RateLimiter(60)  # 60 req/min, largement sous la limite de 7 req/s
-    rech_client = RechercheEntreprisesClient(RechercheClientConfig(rate_limiter=limiter))
+    if l2_provider == "societeinfo":
+        rech_client = _construire_client_l2_societeinfo(cfg, settings, stats, dry_run)
+        console.print("[cyan]ℹ  Provider L2 : Societeinfo (registres officiels).[/cyan]")
+    else:
+        rech_client = RechercheEntreprisesClient(RechercheClientConfig(rate_limiter=limiter))
 
     # Fallback Pappers (PAYANT) : activé uniquement si une clé est présente.
     pappers_client = None
