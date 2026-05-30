@@ -191,6 +191,19 @@ python -m renoboost_leads.cli aper run \
 
 # Mode normal
 python -m renoboost_leads.cli aper run --fichier inventaire_parkings.csv --budget 2.0
+
+# Pousser les top leads vers le staging cold-mail Instantly (validation N2)
+python -m renoboost_leads.cli aper run --fichier inventaire_parkings.csv --vers-staging
+```
+
+**Inventaire auto depuis OpenStreetMap** — au lieu d'un CSV fourni, le connecteur
+géo (Overpass) extrait les parkings d'une zone et calcule leurs **surfaces réelles** :
+
+```bash
+# bbox 'sud,ouest,nord,est' — dry-run = données OSM simulées (réseau bloqué)
+python -m renoboost_leads.cli aper geo \
+  --bbox "50.40,2.80,50.55,2.95" --out inventaire_parkings.csv --dry-run
+# puis : aper run --fichier inventaire_parkings.csv
 ```
 
 ### Enrichissement Societeinfo (firmographie FR)
@@ -203,6 +216,14 @@ match gratuit a échoué. Voir [SOCIETEINFO.md](./SOCIETEINFO.md).
 # Dry-run (données simulées si SOCIETEINFO_API_KEY absente)
 python -m renoboost_leads.cli enrich-societeinfo \
   --from-csv data/output/<session>/etage2_entreprises.csv --dry-run
+```
+
+Societeinfo peut aussi remplacer data.gouv comme **provider de l'étage 2** (match
+SIREN sur registres officiels) :
+
+```bash
+python -m renoboost_leads.cli run --config config/client_rossini.yaml \
+  --stages 1,2 --l2-provider societeinfo
 ```
 
 ### Étage 3.7 — Complétion (repêchage + enrichissement)
