@@ -99,6 +99,24 @@ def test_verdict_nogo_si_donnees_vides(fake_root: Path) -> None:
     assert "NO-GO Phase 2" in html
 
 
+def test_rapport_l3_vide_affiche_indetermine(fake_root: Path) -> None:
+    """Session avec L3 CSV header-only : verdict indéterminé, pas de
+    `%` orphelin dans les KPI."""
+    d = fake_root / "s_empty"
+    d.mkdir()
+    _ecrire_csv(d / "etage3_contacts.csv", [])
+    res = rep.generate_report("s_empty")
+    assert "error" not in res
+    assert res["verdict_go_phase2"] is False
+    html = (d / "rapport.html").read_text(encoding="utf-8")
+    assert "INDÉTERMINÉ" in html
+    assert "NO-GO Phase 2" not in html
+    # Plus de `%` sans valeur juste devant
+    assert ">%<" not in html
+    # Les tuiles sans dénominateur affichent N/A
+    assert "N/A" in html
+
+
 def test_max_leads_tronque(fake_root: Path) -> None:
     _session_l3(fake_root, "s3", n=20)
     res = rep.generate_report("s3", max_leads=5)

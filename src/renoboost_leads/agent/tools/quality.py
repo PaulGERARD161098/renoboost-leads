@@ -48,7 +48,17 @@ def _has(row: dict, key: str) -> bool:
 def _metriques_l3(rows: list[dict]) -> dict:
     n = len(rows)
     if not n:
-        return {"row_count": 0}
+        # `None` (pas 0.0) signale "indéterminé" — pas de dénominateur,
+        # donc 0% serait trompeur. Le rapport affichera "N/A".
+        return {
+            "row_count": 0,
+            "pct_siren_matche": None,
+            "pct_dirigeant_identifie": None,
+            "pct_email_scrape": None,
+            "pct_site_web": None,
+            "distribution_effectif": {},
+            "distribution_naf_top5": {},
+        }
     siren_ok = sum(1 for r in rows if _has(r, "siren"))
     dirigeant_ok = sum(1 for r in rows if _has(r, "dirigeant_nom"))
     # email peut être stocké sous diverses clés selon l'évolution du schéma
@@ -95,7 +105,14 @@ def _metriques_l3_5(rows: list[dict]) -> dict:
     """
     n = len(rows)
     if not n:
-        return {"row_count_3_5": 0}
+        return {
+            "row_count_3_5": 0,
+            "pct_email_verifie_dropcontact": None,
+            "pct_email_correct": None,
+            "pct_tel_direct": None,
+            "pct_linkedin": None,
+            "nb_enrichis": 0,
+        }
     email_dc = sum(
         1
         for r in rows
@@ -162,7 +179,21 @@ def _metriques_l4(rows: list[dict], seuil_top: int = 70) -> dict:
 
 
 def _verdict_pilote_phase1(m3: dict) -> dict:
-    """Applique les seuils Phase 1 du handoff."""
+    """Applique les seuils Phase 1 du handoff.
+
+    Si la session ne contient aucune ligne L3, le verdict est
+    "indéterminé" plutôt que NO-GO : on n'a rien mesuré, donc on ne
+    peut pas conclure que les critères sont ratés.
+    """
+    if m3.get("row_count", 0) == 0:
+        return {
+            "go_phase2": False,
+            "indetermine": True,
+            "raison_indetermine": (
+                "Aucune ligne L3 — pipeline n'a pas produit de données."
+            ),
+            "criteres": [],
+        }
     criteres = []
     siren = m3.get("pct_siren_matche", 0.0)
     criteres.append(
@@ -189,7 +220,7 @@ def _verdict_pilote_phase1(m3: dict) -> dict:
         }
     )
     go = all(c["ok"] for c in criteres)
-    return {"go_phase2": go, "criteres": criteres}
+    return {"go_phase2": go, "indetermine": False, "criteres": criteres}
 
 
 def diagnose_quality(session_id: str) -> dict:

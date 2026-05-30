@@ -97,6 +97,23 @@ def test_verdict_phase1_no_go(fake_root: Path) -> None:
     assert siren_critere["ok"] is False
 
 
+def test_verdict_indetermine_si_l3_vide(fake_root: Path) -> None:
+    """Une session sans aucune ligne L3 doit produire un verdict
+    "indéterminé" plutôt qu'un NO-GO trompeur."""
+    d = fake_root / "s_empty"
+    d.mkdir()
+    _ecrire_csv(d / "etage3_contacts.csv", [])
+    res = q.diagnose_quality("s_empty")
+    verdict = res["verdict_pilote_phase1"]
+    assert verdict["indetermine"] is True
+    assert verdict["go_phase2"] is False
+    assert verdict["criteres"] == []
+    m3 = res["metriques_l3"]
+    assert m3["row_count"] == 0
+    assert m3["pct_siren_matche"] is None
+    assert m3["pct_email_scrape"] is None
+
+
 def test_l3_5_present(fake_root: Path) -> None:
     d = fake_root / "s4"
     d.mkdir()

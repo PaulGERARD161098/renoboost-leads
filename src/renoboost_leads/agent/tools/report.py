@@ -158,6 +158,8 @@ _TEMPLATE = _ENV.from_string(
     color: #1a5a1a; }
   .verdict.nogo { background: #fde6e6; border-left: 4px solid #c82c2c;
     color: #6a1a1a; }
+  .verdict.indetermine { background: #fff6e0; border-left: 4px solid #d18b1a;
+    color: #6a4a10; }
   .criteres { list-style: none; padding: 0; margin: 12px 0; }
   .criteres li { padding: 6px 0; border-bottom: 1px solid #eee;
     font-size: 14px; }
@@ -195,7 +197,7 @@ _TEMPLATE = _ENV.from_string(
     <strong>Campagne :</strong> {{ campaign }}<br>
     <strong>Session :</strong> {{ session_id }}<br>
     <strong>Période :</strong> {{ debut }} → {{ fin }}
-    {% if duree_min %} ({{ duree_min }} min){% endif %}<br>
+    {% if duree_min is not none %} ({{ duree_min }} min){% endif %}<br>
     <strong>Étages traités :</strong>
     <span class="badges">
       {% for s in stages %}<span class="badge">L{{ s }}</span>{% endfor %}
@@ -244,15 +246,27 @@ _TEMPLATE = _ENV.from_string(
     </div>
     <div class="kpi">
       <div class="label">SIREN matchés</div>
-      <div class="value">{{ metriques.pct_siren_matche }}%</div>
+      <div class="value">
+        {%- if metriques.pct_siren_matche is not none -%}
+          {{ metriques.pct_siren_matche }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
     <div class="kpi">
       <div class="label">Dirigeant identifié</div>
-      <div class="value">{{ metriques.pct_dirigeant_identifie }}%</div>
+      <div class="value">
+        {%- if metriques.pct_dirigeant_identifie is not none -%}
+          {{ metriques.pct_dirigeant_identifie }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
     <div class="kpi">
       <div class="label">Email scrapé</div>
-      <div class="value">{{ metriques.pct_email_scrape }}%</div>
+      <div class="value">
+        {%- if metriques.pct_email_scrape is not none -%}
+          {{ metriques.pct_email_scrape }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
   </div>
 
@@ -265,13 +279,13 @@ _TEMPLATE = _ENV.from_string(
       <div class="value">{{ "%.2f"|format(run_stats_extra.cout_total_eur) }} €</div>
     </div>
     {% endif %}
-    {% if run_stats_extra.duree_min %}
+    {% if run_stats_extra.duree_min is not none %}
     <div class="kpi">
       <div class="label">Durée</div>
       <div class="value">{{ run_stats_extra.duree_min }} min</div>
     </div>
     {% endif %}
-    {% if run_stats_extra.leads_finaux %}
+    {% if run_stats_extra.leads_finaux is not none %}
     <div class="kpi">
       <div class="label">Leads finaux</div>
       <div class="value">{{ run_stats_extra.leads_finaux }}</div>
@@ -281,13 +295,17 @@ _TEMPLATE = _ENV.from_string(
   {% endif %}
 
   <h2>Verdict pilote Phase 1</h2>
-  {% if verdict.go_phase2 %}
+  {% if verdict.indetermine %}
+    <div class="verdict indetermine">⚠ INDÉTERMINÉ — {{ verdict.raison_indetermine }}
+      Les critères pilote ne peuvent pas être évalués sans données.</div>
+  {% elif verdict.go_phase2 %}
     <div class="verdict go">✓ GO Phase 2 — tous les critères pilote sont
       atteints.</div>
   {% else %}
     <div class="verdict nogo">✗ NO-GO Phase 2 — au moins un critère pilote
       n'est pas atteint.</div>
   {% endif %}
+  {% if verdict.criteres %}
   <ul class="criteres">
     {% for c in verdict.criteres %}
     <li>
@@ -298,6 +316,7 @@ _TEMPLATE = _ENV.from_string(
     </li>
     {% endfor %}
   </ul>
+  {% endif %}
 
   <h2>Top {{ leads|length }} leads</h2>
   {% if leads %}
@@ -341,12 +360,18 @@ _TEMPLATE = _ENV.from_string(
     <div class="kpi">
       <div class="label">Email vérifié</div>
       <div class="value">
-        {{ metriques_l3_5.pct_email_verifie_dropcontact }}%
+        {%- if metriques_l3_5.pct_email_verifie_dropcontact is not none -%}
+          {{ metriques_l3_5.pct_email_verifie_dropcontact }}%
+        {%- else -%}N/A{%- endif -%}
       </div>
     </div>
     <div class="kpi">
       <div class="label">Tél. direct</div>
-      <div class="value">{{ metriques_l3_5.pct_tel_direct }}%</div>
+      <div class="value">
+        {%- if metriques_l3_5.pct_tel_direct is not none -%}
+          {{ metriques_l3_5.pct_tel_direct }}%
+        {%- else -%}N/A{%- endif -%}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -485,7 +510,7 @@ def _extract_run_stats(stats: dict) -> dict:
     if not stats:
         return {}
     duree_s = stats.get("duree_totale_secondes")
-    duree_min = round(duree_s / 60, 1) if duree_s else None
+    duree_min = round(duree_s / 60, 1) if duree_s is not None else None
     return {
         "cout_total_eur": stats.get("cout_total_eur"),
         "duree_min": duree_min,
