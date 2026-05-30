@@ -412,3 +412,45 @@ class TestCallbackIncrementiel:
         enricher.enrichir([_lead(f"L{i}") for i in range(25)])
         # Callback à 20
         assert 20 in appels
+
+
+# ─────────────────────────────────────────────────────────────────
+# Propagation de l'émetteur jusqu'au prompt
+# ─────────────────────────────────────────────────────────────────
+
+
+class TestPropagationEmetteur:
+    def test_emetteur_injecte_dans_le_prompt(self, tmp_path):
+        from renoboost_leads.models import Emetteur
+
+        prompts: list[str] = []
+
+        from renoboost_leads.stage4_prospection.client import ClaudeReponse
+
+        class _Capturing:
+            def scorer(self, prompt: str):
+                prompts.append(prompt)
+                return ClaudeReponse(
+                    score_interet=60,
+                    raison_score="x",
+                    pitch_propose=None,
+                    tokens_in=10,
+                    tokens_out=5,
+                    cout_eur=0.0,
+                    modele="claude-haiku-4-5",
+                )
+
+        emetteur = Emetteur(
+            nom_entreprise="Toitures Rossini", email="contact@toitures-rossini.fr"
+        )
+        enricher = EnricheurStage4(
+            client=_Capturing(),
+            config=ClaudeScoring(inclure_pitch=True),
+            cache=CacheStage4(tmp_path / "l4.sqlite"),
+            emetteur=emetteur,
+        )
+        enricher.enrichir([_lead("A")])
+
+        assert prompts, "le client n'a pas été appelé"
+        assert "# Émetteur" in prompts[0]
+        assert "Toitures Rossini" in prompts[0]

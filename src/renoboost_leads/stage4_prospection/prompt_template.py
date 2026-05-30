@@ -6,11 +6,12 @@ invalide automatiquement les entrées de cache (cf. `cache.py`).
 
 from __future__ import annotations
 
-from ..models import LeadStage3
+from ..models import Emetteur, LeadStage3
 
 # Bump ce numéro à chaque modification du prompt (structure, instructions, JSON shape).
 # Le cache L4 utilise cette valeur comme partie de sa clé de hachage.
-PROMPT_VERSION = "v3"
+# v4 : section « # Émetteur » optionnelle + signature entreprise/coordonnées.
+PROMPT_VERSION = "v4"
 
 
 CONTEXTE_CLIENT_DEFAUT = """\
@@ -40,22 +41,44 @@ def _format_emails(emails: list[str], limite: int = 3) -> str:
     return ", ".join(affiches) + suite
 
 
+def _section_emetteur(emetteur: Emetteur) -> str:
+    """Bloc « # Émetteur » : qui signe le mail + coordonnées pour le pied."""
+    lignes: list[str] = [f"- Entreprise émettrice : {emetteur.nom_entreprise}"]
+    if emetteur.signataire:
+        fonction = f", {emetteur.fonction}" if emetteur.fonction else ""
+        lignes.append(f"- Signataire : {emetteur.signataire}{fonction}")
+    elif emetteur.fonction:
+        lignes.append(f"- Fonction du signataire : {emetteur.fonction}")
+    if emetteur.telephone:
+        lignes.append(f"- Téléphone : {emetteur.telephone}")
+    if emetteur.email:
+        lignes.append(f"- Email : {emetteur.email}")
+    if emetteur.site_web:
+        lignes.append(f"- Site web : {emetteur.site_web}")
+    return "\n".join(lignes)
+
+
 def construire_prompt(
     lead: LeadStage3,
     contexte_client: str | None = None,
     inclure_pitch: bool = True,
+    emetteur: Emetteur | None = None,
 ) -> str:
     """Construit le prompt utilisateur envoyé à Claude pour un lead.
 
     Le prompt :
     - Fournit le contexte client en tête (`contexte_client` ou défaut).
     - Décrit le lead avec uniquement les champs renseignés (pas de "None").
+    - Si `emetteur` est fourni : ajoute une section « # Émetteur » et impose une
+      signature au nom de cette entreprise + un pied de coordonnées. Sinon, le
+      comportement historique est conservé (signature devinée depuis l'offre).
     - Demande une réponse JSON stricte avec score / raison / (pitch).
 
     Args:
         lead: lead L3 à scorer
         contexte_client: contexte de l'offre commerciale. None = défaut RénoBoost.
         inclure_pitch: si False, le prompt n'exige pas le champ pitch_propose.
+        emetteur: identité de l'émetteur signataire. None = comportement historique.
 
     Returns:
         Chaîne de texte (rôle "user").
@@ -121,6 +144,21 @@ def construire_prompt(
             '  "email_corps": "<email complet prêt à envoyer, en français>"\n'
             '}'
         )
+        if emetteur is not None:
+            regle_signature = (
+                "un appel à l'action clair (proposer un échange de 15 min), puis une "
+                "signature « Cordialement, » suivie du nom du signataire (si fourni) et "
+                "de l'entreprise émettrice, et ENFIN un pied de coordonnées reprenant "
+                "EXACTEMENT les informations de la section « # Émetteur » ci-dessus "
+                "(téléphone / email / site web, une par ligne, uniquement celles "
+                "fournies). N'invente aucune coordonnée absente de cette section."
+            )
+        else:
+            regle_signature = (
+                "un appel à l'action clair (proposer un échange de 15 min), puis une "
+                "signature « Cordialement, » suivie du nom de l'entreprise émettrice "
+                "(issu de l'offre commerciale ci-dessus)."
+            )
         regles = (
             "1. `score_interet` : 0-100 (0 = aucun intérêt, 100 = lead idéal).\n"
             "2. `raison_score` : UNE phrase, en français, qui justifie le score.\n"
@@ -131,9 +169,7 @@ def construire_prompt(
             "5. `email_corps` : email B2B complet et personnalisé, prêt à envoyer, structuré : "
             "formule d'appel (utilise le nom du dirigeant si fourni, sinon « Madame, Monsieur »), "
             "2-3 paragraphes courts reliant l'offre au profil du lead (activité, taille, bâti), "
-            "un appel à l'action clair (proposer un échange de 15 min), puis une signature "
-            "« Cordialement, » suivie du nom de l'entreprise émettrice (issu de l'offre "
-            "commerciale ci-dessus). Sauts de ligne encodés en \\n.\n"
+            f"{regle_signature} Sauts de ligne encodés en \\n.\n"
             "6. Aucune invention de chiffres (CA, économies, montants CEE) ni de fausse "
             "référence client. Reste factuel et sobre.\n"
             "7. Si des signaux flotte / véhicule électrique sont détectés, traite-les "
@@ -156,11 +192,18 @@ def construire_prompt(
             "l'offre commerciale ci-dessus ; sinon ignore-les."
         )
 
+    bloc_emetteur = (
+        f"# Émetteur (signature de l'email)\n{_section_emetteur(emetteur)}\n\n"
+        if emetteur is not None
+        else ""
+    )
+
     return (
         "Tu es un analyste commercial B2B. Tu dois évaluer un lead par rapport "
         "à une offre commerciale donnée, et répondre EXCLUSIVEMENT en JSON valide "
         "(rien avant, rien après).\n\n"
         f"# Offre commerciale\n{ctx}\n\n"
+        f"{bloc_emetteur}"
         f"# Lead à évaluer\n{desc_lead}\n\n"
         f"# Format de sortie attendu (JSON strict)\n{format_json}\n\n"
         f"# Règles\n{regles}\n"

@@ -16,7 +16,7 @@ from typing import Any
 
 from ..common.budget_guard import BudgetExceededError
 from ..common.logger import get_logger
-from ..models import ClaudeScoring, LeadStage3, LeadStage4
+from ..models import ClaudeScoring, Emetteur, LeadStage3, LeadStage4
 from .cache import CacheStage4, calcul_cache_key, hash_prompt
 from .client import ClaudeClient, ClaudeParseError
 from .prompt_template import CONTEXTE_CLIENT_DEFAUT, PROMPT_VERSION, construire_prompt
@@ -33,11 +33,13 @@ class EnricheurStage4:
         config: ClaudeScoring,
         cache: CacheStage4 | None = None,
         callback_save_incremental=None,
+        emetteur: Emetteur | None = None,
     ):
         self.client = client
         self.config = config
         self.cache = cache
         self.callback_save = callback_save_incremental
+        self.emetteur = emetteur
 
         self.contexte_client = config.contexte_client or CONTEXTE_CLIENT_DEFAUT
         self._cache_key = calcul_cache_key(
@@ -92,6 +94,7 @@ class EnricheurStage4:
             lead=lead,
             contexte_client=self.contexte_client,
             inclure_pitch=self.config.inclure_pitch,
+            emetteur=self.emetteur,
         )
         lead_cache_key = f"{self._cache_key}:{hash_prompt(prompt)}"
 

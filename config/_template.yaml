@@ -69,6 +69,20 @@ claude_scoring:
   contexte_client: null                   # null = contexte RénoBoost par défaut ; sinon string libre
   max_tokens_sortie: 400                  # plafond tokens sortie par lead
 
+# ─── Émetteur (optionnel) ─────────────────────────────────────────
+# Identité au nom de laquelle les cold mails sont SIGNÉS et ENVOYÉS.
+# Bloc absent (ou commenté) = comportement historique : Claude devine
+# l'émetteur dans `contexte_client`. Renseigné = signature « entreprise +
+# coordonnées en pied » imposée en L4, et `email` sert de from_email d'envoi
+# (résolu auto par le staging cold-mail depuis la session).
+# emetteur:
+#   nom_entreprise: "Toitures Rossini"     # REQUIS
+#   signataire: "Marc Rossini"             # optionnel — personne qui signe
+#   fonction: "Gérant"                     # optionnel
+#   telephone: "03 20 00 00 00"            # optionnel — pied de signature
+#   email: "contact@toitures-rossini.fr"   # optionnel — pied + from_email d'envoi
+#   site_web: "https://toitures-rossini.fr"# optionnel — pied de signature
+
 # ─── Volume cible ─────────────────────────────────────────────────
 volume:
   cible: 200                              # Nombre de leads visés

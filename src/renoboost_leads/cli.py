@@ -357,6 +357,7 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         session_id=session_id,
         campaign=cfg.run.client_name,
         debut=datetime.now(timezone.utc),
+        emetteur_email=cfg.emetteur.email if cfg.emetteur else None,
     )
 
     settings = get_settings()
@@ -1029,6 +1030,7 @@ def _executer_stage4(cfg, settings, leads_l3, output_dir, stats, dry_run: bool =
         config=cfg.claude_scoring,
         cache=cache_l4,
         callback_save_incremental=callback_save,
+        emetteur=cfg.emetteur,
     )
 
     # Par défaut on ne score que les qualifiés (économie de tokens). Les leads

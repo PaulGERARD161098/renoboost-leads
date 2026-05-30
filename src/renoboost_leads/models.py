@@ -188,6 +188,28 @@ class ClaudeScoring(BaseModel):
     scorer_hors_filtre: bool = False
 
 
+class Emetteur(BaseModel):
+    """Identité de l'émetteur au nom de qui les mails sont chassés/signés.
+
+    L'outil prospecte POUR un client (l'utilisateur de RénoBoost-Leads) :
+    les cold mails générés en L4 doivent être signés au nom de CE client
+    (entreprise + coordonnées en pied), pas au nom de RénoBoost.
+
+    `nom_entreprise` est requis ; le reste est optionnel. Quand le bloc
+    `emetteur` est absent du YAML, le comportement historique est conservé
+    (Claude devine l'émetteur dans le texte libre `contexte_client`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nom_entreprise: str = Field(min_length=1, max_length=120)
+    telephone: str | None = None
+    email: str | None = None  # sert aussi de from_email d'envoi (cold mail)
+    site_web: str | None = None
+    signataire: str | None = None  # nom de la personne qui signe
+    fonction: str | None = None  # ex "Gérant", "Responsable commercial"
+
+
 class CampaignConfig(BaseModel):
     """Représente le contenu d'un fichier `config/<client>.yaml`."""
 
@@ -201,6 +223,9 @@ class CampaignConfig(BaseModel):
     filtres_entreprise: FiltresEntreprise = Field(default_factory=FiltresEntreprise)
     enrichissement_l3_5: EnrichissementL35 = Field(default_factory=EnrichissementL35)
     claude_scoring: ClaudeScoring = Field(default_factory=ClaudeScoring)
+    # Émetteur au nom duquel les mails sont signés/envoyés. None = comportement
+    # historique (signature devinée par Claude depuis `contexte_client`).
+    emetteur: Emetteur | None = None
     volume: Volume
     budget: Budget
     sortie: Sortie = Sortie()
@@ -532,3 +557,6 @@ class RunStats(BaseModel):
     etages_executes: list[StageStats] = []
     leads_finaux: int = 0
     erreurs: list[str] = []
+    # Email de l'émetteur (cf. CampaignConfig.emetteur). Persisté ici pour que
+    # le staging cold-mail puisse résoudre le from_email « auto depuis la session ».
+    emetteur_email: str | None = None

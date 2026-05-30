@@ -92,6 +92,52 @@ def test_stage_drafte_et_persiste(fake_root: Path) -> None:
     assert "Marie" in corps_alice.corps or "Marie Dupont" in corps_alice.corps
 
 
+def _ecrire_run_stats(d: Path, emetteur_email: str | None) -> None:
+    import json
+
+    (d / "run_stats.json").write_text(
+        json.dumps({"session_id": d.name, "campaign": "x", "emetteur_email": emetteur_email}),
+        encoding="utf-8",
+    )
+
+
+def test_from_email_auto_depuis_session(
+    fake_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cm, "OUTPUT_ROOT", fake_root)
+    d = fake_root / "s_emetteur"
+    d.mkdir()
+    _ecrire_l4(d, [{"nom": "A", "email_dropcontact": "a@x.fr", "score_interet": "90"}])
+    _ecrire_run_stats(d, "contact@toitures-rossini.fr")
+    # Pas de from_email explicite → résolu depuis la session.
+    res = cm.stage_cold_emails("s_emetteur", secteur="compta")
+    assert res["from_email"] == "contact@toitures-rossini.fr"
+
+
+def test_from_email_explicite_prioritaire(
+    fake_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cm, "OUTPUT_ROOT", fake_root)
+    d = fake_root / "s_override"
+    d.mkdir()
+    _ecrire_l4(d, [{"nom": "A", "email_dropcontact": "a@x.fr", "score_interet": "90"}])
+    _ecrire_run_stats(d, "contact@toitures-rossini.fr")
+    res = cm.stage_cold_emails("s_override", secteur="compta", from_email="paul@x.fr")
+    assert res["from_email"] == "paul@x.fr"
+
+
+def test_from_email_fallback_defaut(
+    fake_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cm, "OUTPUT_ROOT", fake_root)
+    d = fake_root / "s_nofallback"
+    d.mkdir()
+    _ecrire_l4(d, [{"nom": "A", "email_dropcontact": "a@x.fr", "score_interet": "90"}])
+    # Pas de run_stats.json → fallback sur le défaut.
+    res = cm.stage_cold_emails("s_nofallback", secteur="compta")
+    assert res["from_email"] == cm.FROM_EMAIL_DEFAUT
+
+
 def test_list_stagings(fake_root: Path) -> None:
     d = fake_root / "s4"
     d.mkdir()

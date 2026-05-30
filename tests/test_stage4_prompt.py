@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from renoboost_leads.models import LeadStage3
+from renoboost_leads.models import Emetteur, LeadStage3
 from renoboost_leads.stage4_prospection.prompt_template import (
     CONTEXTE_CLIENT_DEFAUT,
     PROMPT_VERSION,
@@ -133,3 +133,60 @@ class TestConstruirePrompt:
     def test_prompt_sans_signaux_ve_n_affiche_pas_la_ligne(self):
         prompt = construire_prompt(_lead_minimal())
         assert "Signaux flotte" not in prompt
+
+
+class TestEmetteur:
+    @staticmethod
+    def _emetteur_complet() -> Emetteur:
+        return Emetteur(
+            nom_entreprise="Toitures Rossini",
+            signataire="Marc Rossini",
+            fonction="Gérant",
+            telephone="03 20 00 00 00",
+            email="contact@toitures-rossini.fr",
+            site_web="https://toitures-rossini.fr",
+        )
+
+    def test_sans_emetteur_pas_de_section(self):
+        prompt = construire_prompt(_lead_minimal())
+        assert "# Émetteur" not in prompt
+        # Comportement historique : signature devinée depuis l'offre commerciale.
+        assert "issu de l'offre commerciale" in prompt
+
+    def test_avec_emetteur_section_et_coordonnees(self):
+        prompt = construire_prompt(_lead_minimal(), emetteur=self._emetteur_complet())
+        assert "# Émetteur" in prompt
+        assert "Toitures Rossini" in prompt
+        assert "Marc Rossini" in prompt
+        assert "Gérant" in prompt
+        assert "03 20 00 00 00" in prompt
+        assert "contact@toitures-rossini.fr" in prompt
+        assert "https://toitures-rossini.fr" in prompt
+        # La règle de signature bascule sur le pied de coordonnées.
+        assert "pied de coordonnées" in prompt
+        assert "issu de l'offre commerciale" not in prompt
+
+    def test_emetteur_champs_optionnels_absents_non_affiches(self):
+        prompt = construire_prompt(
+            _lead_minimal(), emetteur=Emetteur(nom_entreprise="ACME Solaire")
+        )
+        assert "# Émetteur" in prompt
+        assert "ACME Solaire" in prompt
+        # Aucune ligne de coordonnée fabriquée quand non fournie.
+        assert "Téléphone :" not in prompt.split("# Lead", 1)[0]
+        assert "Email :" not in prompt.split("# Lead", 1)[0]
+
+    def test_emetteur_sans_pitch_pas_de_section(self):
+        # Sans pitch, pas d'email généré → la section émetteur n'a pas de sens
+        # mais ne doit pas planter ; la signature ne s'applique qu'au corps email.
+        prompt = construire_prompt(
+            _lead_minimal(), inclure_pitch=False, emetteur=self._emetteur_complet()
+        )
+        # La section est toujours injectée (inoffensive), mais aucune règle email.
+        assert "email_corps" not in prompt
+
+    def test_emetteur_change_le_hash_du_prompt(self):
+        # Deux émetteurs distincts → prompts distincts → cache miss (hash_prompt).
+        base = construire_prompt(_lead_minimal())
+        avec = construire_prompt(_lead_minimal(), emetteur=self._emetteur_complet())
+        assert base != avec
