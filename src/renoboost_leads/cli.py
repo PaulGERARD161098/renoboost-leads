@@ -17,6 +17,12 @@ from .common.budget_guard import BudgetExceededError, BudgetGuard
 from .common.cache import SessionCache
 from .common.logger import setup_logger
 from .common.rate_limiter import RateLimiter
+from .completion import (
+    EtageCompletion,
+    construire_provider_societeinfo,
+    export_completion_csv,
+    generer_annexe_completion,
+)
 from .config_loader import load_campaign_config
 from .exporter import (
     backup_csv,
@@ -303,11 +309,12 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         console.print(f"[red]✗ Format --stages invalide : '{stages}'.[/red]")
         sys.exit(2)
 
-    if any(s not in (0, 1, 2, 3, 3.5, 4) for s in stages_demandes):
+    if any(s not in (0, 1, 2, 3, 3.5, 3.7, 4) for s in stages_demandes):
         console.print(
-            "[yellow]⚠  Étages valides : 0, 1, 2, 3, 3.5, 4. Étages inconnus ignorés.[/yellow]"
+            "[yellow]⚠  Étages valides : 0, 1, 2, 3, 3.5, 3.7, 4. "
+            "Étages inconnus ignorés.[/yellow]"
         )
-        stages_demandes = [s for s in stages_demandes if s in (0, 1, 2, 3, 3.5, 4)]
+        stages_demandes = [s for s in stages_demandes if s in (0, 1, 2, 3, 3.5, 3.7, 4)]
 
     if not stages_demandes:
         console.print("[red]✗ Aucun étage valide demandé.[/red]")
@@ -491,11 +498,63 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
                 "(sous-traitant RGPD — voir RGPD_COMPLIANCE.md)"
             )
 
+    # ─── Étage 3.7 (complétion : repêchage + enrichissement, optionnel) ───
+    leads_l37 = None
+    if 3.7 in stages_demandes:
+        # Source : L3.5 si dispo, sinon L3, sinon CSV sur disque.
+        leads_pour_l37 = leads_l35 if leads_l35 is not None else leads_l3
+        if leads_pour_l37 is None:
+            csv_l35 = output_dir / "etage3_5_enrichissement.csv"
+            csv_l3 = output_dir / "etage3_contacts.csv"
+            if csv_l35.exists():
+                leads_pour_l37 = lire_stage3_5_csv(csv_l35)
+                logger.info("L3.5 chargé depuis CSV existant : %d leads", len(leads_pour_l37))
+            elif csv_l3.exists():
+                leads_pour_l37 = lire_stage3_csv(csv_l3)
+                logger.info("L3 chargé depuis CSV existant : %d leads", len(leads_pour_l37))
+            else:
+                console.print(
+                    f"[red]✗ Impossible de lancer L3.7 : CSV L3 introuvable ({csv_l3}).[/red]\n"
+                    "   Lance d'abord --stages 3."
+                )
+                sys.exit(2)
+
+        use_dry_37 = dry_run or not settings.has_societeinfo()
+        if use_dry_37 and not dry_run:
+            console.print(
+                "[yellow]⚠  SOCIETEINFO_API_KEY absente → L3.7 en dry-run "
+                "(données simulées).[/yellow]"
+            )
+
+        leads_l37 = _executer_stage3_7(
+            cfg=cfg,
+            settings=settings,
+            leads_l3=leads_pour_l37,
+            output_dir=output_dir,
+            stats=stats,
+            dry_run=use_dry_37,
+        )
+        if use_dry_37:
+            sources_rgpd.append(
+                "Étage 3.7 simulé (dry-run) — aucune donnée envoyée à Societeinfo"
+            )
+        else:
+            sources_rgpd.append(
+                "Societeinfo API — complétion firmographique "
+                "(registres officiels FR — voir RGPD_COMPLIANCE.md)"
+            )
+
     # ─── Étage 4 ───
     leads_l4 = None
     if 4 in stages_demandes:
-        # Source L3.5 prioritaire si on l'a, sinon L3 (avec ou sans depuis CSV).
-        leads_pour_l4 = leads_l35 if leads_l35 is not None else leads_l3
+        # Source : complétion 3.7 si on l'a, sinon L3.5, sinon L3.
+        leads_pour_l4 = (
+            leads_l37
+            if leads_l37 is not None
+            else leads_l35
+            if leads_l35 is not None
+            else leads_l3
+        )
         if leads_pour_l4 is None:
             # Si un CSV L3.5 existe sur disque, on le préfère (pas perdre l'enrichissement)
             csv_l35 = output_dir / "etage3_5_enrichissement.csv"
@@ -543,6 +602,8 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
     nb_leads_finaux = (
         len(leads_l4)
         if leads_l4 is not None
+        else len(leads_l37)
+        if leads_l37 is not None
         else len(leads_l35)
         if leads_l35 is not None
         else len(leads_l3)
@@ -974,6 +1035,63 @@ def _executer_stage3_5(cfg, settings, leads_l3, output_dir, stats, dry_run: bool
         f"Coût : {enricher.cout_total_eur:.2f} €"
     )
     return leads_l35
+
+
+def _executer_stage3_7(cfg, settings, leads_l3, output_dir, stats, dry_run: bool = False):
+    """Exécute l'étage 3.7 (complétion : repêchage + enrichissement Societeinfo).
+
+    Comble les champs de base manquants (SIREN, dirigeant, NAF, effectif, CA,
+    emails, téléphone) via un provider externe, trace la provenance, et produit
+    deux livrables : le CSV `etage3_7_completion.csv` + l'annexe `completion.md`.
+    """
+    csv_path = output_dir / "etage3_7_completion.csv"
+    annexe_path = output_dir / "completion.md"
+    t0 = datetime.now(timezone.utc)
+
+    api_key = (
+        settings.societeinfo_api_key.get_secret_value()
+        if settings.has_societeinfo()
+        else None
+    )
+    budget_eur = max(0.01, cfg.budget.max_eur - stats.cout_total_eur)
+    provider = construire_provider_societeinfo(
+        api_key=api_key,
+        dry_run=dry_run,
+        budget_eur=budget_eur,
+        rate_per_min=settings.max_requests_per_minute,
+    )
+    if dry_run:
+        console.print("[yellow]⚠  L3.7 en mode dry-run (aucun appel à Societeinfo).[/yellow]")
+
+    etage = EtageCompletion(provider=provider)
+    leads_l37 = etage.enrichir(leads_l3)
+
+    duree = (datetime.now(timezone.utc) - t0).total_seconds()
+    export_completion_csv(leads_l37, csv_path)
+    backup_csv(csv_path)
+    generer_annexe_completion(leads_l37, annexe_path)
+
+    stats.cout_total_eur += etage.cout_total_eur
+    stats.etages_executes.append(
+        StageStats(
+            nom_etage="completion",
+            duree_secondes=duree,
+            nb_appels_api=etage.nb_appeles,
+            nb_succes=etage.nb_repeches,
+            nb_echecs=etage.nb_appeles - etage.nb_repeches,
+            cout_eur_estime=etage.cout_total_eur,
+            leads_collectes=len(leads_l37),
+        )
+    )
+
+    console.print(
+        f"\n[green]✓ Étage 3.7 : {len(leads_l37)} leads → {csv_path.name}[/green]\n"
+        f"   Appelés (provider) : {etage.nb_appeles} — "
+        f"Repêchés : {etage.nb_repeches} — "
+        f"Coût : {etage.cout_total_eur:.2f} €\n"
+        f"   Annexe : {annexe_path.name}"
+    )
+    return leads_l37
 
 
 def _filtrer_leads_a_scorer(leads, scorer_hors_filtre: bool):

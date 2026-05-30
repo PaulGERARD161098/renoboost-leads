@@ -205,6 +205,25 @@ python -m renoboost_leads.cli enrich-societeinfo \
   --from-csv data/output/<session>/etage2_entreprises.csv --dry-run
 ```
 
+### Étage 3.7 — Complétion (repêchage + enrichissement)
+
+Étage **générique** intégré au pipeline `run`, qui à la fois **enrichit**
+l'existant (NAF, effectif, CA, dirigeant…) **et repêche** ce que les étages
+classiques n'ont pas trouvé (SIREN, dirigeant, email) via une source externe
+(provider Societeinfo, swappable). Remplissage *fill-if-empty* + provenance
+tracée. Deux livrables par run : `etage3_7_completion.csv` + l'annexe
+`completion.md`. Voir [COMPLETION.md](./COMPLETION.md).
+
+```bash
+# Opt-in dans un run complet (dry-run sans clé) :
+python -m renoboost_leads.cli run --config config/client_rossini.yaml \
+  --stages 1,2,3,3.5,3.7,4 --dry-run
+
+# Sur un CSV L3 existant uniquement :
+python -m renoboost_leads.cli run --config config/client_rossini.yaml \
+  --stages 3.7 --from-csv data/output/<session>/etage3_contacts.csv
+```
+
 ### Interface Streamlit (visualisation + déclenchement L4)
 
 ```bash
