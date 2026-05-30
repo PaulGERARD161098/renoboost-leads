@@ -3,10 +3,17 @@
 ## Convention "fin de session"
 
 Quand l'utilisateur écrit **`fin de session`** (ou variante : *fin de session.*,
-*on s'arrête*, *fin de journée*), produire un **prompt de reprise prêt à coller
-dans une nouvelle session demain**, dans un bloc ``` ``` ```.
+*on s'arrête*, *fin de journée*), produire **trois livrables**, dans l'ordre :
 
-Le prompt doit contenir :
+1. **Synthèse du travail effectué** — le passage d'un point A (état d'ouverture)
+   à un point B (état de fermeture) : ce qui a été livré, mergé, décidé.
+2. **Nettoyage du code mort** — vérifier et retirer ce que la session a laissé
+   d'inutile (imports/variables/fonctions non utilisés, helpers morts, TODO
+   résolus, fichiers temporaires). `ruff check` + `pytest` doivent rester verts.
+3. **Prompt de reprise** — prêt à coller dans une nouvelle session demain, dans
+   un bloc ``` ``` ```.
+
+Le prompt de reprise doit contenir :
 
 1. **Contexte projet** — repo, langage, architecture en 1-2 phrases.
 2. **État à la fermeture** — branche, SHA HEAD, propreté du working tree,
