@@ -198,3 +198,28 @@ class TestEnricheurPropageSignauxVe:
 
         assert l3a.signaux_ve == ["IRVE", "ZFE"]
         assert l3b.signaux_ve == ["IRVE", "ZFE"]
+
+
+def test_403_allowlist_donne_reseau_bloque():
+    """403 + mention allowlist -> raison_echec dediee (blocage reseau, pas site KO)."""
+    from renoboost_leads.stage3_contacts.scraper import (
+        RESEAU_BLOQUE,
+        SITE_INACCESSIBLE,
+        ScraperContact,
+    )
+
+    class _Resp:
+        def __init__(self, status_code, text=""):
+            self.status_code = status_code
+            self.text = text
+
+    def _scraper(resp):
+        sc = ScraperContact(rate_limit_seconds=0.0)
+        sc.session.get = lambda *a, **k: resp  # type: ignore[assignment]
+        return sc
+
+    res = _scraper(_Resp(403, "Host not in allowlist")).scraper("http://acme.fr")
+    assert res.raison_echec == RESEAU_BLOQUE
+
+    res2 = _scraper(_Resp(403, "Forbidden")).scraper("http://acme.fr")
+    assert res2.raison_echec == SITE_INACCESSIBLE

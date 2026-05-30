@@ -19,7 +19,7 @@ from ..common.cache import SessionCache
 from ..common.logger import get_logger
 from ..models import LeadStage2, LeadStage3
 from .pattern_generator import generer_tous_patterns
-from .scraper import ResultatScraping, ScraperContact, extraire_domaine
+from .scraper import RESEAU_BLOQUE, ResultatScraping, ScraperContact, extraire_domaine
 
 logger = get_logger(__name__)
 
@@ -36,6 +36,7 @@ class EnricheurStage3:
         self.scraper = scraper
         self.cache = cache
         self.callback_save = callback_save_incremental
+        self._reseau_bloque_signale = False
 
     def _scraper_avec_cache(self, site_web: str | None) -> ResultatScraping:
         """Scrape avec cache (évite re-scraping en cas de relance)."""
@@ -103,6 +104,14 @@ class EnricheurStage3:
             emails_scrapes = scraping.emails
             page_source = scraping.page_source
             signaux_ve = scraping.signaux_ve
+
+            if scraping.raison_echec == RESEAU_BLOQUE and not self._reseau_bloque_signale:
+                logger.warning(
+                    "Scraping L3 de fait désactivé par la politique réseau "
+                    "(allowlist) — les emails ne pourront pas être collectés "
+                    "dans cet environnement."
+                )
+                self._reseau_bloque_signale = True
 
         # Si pas de domaine via scraping, on tente l'extraction directe
         if domaine_extrait is None and site_web:
