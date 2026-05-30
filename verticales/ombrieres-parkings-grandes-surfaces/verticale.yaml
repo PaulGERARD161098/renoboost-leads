@@ -1,0 +1,90 @@
+# ════════════════════════════════════════════════════════════════
+# VERTICALE — Ombrières parking (grandes surfaces & ERP)
+# ════════════════════════════════════════════════════════════════
+# Brouillon de cadrage V0 (24 mai 2026). Le schéma est validé en D1.
+# Hérite des configs existantes client_ombrieres*.yaml (Hérault, BdR).
+# Référence : VERTICALES.md sections 4 et 8.
+
+verticale:
+  slug: ombrieres-parkings-grandes-surfaces
+  nom: "Ombrières de parking — grandes surfaces & ERP"
+  description: |
+    Fabricant/installateur d'ombrières (bois ou acier) démarchant des
+    sites à grand parking exploitable : hypers, retail parks, hôpitaux,
+    cliniques, lycées, salles de séminaire.
+
+cible:
+  type: b2b
+  detail: "Exploitants de sites à parking > 3000 m² (retail, santé, enseignement, événementiel)"
+
+offre:
+  produit: "Ombrières de parking photovoltaïques + bornes IRVE optionnelles"
+  argument_principal: "Décret tertiaire/parkings, ombrage clients, revenu PV, image RSE"
+  ticket_moyen_eur: 250000
+
+cibles:
+  secteurs_places:
+    - type: "supermarket"
+      query: "hypermarché"
+    - type: "shopping_mall"
+      query: "centre commercial"
+    - type: "hospital"
+      query: "clinique privée"
+    - type: "event_venue"
+      query: "salle de séminaire entreprise"
+    - type: "lodging"
+      query: "hôtel 4 étoiles"
+  filtres_entreprise:
+    effectif_min: 50
+    naf_inclus: ["47", "55", "86", "85", "93"]
+    naf_exclus: []
+    forme_juridique_inclus: ["SAS", "SARL", "SA", "SNC"]
+    multi_sites_only: false
+
+signaux:
+  - "Parking extérieur > 3000 m² (estimé satellite/terrain en V1)"
+  - "Site opérationnel avec forte fréquentation (avis Google nombreux)"
+  - "Obligation décret parkings > 1500 m² (loi APER)"
+  - "Propriétaire/exploitant du foncier (vs simple locataire d'une cellule)"
+
+qualification:
+  seuil_score_top: 70
+  criteres_top:
+    - "Parking estimé grand (signal #1)"
+    - "Au moins 1 obligation réglementaire applicable"
+    - "Email décideur (direction technique / patrimoine) trouvé"
+  criteres_exclusion:
+    - "Pas de parking propre"
+    - "Cellule en location dans un centre tiers"
+
+enrichissements:
+  l3_5_dropcontact: true
+  lecture_site_web: true
+  detection_terrain: false   # V1 — détection surface parking = gros levier ici
+
+ton_mail:
+  registre: "professionnel, orienté conformité + revenu"
+  longueur_mots: 130
+  attaque: "Rappel de l'obligation légale d'équiper les grands parkings (loi APER)"
+  cta: "20 min pour estimer le potentiel de votre parking"
+  signaux_a_personnaliser:
+    - "nom décideur (patrimoine/technique)"
+    - "ville"
+    - "type de site (hyper, clinique, lycée...)"
+    - "taille de parking observée"
+
+sequence:
+  j0:
+    template: "templates_sequence/mail_j0.md"
+    sujet: "{nom_entreprise} — votre parking est-il aux normes APER ?"
+  j3:
+    template: "templates_sequence/mail_j3.md"
+    sujet: "Relance — potentiel ombrières {ville}"
+  j7:
+    template: "templates_sequence/mail_j7.md"
+    sujet: "Dernière relance — {nom_entreprise}"
+
+budget_typique:
+  volume_cible: 150
+  cout_pipeline_eur: 12
+  cout_avec_l3_5_eur: 35

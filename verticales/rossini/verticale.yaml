@@ -1,0 +1,126 @@
+# ════════════════════════════════════════════════════════════════
+# VERTICALE — Rossini Energy : ombrières bois + bornes IRVE  [PILOTE V0]
+# ════════════════════════════════════════════════════════════════
+# Client réel (pilote D5/D6). Dérivée de la fiche Notion "Rossini Energy —
+# Compte client" + du proto config/client_rossini.yaml (10 leads validés).
+#
+# Offre combo : ombrières solaires en bois imputrescible + bornes de recharge
+# VE pour parkings B2B, + entretien en cross-sell.
+#
+# NB séparation offre / exécution : la ZONE (départements limitrophes 42/49/59,
+# liste fermée À CONFIRMER) n'est PAS ici — elle appartient à la CAMPAGNE
+# (objet construit en D3). Cette verticale décrit l'offre, pas le run.
+#
+# Dépendances pilote (cf ROADMAP_V0 'État de préparation') :
+#   - CA / santé financière : via Pappers (décidé).
+#   - Signal VE : flux Triple A Data (Rossini abonné, livraison SFTP).
+#   - Parking exploitable : approché par le secteur en V0 (détection = V1).
+
+verticale:
+  slug: rossini
+  nom: "Rossini Energy — ombrières bois + bornes IRVE"
+  description: |
+    Installateur d'ombrières solaires en bois imputrescible et de bornes de
+    recharge VE pour des PME B2B (sièges, entrepôts, sites logistiques,
+    industrie). Vend l'installation combinée puis l'entretien.
+
+cible:
+  type: b2b
+  detail: "PME/ETI (sièges, entrepôts, logistique, industrie) — ERT, pas ERP, parking exploitable"
+
+offre:
+  produit: "Ombrières solaires bois + bornes IRVE (installation) + contrat d'entretien"
+  argument_principal: "Obligation loi APER (parkings), revenu PV, recharge flotte, image RSE"
+  ticket_moyen_eur: 150000
+
+cibles:
+  secteurs_places:
+    - type: "industrie"
+      query: "usine"
+    - type: "logistique"
+      query: "entrepôt logistique"
+    - type: "logistique_plateforme"
+      query: "plateforme logistique"
+    - type: "sieges_sociaux"
+      query: "siège social"
+  filtres_entreprise:
+    effectif_min: 20            # exclut les TPE ; signal "site sérieux"
+    naf_inclus:
+      - "10"                    # industries alimentaires
+      - "20"                    # chimie
+      - "22"                    # caoutchouc/plastiques
+      - "23"                    # autres produits minéraux
+      - "24"                    # métallurgie
+      - "25"                    # produits métalliques
+      - "26"                    # informatique/électronique
+      - "27"                    # équipements électriques
+      - "28"                    # machines/équipements
+      - "29"                    # automobile
+      - "30"                    # autres matériels de transport
+      - "31"                    # meubles
+      - "32"                    # autres industries manufacturières
+      - "33"                    # réparation/installation machines
+      - "49"                    # transports terrestres
+      - "52"                    # entreposage / logistique
+      - "53"                    # poste/courrier
+      - "70.10"                 # sièges sociaux
+    naf_exclus:
+      - "47"                    # commerce de détail (retail / zones commerciales)
+      - "55"                    # hôtellerie
+      - "56"                    # restauration / événementiel
+    forme_juridique_inclus: ["SAS", "SARL", "SA"]
+    multi_sites_only: false     # multisites = critère "top", pas exclusion
+
+signaux:
+  # Le flux Triple A Data (SFTP) alimente le signal VE (bornes).
+  - "Parking extérieur exploitable — cible ombrières (obligation loi APER dès ~1500 m²)"
+  - "Immatriculations VE récentes au nom de l'entreprise (Triple A Data) — signal bornes"
+  - "Propriétaire / exploitant du site (vs locataire d'une cellule) — installation possible"
+  - "Établissement recevant des travailleurs (ERT), pas du public (ERP)"
+  - "Multi-sites (>= 2 établissements) — potentiel de déploiement"
+  - "Santé financière solide (CA, résultat net positif) — ressources suffisantes"
+
+qualification:
+  seuil_score_top: 70
+  criteres_top:
+    - "Parking exploitable ET propriétaire/exploitant du site"
+    - "Signal VE récent (Triple A) OU obligation loi APER applicable"
+    - "Santé financière OK (ni déficitaire N/N-1, ni procédure collective)"
+    - "Email décideur trouvé (DG, resp. patrimoine / technique / moyens généraux)"
+  criteres_exclusion:
+    - "Locataire d'une cellule dans un centre tiers (parking non maîtrisé)"
+    - "Zone commerciale / retail (propriété multi-propriétaires, SCPI)"
+    - "Hôtellerie ou événementiel"
+    - "TPE / ressources insuffisantes (effectif < 20)"
+
+enrichissements:
+  l3_5_dropcontact: true        # Triple A ne fournit pas le tél décideur
+  lecture_site_web: true
+  detection_terrain: false      # V1 — détection surface parking par imagerie
+
+ton_mail:
+  registre: "professionnel, orienté conformité (loi APER) + revenu + image RSE"
+  longueur_mots: 130
+  attaque: "Constat sur leur grand parking ou leur passage à l'électrique + rappel de l'obligation loi APER"
+  cta: "20 min pour estimer le potentiel ombrières + bornes de votre site"
+  signaux_a_personnaliser:
+    - "nom décideur (patrimoine / technique / DG)"
+    - "ville"
+    - "type de site (entrepôt, usine, siège...)"
+    - "indice observé (parking, VE, multi-sites)"
+
+sequence:
+  j0:
+    template: "templates_sequence/mail_j0.md"
+    sujet: "{nom_entreprise} — votre parking est-il aux normes loi APER ?"
+  j3:
+    template: "templates_sequence/mail_j3.md"
+    sujet: "Relance — ombrières + bornes {ville}"
+  j7:
+    template: "templates_sequence/mail_j7.md"
+    sujet: "Dernière relance — {nom_entreprise}"
+
+budget_typique:
+  volume_cible: 200
+  cout_pipeline_eur: 15
+  cout_avec_l3_5_eur: 45
