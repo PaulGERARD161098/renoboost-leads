@@ -845,7 +845,10 @@ def _executer_stage3(cfg, leads_l2, cache, output_dir, stats):
     def callback_save(leads_partial):
         export_stage3_csv(leads_partial, csv_path)
 
-    scraper = ScraperContact(rate_limit_seconds=1.0)
+    scraper = ScraperContact(
+        rate_limit_seconds=1.0,
+        signaux_ve=cfg.scraping_l3.signaux_ve,
+    )
     enricheur = EnricheurStage3(
         scraper=scraper,
         cache=cache,
