@@ -16,6 +16,7 @@ data/cold_mail/
 *.csv
 !data/reference/*.csv
 !tests/fixtures_aaa/*.csv
+!tests/fixtures_parkings/*.csv
 *.sqlite
 *.db
 

@@ -1,0 +1,11 @@
+IDENTIFIANT;NOM;SIREN;ADRESSE;CODE_POSTAL;COMMUNE;DEPARTEMENT;SURFACE_M2;LATITUDE;LONGITUDE
+osm-1001;Carrefour Lens;;Rue de la Gare;62300;Lens;62;14500;50.4281;2.8319
+osm-1002;Zone commerciale Grand Sud;;Avenue du Languedoc;34070;Montpellier;34;22000;43.5800;3.8700
+osm-1003;Decathlon Englos;;Centre commercial;59320;Englos;59;8200;50.6300;2.9700
+osm-1004;Clinique du Parc;;Boulevard Pasteur;69008;Lyon;69;3400;45.7400;4.8700
+osm-1005;Restaurant Le Petit Coin;;Place du Marche;31000;Toulouse;31;850;43.6000;1.4400
+osm-1006;Usine Plastiques Nord;402111111;ZI des Hauts;59200;Tourcoing;59;5600;50.7200;3.1600
+osm-1007;Hypermarche Auchan;;Route de Paris;33700;Merignac;33;31000;44.8400;-0.6500
+osm-1008;Garage Dupont;;Rue Nationale;44000;Nantes;44;420;47.2100;-1.5500
+osm-1009;Lycee Jean Moulin;;Avenue de la Republique;13100;Aix-en-Provence;13;1800;43.5300;5.4400
+osm-1010;Entrepot Logistique Est;;ZAC du Moulin;67200;Strasbourg;67;12500;48.5800;7.7000

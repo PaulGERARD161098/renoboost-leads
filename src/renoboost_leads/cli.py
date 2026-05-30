@@ -1374,6 +1374,16 @@ from .cli_cold_mail import cold_mail_group  # noqa: E402
 
 cli.add_command(cold_mail_group)
 
+# Sous-groupe parkings APER (prospects ombrières contraints loi APER)
+from .parkings_aper.cli_aper import aper_group  # noqa: E402
+
+cli.add_command(aper_group)
+
+# Commande enrich-societeinfo (enrichissement firmographique autonome)
+from .societeinfo_enrichment.cli_societeinfo import enrich_societeinfo  # noqa: E402
+
+cli.add_command(enrich_societeinfo)
+
 
 if __name__ == "__main__":
     cli()
