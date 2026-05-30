@@ -58,6 +58,38 @@ filtres_entreprise:
     - "SCI"
   naf_inclus: []                         # pas de whitelist : on prend large puis on exclut
 
+# ─── Étage 3 — signaux « flotte en transition VE » ────────────────
+# Le client idéal est un SIÈGE de PME qui veut passer aux VE, ou vient de
+# passer et commence à constituer sa flotte (fenêtre d'achat ombrières/IRVE).
+# Ces motifs (regex sur texte normalisé minuscule SANS accents) repèrent ce
+# signal sur le site du lead en L3 ; il est ensuite remonté au scoring L4.
+scraping_l3:
+  signaux_ve:
+    "flotte electrique": "\\bflottes? (de )?(vehicules? )?electriques?\\b"
+    "passage aux VE": "\\b(passage|passer|passons|passe|transition|electrification) (a l'|aux |de (la|notre) flotte )?electriques?\\b|\\belectrification\\b"
+    "bornes de recharge": "\\bbornes? de recharge\\b|\\birve\\b|\\bwallbox\\b|\\bpoints? de charge\\b"
+    "vehicule electrique": "\\bvehicules? electriques?\\b"
+    "engagement ZFE/decarbonation": "\\bzfe\\b|\\bzone a faibles emissions\\b|\\bdecarbonation\\b|\\bbilan carbone\\b"
+
+# ─── Étage 4 — contexte scoring orienté ICP « transition VE » ─────
+claude_scoring:
+  contexte_client: |
+    Tu travailles pour RénoBoost, courtier B2B en travaux de rénovation
+    énergétique : ombrières photovoltaïques de parking, bornes de recharge
+    (IRVE), panneaux solaires en toiture.
+
+    CIBLE IDÉALE (à scorer haut) : le SIÈGE d'une PME qui possède ses locaux
+    dans une zone d'activité (parking + toiture exploitables) ET qui est en
+    pleine transition vers les véhicules électriques — soit elle prévoit d'y
+    passer, soit elle vient de franchir le pas et commence à constituer sa
+    flotte. Ces entreprises ont un besoin imminent de bornes de recharge et
+    d'ombrières pour alimenter/abriter leurs VE.
+
+    Signaux forts (priorité) : mention d'une flotte qui s'électrifie, bornes
+    récemment installées ou en projet, engagement ZFE / décarbonation, parc de
+    véhicules d'entreprise. Un siège local (décideur joignable) prime sur une
+    antenne de grand groupe.
+
 volume:
   cible: 30
 
