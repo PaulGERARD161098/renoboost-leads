@@ -46,6 +46,12 @@ def aper_group() -> None:
               help="Plafond budget € pour le scoring L4 (Claude).")
 @click.option("--dry-run", is_flag=True,
               help="Simulation L4 (scores factices, pas d'appel Anthropic).")
+@click.option("--vers-staging", is_flag=True,
+              help="Pousse les top leads dans le staging cold-mail Instantly (validation N2).")
+@click.option("--min-score", "min_score", type=int, default=None,
+              help="Avec --vers-staging : élargit aux leads de score ≥ N (défaut : top leads).")
+@click.option("--from-email", "from_email", default="",
+              help="Avec --vers-staging : adresse expéditeur du staging.")
 def aper_run(
     fichier_parkings: Path,
     config_path: Path | None,
@@ -53,6 +59,9 @@ def aper_run(
     surface_min: float | None,
     budget_eur: float,
     dry_run: bool,
+    vers_staging: bool,
+    min_score: int | None,
+    from_email: str,
 ) -> None:
     """Lance un run parkings APER sur un CSV inventaire."""
     settings = get_settings()
@@ -120,3 +129,22 @@ def aper_run(
         f"  Coût L4                   : {resultat.cout_l4_eur:.4f} €\n"
         f"  CSV final                 : {csv_final}"
     )
+
+    if vers_staging:
+        from .staging_instantly import stager_leads_aper
+
+        res_stg = stager_leads_aper(
+            resultat.leads,
+            secteur=source,
+            session_id=output_dir.name,
+            from_email=from_email,
+            min_score=min_score,
+        )
+        console.print(
+            f"\n[green]✓ Staging cold-mail créé : {res_stg.staging_id}[/green]\n"
+            f"  Leads stagés (à valider) : {res_stg.nb_stages}\n"
+            f"  Écartés (sans email)     : {res_stg.nb_sans_email}\n"
+            f"  Écartés (sous le seuil)  : {res_stg.nb_sous_seuil}\n"
+            f"  → Valider : [cyan]cold-mail show {res_stg.staging_id}[/cyan] "
+            f"puis [cyan]cold-mail validate / send[/cyan]"
+        )
