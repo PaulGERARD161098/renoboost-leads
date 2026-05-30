@@ -1,0 +1,50 @@
+# ════════════════════════════════════════════════════════════════
+# Pilote IRVE flottes — run réel LIMITÉ (L1+L2), Paris (75)
+# Le CIBLAGE (secteurs Places + filtres NAF) vient de la verticale
+# irve-flottes-b2b via `--verticale` : ne PAS éditer secteurs/filtres ici,
+# ils sont surchargés à l'exécution. Cette config porte uniquement les
+# paramètres opérationnels (zone, volume, budget).
+# Budget plafonné : le BudgetGuard coupe le run au-delà de max_eur.
+# ════════════════════════════════════════════════════════════════
+
+run:
+  client_name: "pilote-irve-75"
+  description: "Run réel limité L1+L2 — ciblage verticale irve-flottes-b2b, Paris"
+  campaign_date: "2026-05-30"
+
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: false
+  enable_stage_4_prospection: false
+
+# Placeholder — surchargé par `--verticale irve-flottes-b2b`.
+secteurs:
+  - type: "placeholder"
+    query: "à surcharger par la verticale"
+
+zone:
+  type: "departement"
+  codes: ["75"]                 # Paris : bbox réduite → peu de points de grille
+  rayon_par_point_km: 12
+  pas_grille_km: 18             # grille large → minimise les appels Text Search
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  exiger_site_web: false
+
+# Placeholder — surchargé par `--verticale irve-flottes-b2b`.
+filtres_entreprise:
+  effectif_min: 50
+
+volume:
+  cible: 30
+  max_par_secteur: 8
+  max_pages: 1                  # 1 appel facturé par point × secteur
+
+budget:
+  max_eur: 2.0                  # plafond dur : coupe le run au-delà
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

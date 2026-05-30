@@ -75,6 +75,7 @@ from .stage4_prospection.client import ClaudeClient, ClaudeClientConfig
 from .stage4_prospection.dry_run import ClaudeClientDryRun
 from .stage4_prospection.enricher import EnricheurStage4
 from .veille_immatriculations.cli_veille import veille_group
+from .verticale import VerticaleHorsV0Error, load_verticale
 
 console = Console()
 
@@ -97,6 +98,35 @@ def _load_config_or_exit(config_path: Path) -> CampaignConfig:
     except ValidationError as e:
         console.print(f"[red]✗ Config YAML invalide :[/red]\n{e}")
         sys.exit(2)
+
+
+def _appliquer_verticale(cfg: CampaignConfig, slug: str) -> None:
+    """Surcharge le ciblage de `cfg` à partir de la verticale `slug`.
+
+    La verticale est la source de vérité du CIBLAGE : secteurs Places (L1) et
+    filtres entreprise NAF (L2) viennent du même fichier, ce qui garantit leur
+    cohérence (évite le décalage L1↔NAF). La config conserve les paramètres
+    opérationnels (zone, volume, budget, émetteur). Seul le B2B est exploitable
+    en V0 ; toute erreur de chargement termine le run avec le code 2.
+    """
+    try:
+        verticale = load_verticale(slug)
+    except FileNotFoundError:
+        console.print(f"[red]✗ Verticale introuvable : '{slug}'.[/red]")
+        sys.exit(2)
+    except VerticaleHorsV0Error as exc:
+        console.print(f"[red]✗ {exc}[/red]")
+        sys.exit(2)
+    except (ValueError, ValidationError) as exc:
+        console.print(f"[red]✗ Verticale '{slug}' invalide : {exc}[/red]")
+        sys.exit(2)
+
+    cfg.secteurs = verticale.cibles.secteurs_places
+    cfg.filtres_entreprise = verticale.cibles.filtres_entreprise
+    console.print(
+        f"[cyan]Verticale '{verticale.slug}' : {len(cfg.secteurs)} secteur(s) L1 "
+        f"+ filtres NAF L2 appliqués (ciblage aligné).[/cyan]"
+    )
 
 
 def _check_google_key_or_exit() -> str:
@@ -306,15 +336,25 @@ def estimate(config_path: Path) -> None:
     show_default=True,
     help="Provider étage 2 : data.gouv (gratuit) ou societeinfo (payant, registres officiels).",
 )
+@click.option(
+    "--verticale",
+    "verticale_slug",
+    default=None,
+    help="Slug d'une verticale (verticales/<slug>/verticale.yaml) : surcharge le "
+    "ciblage L1 (secteurs Places) et les filtres NAF L2 pour garantir leur cohérence.",
+)
 def run(
     config_path: Path,
     stages: str,
     from_csv_path: Path | None,
     dry_run: bool,
     l2_provider: str,
+    verticale_slug: str | None,
 ) -> None:
     """Lance un run de prospection."""
     cfg = _load_config_or_exit(config_path)
+    if verticale_slug:
+        _appliquer_verticale(cfg, verticale_slug)
 
     # Parse les étages demandés (accepte int "1/2/3/4" et float "3.5")
     try:
