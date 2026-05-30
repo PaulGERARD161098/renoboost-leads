@@ -115,26 +115,47 @@ MOTS_CLES_VE: dict[str, str] = {
 _VE_REGEX = {label: re.compile(motif) for label, motif in MOTS_CLES_VE.items()}
 
 
+def compiler_signaux_ve(
+    mots: dict[str, str] | None,
+) -> dict[str, re.Pattern[str]]:
+    """Compile un mapping `{libellé: motif}` en regex.
+
+    `None` → jeu par défaut `_VE_REGEX`. `{}` → aucun signal (détection off).
+    """
+    if mots is None:
+        return _VE_REGEX
+    return {label: re.compile(motif) for label, motif in mots.items()}
+
+
 def _normaliser_texte(texte: str) -> str:
     """Minuscule + suppression des accents, pour un matching robuste."""
     nfkd = unicodedata.normalize("NFKD", texte)
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
 
-def detecter_signaux_ve(html: str | None) -> list[str]:
+def detecter_signaux_ve(
+    html: str | None,
+    signaux_regex: dict[str, re.Pattern[str]] | None = None,
+) -> list[str]:
     """Détecte les signaux 'flotte / véhicule électrique' dans une page HTML.
 
     Recherche sur le texte visible (balises script/style retirées),
     insensible à la casse et aux accents. Retourne les libellés trouvés sans
-    doublon, dans l'ordre de `MOTS_CLES_VE`.
+    doublon, dans l'ordre du mapping fourni.
+
+    `signaux_regex` : regex compilées (cf. `compiler_signaux_ve`). None → jeu
+    par défaut `_VE_REGEX`.
     """
     if not html:
+        return []
+    regex = _VE_REGEX if signaux_regex is None else signaux_regex
+    if not regex:
         return []
     soup = BeautifulSoup(html, "html.parser")
     for balise in soup(["script", "style"]):
         balise.decompose()
     norm = _normaliser_texte(soup.get_text(separator=" "))
-    return [label for label, rx in _VE_REGEX.items() if rx.search(norm)]
+    return [label for label, rx in regex.items() if rx.search(norm)]
 
 
 # ════════════════════════════════════════════════════════════════
@@ -250,12 +271,18 @@ def extraire_emails_du_html(html: str, domaine_attendu: str | None = None) -> li
 class ScraperContact:
     """Scraping HTTP simple, politesse-first."""
 
-    def __init__(self, rate_limit_seconds: float = 1.0):
+    def __init__(
+        self,
+        rate_limit_seconds: float = 1.0,
+        signaux_ve: dict[str, str] | None = None,
+    ):
         self.rate_limit_seconds = rate_limit_seconds
         self._last_request_per_host: dict[str, float] = {}
         self._robots_cache: dict[str, urllib.robotparser.RobotFileParser] = {}
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
+        # Regex des signaux VE à détecter (None → défaut MOTS_CLES_VE).
+        self._signaux_regex = compiler_signaux_ve(signaux_ve)
 
     def _attendre_rate_limit(self, host: str) -> None:
         last = self._last_request_per_host.get(host)
@@ -342,7 +369,7 @@ class ScraperContact:
 
         def _accumuler_signaux_ve(html: str) -> None:
             """Ajoute les signaux VE de cette page sans doublon (ordre stable)."""
-            for signal in detecter_signaux_ve(html):
+            for signal in detecter_signaux_ve(html, self._signaux_regex):
                 if signal not in result.signaux_ve:
                     result.signaux_ve.append(signal)
 

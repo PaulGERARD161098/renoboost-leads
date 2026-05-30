@@ -58,6 +58,19 @@ filtres_entreprise:
   forme_juridique_exclus: []              # ex ["EI","EIRL"]
   multi_sites_only: false                 # true = exige nb_etablissements > 1
 
+# ─── Étage 3 — Scraping (optionnel) ───────────────────────────────
+# Signaux « flotte / véhicule électrique » détectés à coût nul sur les pages
+# déjà téléchargées, remontés au scoring L4. Pilotables par verticale.
+# Forme : {libellé affiché: motif regex}, appliqué sur le texte normalisé
+# (minuscule, sans accents). Utiliser \b pour les acronymes (faux positifs).
+# Bloc absent ou signaux_ve: null = jeu par défaut (IRVE, borne de recharge,
+# flotte/véhicule/mobilité électrique, ZFE, APER). signaux_ve: {} = détection off.
+# scraping_l3:
+#   signaux_ve:
+#     "IRVE": "\\birve\\b"
+#     "borne de recharge": "\\bbornes? de recharge\\b"
+#     "panneaux solaires": "\\bpanneaux? solaires?\\b"
+
 # ─── Étage 4 — Scoring Claude (optionnel) ─────────────────────────
 # Évalue chaque lead L3 face à un contexte commercial, produit un
 # score 0-100, une raison et (optionnel) un pitch personnalisé.

@@ -6,6 +6,7 @@ Les modèles suivent une logique d'extension : LeadStage2 hérite/contient LeadS
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -188,6 +189,39 @@ class ClaudeScoring(BaseModel):
     scorer_hors_filtre: bool = False
 
 
+class ScrapingL3(BaseModel):
+    """Configuration de l'étage 3 (scraping de contacts).
+
+    `signaux_ve` rend pilotables par YAML les marqueurs « flotte / véhicule
+    électrique » détectés à coût nul sur les pages déjà téléchargées, puis
+    remontés au scoring L4. Forme : `{libellé affiché: motif regex}`, le motif
+    étant appliqué sur le texte normalisé (minuscule, sans accents). Utiliser
+    des frontières de mot `\\b` pour les acronymes afin d'éviter les faux
+    positifs (ex. `\\baper\\b`).
+
+    None → jeu par défaut `MOTS_CLES_VE` (verticales ombrières / IRVE).
+    Vide (`{}`) → désactive complètement la détection de signaux.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    signaux_ve: dict[str, str] | None = None
+
+    @field_validator("signaux_ve")
+    @classmethod
+    def _compilable(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return v
+        for label, motif in v.items():
+            try:
+                re.compile(motif)
+            except re.error as e:
+                raise ValueError(
+                    f"signaux_ve['{label}'] : motif regex invalide ({e})"
+                ) from e
+        return v
+
+
 class Emetteur(BaseModel):
     """Identité de l'émetteur au nom de qui les mails sont chassés/signés.
 
@@ -222,6 +256,7 @@ class CampaignConfig(BaseModel):
     filtres: Filtres = Filtres()
     filtres_entreprise: FiltresEntreprise = Field(default_factory=FiltresEntreprise)
     enrichissement_l3_5: EnrichissementL35 = Field(default_factory=EnrichissementL35)
+    scraping_l3: ScrapingL3 = Field(default_factory=ScrapingL3)
     claude_scoring: ClaudeScoring = Field(default_factory=ClaudeScoring)
     # Émetteur au nom duquel les mails sont signés/envoyés. None = comportement
     # historique (signature devinée par Claude depuis `contexte_client`).

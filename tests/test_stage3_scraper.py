@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from renoboost_leads.models import LeadStage2
 from renoboost_leads.stage3_contacts.enricher import EnricheurStage3
 from renoboost_leads.stage3_contacts.scraper import (
+    MOTS_CLES_VE,
     ResultatScraping,
     ScraperContact,
+    compiler_signaux_ve,
     detecter_signaux_ve,
 )
 
@@ -50,6 +52,57 @@ class TestDetecterSignauxVe:
         html = "<p>Des bornes de recharge et une borne de recharge.</p>"
         # Le pluriel et le singulier matchent le même libellé : un seul résultat.
         assert detecter_signaux_ve(html).count("borne de recharge") == 1
+
+
+class TestScrapingL3Config:
+    """Validation du bloc de config `scraping_l3`."""
+
+    def test_regex_invalide_rejetee(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from renoboost_leads.models import ScrapingL3
+
+        with pytest.raises(ValidationError, match="regex invalide"):
+            ScrapingL3(signaux_ve={"bug": "[unclosed"})
+
+    def test_defaut_signaux_ve_none(self):
+        from renoboost_leads.models import ScrapingL3
+
+        assert ScrapingL3().signaux_ve is None
+
+
+class TestSignauxVePilotables:
+    """Les mots-clés VE sont configurables par YAML (chantier A)."""
+
+    def test_compiler_none_renvoie_defaut(self):
+        regex = compiler_signaux_ve(None)
+        assert set(regex) == set(MOTS_CLES_VE)
+
+    def test_compiler_vide_desactive_la_detection(self):
+        regex = compiler_signaux_ve({})
+        assert regex == {}
+        html = "<p>Bornes de recharge IRVE partout.</p>"
+        assert detecter_signaux_ve(html, regex) == []
+
+    def test_mots_cles_custom_detectes(self):
+        custom = {"panneaux solaires": r"\bpanneaux? solaires?\b"}
+        regex = compiler_signaux_ve(custom)
+        html = "<p>Installation de panneaux solaires en toiture.</p>"
+        signaux = detecter_signaux_ve(html, regex)
+        assert signaux == ["panneaux solaires"]
+        # Les mots VE par défaut ne s'appliquent plus quand un set custom est fourni.
+        assert "IRVE" not in detecter_signaux_ve("<p>IRVE</p>", regex)
+
+    def test_scraper_utilise_les_mots_cles_custom(self):
+        scraper = ScraperContact(
+            rate_limit_seconds=0.0,
+            signaux_ve={"hydrogène": r"\bhydrogene\b"},
+        )
+        scraper._fetch = lambda url: "<p>Station hydrogène.</p>"  # type: ignore[method-assign]
+        scraper._verifier_robots = lambda base_url, path: True  # type: ignore[method-assign]
+        result = scraper.scraper("https://exemple.fr")
+        assert "hydrogène" in result.signaux_ve
 
 
 class TestScraperAccumuleSignaux:
