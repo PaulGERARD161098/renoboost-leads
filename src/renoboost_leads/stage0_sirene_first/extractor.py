@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from ..common.logger import get_logger
 from ..models import CampaignConfig, LeadStage2
-from ..stage2_entreprises.filters import _TRANCHES_INSEE
+from ..stage2_entreprises.filters import _TRANCHES_INSEE, evaluer_filtres_entreprise
 from ..stage2_entreprises.recherche_client import (
     RechercheEntreprisesClient,
     RechercheEntreprisesTransientError,
@@ -129,6 +129,7 @@ class ExtracteurStage0:
         leads_par_siren: dict[str, LeadStage2] = {}
         nb_vus = 0
         nb_rejets_mapping = 0
+        nb_hors_filtre = 0
         coupure_api = False
 
         # On itère sur le générateur dans un try/except pour qu'une coupure
@@ -173,6 +174,14 @@ class ExtracteurStage0:
                     continue
                 if lead.siren in leads_par_siren:
                     continue
+                # Filtres entreprise (NAF/forme juridique/CA/effectif/…) :
+                # flag-not-drop, comme l'enricher L2. Sans ça, naf_exclus &
+                # consorts n'auraient aucun effet en mode SIRENE-first.
+                passe, raison = evaluer_filtres_entreprise(lead, filtres)
+                if not passe:
+                    lead.hors_filtre_entreprise = True
+                    lead.raison_hors_filtre = raison
+                    nb_hors_filtre += 1
                 leads_par_siren[lead.siren] = lead
 
                 if len(leads_par_siren) >= cible:
@@ -187,8 +196,10 @@ class ExtracteurStage0:
 
         leads = list(leads_par_siren.values())
         logger.info(
-            "=== Étage 0 terminé : %d leads (sur %d vus, %d rejets mapping%s) ===",
+            "=== Étage 0 terminé : %d leads (dont %d hors-filtre) "
+            "sur %d vus, %d rejets mapping%s ===",
             len(leads),
+            nb_hors_filtre,
             nb_vus,
             nb_rejets_mapping,
             ", coupure API" if coupure_api else "",

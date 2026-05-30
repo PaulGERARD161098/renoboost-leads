@@ -327,7 +327,7 @@ def run(config_path: Path, stages: str, from_csv_path: Path | None, dry_run: boo
         output_dir = from_csv_path.parent
         session_id = output_dir.name
         console.print(f"[cyan]Mode reprise depuis : {from_csv_path}[/cyan]")
-    elif 1 not in stages_demandes:
+    elif 1 not in stages_demandes and 0 not in stages_demandes:
         # On veut juste L2/L3 — on cherche le dernier dossier avec un CSV L1 pour ce client
         existant = _trouver_dossier_existant(cfg.run.client_name)
         if existant is None or not (existant / "etage1_decouverte.csv").exists():

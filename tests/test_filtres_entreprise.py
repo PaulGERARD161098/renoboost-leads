@@ -149,6 +149,23 @@ class TestEvaluationFiltres:
         ok, _ = evaluer_filtres_entreprise(lead, FiltresEntreprise(effectif_min=50))
         assert ok is True
 
+    def test_tranche_nn_traitee_comme_inconnu(self):
+        # INSEE code l'effectif non renseigné par "NN" : ne doit PAS être rejeté
+        # comme une tranche hors plage (sinon la majorité des PME sautent).
+        lead = _lead(tranche_effectif="NN")
+        ok, _ = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(effectif_min=1, effectif_max=250)
+        )
+        assert ok is True
+
+    def test_tranche_nn_rejetee_si_option_active(self):
+        lead = _lead(tranche_effectif="NN")
+        ok, raison = evaluer_filtres_entreprise(
+            lead, FiltresEntreprise(effectif_min=1, rejeter_effectif_inconnu=True)
+        )
+        assert ok is False
+        assert "inconnu" in raison
+
     def test_effectif_inconnu_accepte_par_defaut_avec_tranche_inclus(self):
         lead = _lead(tranche_effectif=None)
         ok, _ = evaluer_filtres_entreprise(
