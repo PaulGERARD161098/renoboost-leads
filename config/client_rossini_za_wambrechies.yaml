@@ -16,6 +16,15 @@
 # (repéré via l'enseigne ICESTREAM / société SONUPAC, bâtiment E).
 # Pour viser une autre zone : dupliquer ce fichier, remplacer latitude/
 # longitude (relevés sur une carte) et le rayon.
+#
+# ── BILAN RUN RÉEL (30/05/2026, pipeline 0,1,3,4) ──────────────────
+# 30 sièges dans 400 m → 22 qualifiés (8 SCI/holdings écartés). 15/30 avec
+# site web (Places). Scoring L4 : moyenne ~20, AUCUN top lead, ZÉRO signal VE
+# détecté. Enseignement : l'Ecopark est un parc TERTIAIRE (distillerie, paie,
+# écoles, conseil) → faible rendement pour l'ICP "flotte en transition".
+# Pour un bon rendement, viser des zones INDUSTRIELLES / LOGISTIQUES (sites
+# avec flotte de véhicules) plutôt qu'un parc de bureaux. Le moteur est bon ;
+# c'est le CHOIX DE ZONE qui fait le rendement.
 
 run:
   client_name: "rossini-za-wambrechies"
