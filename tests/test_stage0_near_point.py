@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from renoboost_leads.common.rate_limiter import RateLimiter
 from renoboost_leads.models import (
     Budget,
     CampaignConfig,
@@ -27,8 +28,6 @@ from renoboost_leads.stage2_entreprises.recherche_client import (
     RechercheClientConfig,
     RechercheEntreprisesClient,
 )
-from renoboost_leads.common.rate_limiter import RateLimiter
-
 
 # ════════════════════════════════════════════════════════════════
 # Modèle Zone — mode point
