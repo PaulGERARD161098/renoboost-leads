@@ -123,3 +123,8 @@ create policy "lead_events_all_auth" on public.lead_events for all to authentica
 
 alter publication supabase_realtime add table public.runs;
 alter publication supabase_realtime add table public.leads;
+
+-- Durcissement : ces fonctions SECURITY DEFINER ne doivent pas être appelables via /rest/v1/rpc.
+-- handle_new_user n'est qu'un trigger ; is_admin() ne sert qu'aux policies (rôle authenticated).
+revoke execute on function public.handle_new_user() from anon, authenticated, public;
+revoke execute on function public.is_admin() from anon, public;
