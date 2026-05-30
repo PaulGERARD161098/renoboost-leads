@@ -35,6 +35,11 @@ logger = get_logger(__name__)
 USER_AGENT = "RenoboostLeadsBot/0.1 (+contact@renoboost.fr)"
 TIMEOUT_SECONDS = 10.0
 
+# raison_echec dédiée : hôte bloqué par la politique réseau (allowlist du
+# conteneur), à distinguer d'un site réellement inaccessible.
+RESEAU_BLOQUE = "reseau_bloque_allowlist"
+SITE_INACCESSIBLE = "site_inaccessible"
+
 # Chemins typiques où trouver les mentions légales
 CHEMINS_MENTIONS_LEGALES = [
     "/mentions-legales",
@@ -283,6 +288,8 @@ class ScraperContact:
         self.session.headers.update({"User-Agent": USER_AGENT})
         # Regex des signaux VE à détecter (None → défaut MOTS_CLES_VE).
         self._signaux_regex = compiler_signaux_ve(signaux_ve)
+        # Vrai si le dernier _fetch a été bloqué par la politique réseau.
+        self._reseau_bloque = False
 
     def _attendre_rate_limit(self, host: str) -> None:
         last = self._last_request_per_host.get(host)
@@ -334,6 +341,10 @@ class ScraperContact:
                 if len(content) > 2_000_000:  # 2 Mo max
                     content = content[:2_000_000]
                 return content
+            if resp.status_code == 403 and "allowlist" in (resp.text or "").lower():
+                # Blocage par la politique réseau (allowlist du conteneur),
+                # pas un site réellement inaccessible.
+                self._reseau_bloque = True
             return None
         except requests.RequestException:
             raise
@@ -366,6 +377,7 @@ class ScraperContact:
 
         domaine = extraire_domaine(base_url)
         result = ResultatScraping(domaine=domaine)
+        self._reseau_bloque = False
 
         def _accumuler_signaux_ve(html: str) -> None:
             """Ajoute les signaux VE de cette page sans doublon (ordre stable)."""
@@ -376,7 +388,9 @@ class ScraperContact:
         # Test de connectivité de base
         homepage_html = self._fetch(base_url)
         if homepage_html is None:
-            result.raison_echec = "site_inaccessible"
+            result.raison_echec = (
+                RESEAU_BLOQUE if self._reseau_bloque else SITE_INACCESSIBLE
+            )
             return result
         result.pages_visitees.append(base_url)
         _accumuler_signaux_ve(homepage_html)

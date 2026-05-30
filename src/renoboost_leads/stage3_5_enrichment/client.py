@@ -36,6 +36,24 @@ class DropcontactTimeoutError(DropcontactError):
     """Le polling a dépassé `poll_timeout_s` sans réponse `success=True`."""
 
 
+class DropcontactHostBlockedError(DropcontactError):
+    """L'hôte Dropcontact est bloqué par la politique réseau (allowlist).
+
+    Levée sur un 403 dont le corps mentionne l'allowlist : c'est un blocage
+    environnemental (proxy du conteneur), pas une vraie erreur API. Permet à
+    l'orchestrateur de dégrader proprement plutôt que de compter chaque lot
+    comme une erreur.
+    """
+
+
+def _hote_bloque_par_reseau(status_code: int, corps: str) -> bool:
+    """403 + mention allowlist = blocage réseau, distinct d'une erreur API."""
+    if status_code != 403:
+        return False
+    corps_l = (corps or "").lower()
+    return "allowlist" in corps_l or "host_not_allowed" in corps_l
+
+
 @dataclass
 class DropcontactReponse:
     """Réponse brute Dropcontact pour un lot, indexée par position d'entrée.
@@ -93,6 +111,11 @@ class DropcontactClient:
             self.config.rate_limiter.acquire()
         url = f"{self.config.base_url}/v1/enrich/all"
         resp = self._post(url, json=payload, headers=self._headers(), timeout=30)
+        if _hote_bloque_par_reseau(resp.status_code, resp.text):
+            raise DropcontactHostBlockedError(
+                f"hôte Dropcontact bloqué par la politique réseau "
+                f"(HTTP {resp.status_code} : {resp.text[:200]})"
+            )
         if resp.status_code >= 400:
             raise DropcontactError(
                 f"POST /batch HTTP {resp.status_code} : {resp.text[:200]}"
@@ -111,6 +134,11 @@ class DropcontactClient:
     def _get_batch(self, request_id: str) -> dict[str, Any]:
         url = f"{self.config.base_url}/v1/enrich/all/{request_id}"
         resp = self._get(url, headers=self._headers(), timeout=30)
+        if _hote_bloque_par_reseau(resp.status_code, resp.text):
+            raise DropcontactHostBlockedError(
+                f"hôte Dropcontact bloqué par la politique réseau "
+                f"(HTTP {resp.status_code} : {resp.text[:200]})"
+            )
         if resp.status_code >= 400:
             raise DropcontactError(
                 f"GET /batch/{request_id} HTTP {resp.status_code} : {resp.text[:200]}"
@@ -221,6 +249,7 @@ __all__ = [
     "DropcontactClientConfig",
     "DropcontactError",
     "DropcontactTimeoutError",
+    "DropcontactHostBlockedError",
     "DropcontactReponse",
     "BudgetExceededError",
     "lead_payload_dropcontact",

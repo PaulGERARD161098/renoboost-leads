@@ -11,6 +11,7 @@ from renoboost_leads.stage3_5_enrichment.client import (
     DropcontactClient,
     DropcontactClientConfig,
     DropcontactError,
+    DropcontactHostBlockedError,
     DropcontactTimeoutError,
     lead_payload_dropcontact,
 )
@@ -181,3 +182,32 @@ class TestDropcontactClient:
         rep = client.enrichir_batch([])
         assert rep.data == []
         assert rep.cout_eur == 0.0
+
+    def test_post_403_allowlist_leve_host_blocked(self):
+        """403 + mention allowlist → DropcontactHostBlockedError (blocage réseau)."""
+        post_resp = _FakeResponse(403, text="Host not in allowlist")
+        post_fn, _ = _post_factory(post_resp)
+        cfg = DropcontactClientConfig(
+            api_key="k",
+            http_post=post_fn,
+            http_get=lambda *a, **k: _FakeResponse(200, body={}),
+            sleep_fn=lambda s: None,
+        )
+        client = DropcontactClient(cfg)
+        with pytest.raises(DropcontactHostBlockedError):
+            client.enrichir_batch([{"first_name": "P"}])
+
+    def test_post_403_autre_reste_dropcontact_error(self):
+        """403 sans mention allowlist → DropcontactError générique, pas HostBlocked."""
+        post_resp = _FakeResponse(403, text="Forbidden")
+        post_fn, _ = _post_factory(post_resp)
+        cfg = DropcontactClientConfig(
+            api_key="k",
+            http_post=post_fn,
+            http_get=lambda *a, **k: _FakeResponse(200, body={}),
+            sleep_fn=lambda s: None,
+        )
+        client = DropcontactClient(cfg)
+        with pytest.raises(DropcontactError) as exc:
+            client.enrichir_batch([{"first_name": "P"}])
+        assert not isinstance(exc.value, DropcontactHostBlockedError)
