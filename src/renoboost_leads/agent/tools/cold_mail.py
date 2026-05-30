@@ -17,6 +17,7 @@ Il propose, l'humain valide via Streamlit ou `cold-mail validate`.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
 from ...instantly.client import InstantlyClient, InstantlyError
@@ -29,16 +30,44 @@ from ...instantly.staging import (
 )
 from .leads import prioritize_leads
 from .notify import alert_human
+from .sessions import OUTPUT_ROOT
+
+FROM_EMAIL_DEFAUT = "paul@renoboost.fr"
+
+
+def _from_email_session(session_id: str) -> str | None:
+    """Lit l'email émetteur persisté dans `run_stats.json` de la session.
+
+    None si la session, le fichier ou le champ est absent (le caller retombe
+    alors sur le défaut). Permet le from_email « auto depuis la session » :
+    l'émetteur est configuré une fois dans le YAML, repris ici sans ressaisie.
+    """
+    stats_path = OUTPUT_ROOT / session_id / "run_stats.json"
+    if not stats_path.exists():
+        return None
+    try:
+        raw = json.loads(stats_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    email = raw.get("emetteur_email")
+    return email or None
 
 
 def stage_cold_emails(
     session_id: str,
     secteur: str,
     top_n: int = 10,
-    from_email: str = "paul@renoboost.fr",
+    from_email: str | None = None,
     variables_globales: dict | None = None,
 ) -> dict:
-    """Drafte les emails step 1 pour les top N leads et écrit en staging."""
+    """Drafte les emails step 1 pour les top N leads et écrit en staging.
+
+    `from_email` : si None, résolu « auto depuis la session » (email émetteur du
+    YAML, persisté dans run_stats.json), avec fallback sur `FROM_EMAIL_DEFAUT`.
+    """
+    if from_email is None:
+        from_email = _from_email_session(session_id) or FROM_EMAIL_DEFAUT
+
     try:
         sequence = load_sequence(secteur)
     except (FileNotFoundError, ValueError) as e:
@@ -247,8 +276,10 @@ SCHEMAS = [
                 },
                 "from_email": {
                     "type": "string",
-                    "description": "Email d'expédition (doit être configuré dans Instantly).",
-                    "default": "paul@renoboost.fr",
+                    "description": (
+                        "Email d'expédition (doit être configuré dans Instantly). "
+                        "Omis → résolu auto depuis l'émetteur de la session."
+                    ),
                 },
                 "variables_globales": {
                     "type": "object",
