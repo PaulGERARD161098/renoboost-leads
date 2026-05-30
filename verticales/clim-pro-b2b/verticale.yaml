@@ -1,0 +1,154 @@
+# ════════════════════════════════════════════════════════════════
+# VERTICALE — Climatisation réversible pour PME (B2B)
+# ════════════════════════════════════════════════════════════════
+# Générée par l'agent discovery (D2) puis affinée avec l'utilisateur.
+# Cible réelle d'un installateur opérant sur la métropole lilloise +
+# région d'Amiens — d'où l'angle "réversible" (chauffage hiver + froid
+# été), bien plus pertinent dans le Nord que l'argument canicule.
+#
+# NB : la zone géographique (Lille / Amiens) n'est PAS ici — elle
+# appartient à la CAMPAGNE (objet D3). Cette verticale décrit l'offre.
+
+verticale:
+  slug: clim-pro-b2b
+  nom: Climatisation réversible — PME tertiaires & commerces
+  description: |
+    Pose de climatisation réversible pour PME (bureaux, cabinets de santé,
+    commerces et restauration). Argument double saison : rafraîchissement
+    l'été, chauffage performant l'hiver, économies d'énergie.
+cible:
+  type: b2b
+  detail: |
+    PME de 10 à 100 salariés, formes SAS/SARL/SA, occupant propriétaire de
+    ses locaux. Bureaux/tertiaire, cabinets médicaux & paramédicaux,
+    commerces et restauration.
+offre:
+  produit: Installation de climatisation réversible multi-split pour locaux professionnels
+  argument_principal: |
+    Confort toute l'année : rafraîchissement l'été et chauffage performant
+    l'hiver (réversible), économies d'énergie, installation clé en main sans
+    interruption d'activité.
+  ticket_moyen_eur: 15000
+cibles:
+  secteurs_places:
+    - type: bureaux
+      query: bureau entreprise
+    - type: cabinet_medical
+      query: cabinet médical
+    - type: cabinet_paramedical
+      query: cabinet paramédical
+    - type: commerce
+      query: boutique commerce
+    - type: restauration
+      query: restaurant
+  filtres_entreprise:
+    effectif_min: 10
+    effectif_max: 100
+    naf_inclus:
+      - "6820"      # immobilier
+      - "6910Z"     # activités juridiques
+      - "6920Z"     # comptabilité
+      - "7010Z"     # sièges sociaux
+      - "7022Z"     # conseil de gestion
+      - "7111Z"     # architecture
+      - "7112B"     # ingénierie
+      - "6201Z"     # informatique
+      - "8621Z"     # médecine générale
+      - "8622"      # médecine spécialisée
+      - "8623Z"     # dentaire
+      - "8690"      # autres activités santé (kiné, infirmiers...)
+      - "47"        # commerce de détail
+      - "56"        # restauration
+    naf_exclus:
+      - "5510Z"     # hôtels
+      - "5520Z"     # hébergement touristique
+      - "5530Z"     # terrains de camping
+      - "5590Z"     # autres hébergements
+    forme_juridique_inclus: ["SAS", "SARL", "SA"]
+    multi_sites_only: false
+signaux:
+  - Local tertiaire/commerce sans climatisation visible (pas de groupes extérieurs)
+  - "Réversible = besoin double saison : rafraîchir l'été ET chauffer l'hiver"
+  - Rénovation ou aménagement récent des locaux (signal d'investissement)
+  - Avis Google mentionnant la chaleur, l'inconfort thermique ou l'absence de clim
+  - Occupant propriétaire de ses locaux (vs bail précaire / location courte durée)
+  - Épisodes de forte chaleur estivale de plus en plus fréquents (y compris Hauts-de-France)
+qualification:
+  seuil_score_top: 70
+  criteres_top:
+    - Décideur (dirigeant ou gérant) identifié et joignable
+    - Local tertiaire/commerce confirmé, sans clim existante
+    - Occupant propriétaire de ses locaux (installation possible)
+    - Effectif >= 10 (masse critique justifiant l'investissement)
+  criteres_exclusion:
+    - Local en location courte durée ou bail précaire
+    - Activité sans local fixe (artisan itinérant, activité 100 % terrain)
+    - Local déjà équipé de climatisation réversible récente
+    - Effectif < 10 ou > 100 salariés
+enrichissements:
+  l3_5_dropcontact: true
+  lecture_site_web: true
+  detection_terrain: false      # V1
+ton_mail:
+  registre: professionnel et chaleureux
+  longueur_mots: 120
+  attaque: |
+    Interpeller sur le confort thermique des équipes/clients — chaud l'été,
+    chauffage l'hiver — avec une référence locale (métropole lilloise /
+    Amiens) ou un signal détecté (avis, rénovation).
+  cta: Proposer un audit thermique gratuit de 30 minutes ou un appel de découverte rapide.
+  signaux_a_personnaliser:
+    - mention de la ville ou du secteur géographique (Lille, Amiens...)
+    - référence à la rénovation récente si détectée
+    - citation d'un avis Google si mention chaleur/inconfort
+    - prénom du dirigeant si trouvé
+sequence:
+  j0:
+    sujet: "{{prenom}} — le confort thermique de vos locaux, été comme hiver"
+    template: |
+      Bonjour {{prenom}},
+
+      J'ai vu que {{entreprise}} est installée à {{ville}}. Entre les étés de
+      plus en plus chauds et les hivers à chauffer, le confort thermique des
+      locaux pèse autant sur le budget que sur le bien-être des équipes.
+
+      Nous installons des solutions de climatisation réversible clé en main
+      pour les PME : rafraîchissement l'été, chauffage performant l'hiver, et
+      des économies d'énergie à la clé.
+
+      Seriez-vous disponible 20 minutes pour voir si c'est pertinent pour vos
+      locaux ?
+
+      Cordialement,
+      {{prenom_expediteur}}
+      {{entreprise_expediteur}}
+  j3:
+    sujet: "Re : confort thermique — {{entreprise}}"
+    template: |
+      Bonjour {{prenom}},
+
+      Je me permets de revenir vers vous suite à mon message de début de
+      semaine. Nous avons récemment équipé plusieurs PME de la région — les
+      retours sur le confort (été comme hiver) et la facture d'énergie sont
+      très positifs.
+
+      Une courte conversation cette semaine ?
+
+      {{prenom_expediteur}}
+  j7:
+    sujet: Dernière proposition — audit thermique offert
+    template: |
+      Bonjour {{prenom}},
+
+      Je ne veux pas vous importuner, mais je souhaitais vous laisser une
+      dernière proposition : un audit thermique gratuit de vos locaux, sans
+      engagement, pour savoir si une clim réversible est pertinente chez vous.
+
+      Si ce n'est pas le bon moment, pas de souci — je reste disponible.
+
+      Bonne continuation,
+      {{prenom_expediteur}}
+budget_typique:
+  volume_cible: 150
+  cout_pipeline_eur: 2.5
+  cout_avec_l3_5_eur: 17.5
