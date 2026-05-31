@@ -1,0 +1,3 @@
+# Dépendances du worker M3 (déployable seul sur Railway).
+# Volontairement minimal : on parle à Supabase via PostgREST en HTTP.
+requests>=2.31.0
