@@ -164,6 +164,14 @@ class DemoPipeline:
                     ),
                     "mail_sujet": f"{offre} pour {nom.split(' ', 1)[-1]}",
                     "mail_corps": _corps_mail(nom, offre, ville, signal),
+                    "score_raison": (
+                        "Hors cible : effectif/secteur hors critères (démo)"
+                        if hors_filtre
+                        else (
+                            f"Bon potentiel : {effectif} salariés, {_libelle_naf(naf)}"
+                            + (f" · signal détecté : {signal}" if signal else "")
+                        )
+                    ),
                     "statut": "a_valider",
                 }
             )
@@ -414,6 +422,7 @@ class RealPipeline:
             "raison_hors_filtre": getattr(lead, "raison_hors_filtre", None),
             "mail_sujet": getattr(lead, "email_objet", None),
             "mail_corps": getattr(lead, "email_corps", None),
+            "score_raison": getattr(lead, "raison_score", None),
             "statut": "a_valider",
         }
 

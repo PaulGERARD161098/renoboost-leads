@@ -74,6 +74,7 @@ export interface Lead {
   ville: string | null;
   code_postal: string | null;
   score: number | null;
+  score_raison: string | null;
   contact_nom: string | null;
   contact_email: string | null;
   contact_tel: string | null;

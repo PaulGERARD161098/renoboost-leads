@@ -7,7 +7,9 @@ import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
   formatDate,
+  nextAction,
   scoreColor,
+  scoreVerdict,
 } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,7 @@ const EVENT_LABEL: Record<string, string> = {
   relance: "Relancé",
   ecarte: "Écarté",
   note: "Note",
+  rebond: "Rebond (bounce)",
   oubli_rgpd: "Données effacées (RGPD)",
 };
 
@@ -46,6 +49,9 @@ export default async function LeadPage({
     .eq("lead_id", id)
     .order("at", { ascending: false });
 
+  const verdict = scoreVerdict(l.score);
+  const action = nextAction(l);
+
   return (
     <div>
       <Link href="/inbox" className="text-sm text-[var(--muted)] hover:underline">
@@ -61,47 +67,95 @@ export default async function LeadPage({
             {l.code_postal ? ` (${l.code_postal})` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`rounded-md px-2 py-1 text-sm font-semibold ${scoreColor(l.score)}`}
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-sm font-medium ${LEAD_STATUS_COLOR[l.statut]}`}
+        >
+          {LEAD_STATUS_LABEL[l.statut]}
+        </span>
+      </div>
+
+      {/* Bloc score "hero" */}
+      <div className="mb-5 grid gap-4 rounded-2xl border border-[var(--border)] bg-white p-5 md:grid-cols-[auto_1fr]">
+        <div className="flex items-center gap-4 md:pr-6 md:border-r md:border-[var(--border)]">
+          <div
+            className={`flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-2xl text-2xl font-extrabold ${scoreColor(l.score)}`}
           >
-            Score {l.score ?? "—"}
-          </span>
-          <span
-            className={`rounded-full px-3 py-1 text-sm font-medium ${LEAD_STATUS_COLOR[l.statut]}`}
-          >
-            {LEAD_STATUS_LABEL[l.statut]}
-          </span>
+            {l.score ?? "—"}
+            <span className="text-[10px] font-medium opacity-70">/ 100</span>
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-wide text-[var(--muted)]">
+              Score d&apos;intérêt
+            </div>
+            <span
+              className={`mt-1 inline-block rounded-md px-2 py-0.5 text-sm font-semibold ${verdict.tone}`}
+            >
+              {verdict.label}
+            </span>
+            <ScoreBar score={l.score} />
+          </div>
+        </div>
+        <div className="flex flex-col justify-center">
+          <div className="text-xs uppercase tracking-wide text-[var(--muted)]">
+            Prochaine action recommandée
+          </div>
+          <p className="mt-1 text-sm font-medium">{action}</p>
         </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="space-y-5 lg:col-span-2">
+          {/* Pourquoi ce score */}
+          <div className="rounded-xl border border-[var(--border)] bg-white p-5">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Pourquoi ce score
+            </h2>
+            {l.score_raison ? (
+              <p className="text-sm leading-relaxed">{l.score_raison}</p>
+            ) : (
+              <p className="text-sm text-[var(--muted)]">
+                Justification non disponible pour ce lead (créé avant l&apos;activation
+                de l&apos;explicabilité). Les prochaines recherches l&apos;incluront.
+              </p>
+            )}
+            {l.hors_filtre && l.raison_hors_filtre && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                ⚠️ Hors cible : {l.raison_hors_filtre}
+              </p>
+            )}
+          </div>
+
           <LeadEditor lead={l} />
         </div>
 
         <div className="space-y-5">
           <div className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Contact
+              Entreprise
             </h2>
             <dl className="space-y-2 text-sm">
-              <Field label="Dirigeant" value={l.contact_nom} />
-              <Field label="Email" value={l.contact_email} />
-              <Field label="Téléphone" value={l.contact_tel} />
-              <Field
-                label="Site"
-                value={l.site_web}
-                href={l.site_web ?? undefined}
-              />
+              <Field label="Secteur" value={l.libelle_naf ?? l.naf} />
               <Field label="Effectif" value={l.effectif} />
+              <Field label="Ville" value={l.ville} />
               <Field label="SIREN" value={l.siren} />
             </dl>
           </div>
 
           <div className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Activité
+              Décideur
+            </h2>
+            <dl className="space-y-2 text-sm">
+              <Field label="Nom" value={l.contact_nom} />
+              <Field label="Email" value={l.contact_email} />
+              <Field label="Téléphone" value={l.contact_tel} />
+              <Field label="Site" value={l.site_web} href={l.site_web ?? undefined} />
+            </dl>
+          </div>
+
+          <div className="rounded-xl border border-[var(--border)] bg-white p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Historique
             </h2>
             <ul className="space-y-3 text-sm">
               {(events as LeadEvent[] | null)?.length ? (
@@ -120,6 +174,23 @@ export default async function LeadPage({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ScoreBar({ score }: { score: number | null }) {
+  const pct = Math.max(0, Math.min(100, score ?? 0));
+  const color =
+    score === null
+      ? "bg-slate-300"
+      : score >= 75
+        ? "bg-emerald-500"
+        : score >= 50
+          ? "bg-amber-500"
+          : "bg-slate-400";
+  return (
+    <div className="mt-2 h-1.5 w-40 max-w-full overflow-hidden rounded-full bg-slate-100">
+      <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
