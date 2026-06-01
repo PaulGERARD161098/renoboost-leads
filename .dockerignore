@@ -1,0 +1,12 @@
+# Le worker n'a besoin ni du front Next.js ni des artefacts lourds.
+web/
+.git/
+.github/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/
+backups/
+.venv/
+tests/
