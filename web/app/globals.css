@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --border: #e6e8ec;
+  --text: #11181c;
+  --muted: #687076;
+  --brand: #1f7a4d;
+  --brand-dark: #155c39;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}

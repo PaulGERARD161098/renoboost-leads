@@ -1,0 +1,136 @@
+"""Client PostgREST minimal pour Supabase (service_role).
+
+On parle directement à `/rest/v1` en `requests` plutôt qu'au SDK `supabase-py`
+pour garder le worker léger et sans dépendance lourde sur Railway.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import requests
+
+
+class SupabaseRest:
+    def __init__(self, rest_url: str, service_role_key: str, timeout_s: float = 30.0) -> None:
+        self._rest_url = rest_url.rstrip("/")
+        self._timeout = timeout_s
+        self._session = requests.Session()
+        self._session.headers.update(
+            {
+                "apikey": service_role_key,
+                "Authorization": f"Bearer {service_role_key}",
+                "Content-Type": "application/json",
+            }
+        )
+
+    def _url(self, table: str) -> str:
+        return f"{self._rest_url}/{table}"
+
+    def select(self, table: str, params: dict[str, str]) -> list[dict[str, Any]]:
+        resp = self._session.get(self._url(table), params=params, timeout=self._timeout)
+        resp.raise_for_status()
+        return resp.json()
+
+    def insert(
+        self, table: str, rows: list[dict[str, Any]], *, return_representation: bool = False
+    ) -> list[dict[str, Any]]:
+        if not rows:
+            return []
+        prefer = "return=representation" if return_representation else "return=minimal"
+        resp = self._session.post(
+            self._url(table),
+            json=rows,
+            headers={"Prefer": prefer},
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return resp.json() if return_representation else []
+
+    def update(
+        self,
+        table: str,
+        filters: dict[str, str],
+        patch: dict[str, Any],
+        *,
+        return_representation: bool = False,
+    ) -> list[dict[str, Any]]:
+        prefer = "return=representation" if return_representation else "return=minimal"
+        resp = self._session.patch(
+            self._url(table),
+            params=filters,
+            json=patch,
+            headers={"Prefer": prefer},
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return resp.json() if return_representation else []
+
+    # --- helpers métier -----------------------------------------------------
+
+    def fetch_pending_runs(self, limit: int = 5) -> list[dict[str, Any]]:
+        """Runs en attente, les plus anciens d'abord."""
+        return self.select(
+            "runs",
+            {
+                "status": "eq.demande",
+                "order": "created_at.asc",
+                "limit": str(limit),
+                "select": "*",
+            },
+        )
+
+    def claim_run(self, run_id: str) -> dict[str, Any] | None:
+        """Passe un run `demande` → `en_cours` de façon atomique.
+
+        Le filtre `status=eq.demande` garantit qu'un seul worker l'attrape :
+        si un autre l'a déjà pris, la mise à jour ne renvoie aucune ligne.
+        """
+        rows = self.update(
+            "runs",
+            {"id": f"eq.{run_id}", "status": "eq.demande"},
+            {"status": "en_cours", "etape_courante": "Initialisation", "progress": 1},
+            return_representation=True,
+        )
+        return rows[0] if rows else None
+
+    def get_verticale(self, verticale_id: str | None) -> dict[str, Any] | None:
+        if not verticale_id:
+            return None
+        rows = self.select(
+            "verticales", {"id": f"eq.{verticale_id}", "select": "*", "limit": "1"}
+        )
+        return rows[0] if rows else None
+
+    def update_run_progress(
+        self, run_id: str, *, etape: str, progress: int, counts: dict[str, int]
+    ) -> None:
+        self.update(
+            "runs",
+            {"id": f"eq.{run_id}"},
+            {"etape_courante": etape, "progress": progress, "counts": counts},
+        )
+
+    def insert_leads(self, rows: list[dict[str, Any]]) -> None:
+        # Insertion par lots pour rester sous les limites de payload.
+        for start in range(0, len(rows), 200):
+            self.insert(table="leads", rows=rows[start : start + 200])
+
+    def finalize_run(
+        self,
+        run_id: str,
+        *,
+        status: str,
+        counts: dict[str, int],
+        cout_eur: float,
+        erreur: str | None = None,
+    ) -> None:
+        patch: dict[str, Any] = {
+            "status": status,
+            "counts": counts,
+            "cout_eur": round(cout_eur, 2),
+            "progress": 100 if status == "termine" else 0,
+            "etape_courante": "Terminé" if status == "termine" else "Échec",
+            "erreur": erreur,
+        }
+        self.update("runs", {"id": f"eq.{run_id}"}, patch)
