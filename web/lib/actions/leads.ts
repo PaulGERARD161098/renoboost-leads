@@ -47,6 +47,22 @@ export async function setLeadStatus(leadId: string, statut: LeadStatus) {
   if (statut === "ecarte") await logEvent(leadId, "ecarte");
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/inbox");
+  revalidatePath("/suivi");
+  return { ok: true };
+}
+
+/** Marque un lead « à relancer » et trace l'événement de relance. */
+export async function relancerLead(leadId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ statut: "a_relancer" })
+    .eq("id", leadId);
+  if (error) return { error: error.message };
+  await logEvent(leadId, "relance");
+  revalidatePath("/suivi");
+  revalidatePath("/inbox");
+  revalidatePath(`/leads/${leadId}`);
   return { ok: true };
 }
 
@@ -89,6 +105,7 @@ export async function sendLead(leadId: string) {
   await logEvent(leadId, "envoye", { simulation });
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/inbox");
+  revalidatePath("/suivi");
   return { ok: true, simulation };
 }
 

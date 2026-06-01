@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadStatus } from "@/lib/database.types";
-import { scoreColor } from "@/lib/ui";
+import { KanbanCard } from "@/components/kanban-card";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +31,7 @@ export default async function SuiviPage() {
   ).length;
   const replied = byStatus("repondu").length;
   const bounced = leads.filter((l) => l.bounced_at).length;
+  const aRelancer = byStatus("a_relancer").length;
 
   return (
     <div>
@@ -40,7 +40,7 @@ export default async function SuiviPage() {
         Pipeline d&apos;envoi et de réponses.
       </p>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Envoyés" value={sent} />
         <Stat
           label="Taux d'ouverture"
@@ -50,6 +50,7 @@ export default async function SuiviPage() {
           label="Taux de réponse"
           value={sent ? `${Math.round((replied / sent) * 100)}%` : "—"}
         />
+        <Stat label="À relancer" value={aRelancer} />
         <Stat
           label="Rebonds"
           value={sent ? `${bounced} (${Math.round((bounced / sent) * 100)}%)` : bounced}
@@ -69,23 +70,7 @@ export default async function SuiviPage() {
               </div>
               <div className="space-y-2">
                 {items.map((lead) => (
-                  <Link
-                    key={lead.id}
-                    href={`/leads/${lead.id}`}
-                    className="block rounded-lg border border-[var(--border)] bg-white p-3 text-sm shadow-sm hover:border-[var(--brand)]"
-                  >
-                    <div className="font-medium">{lead.entreprise}</div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="text-xs text-[var(--muted)]">
-                        {lead.ville ?? "—"}
-                      </span>
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-xs font-semibold ${scoreColor(lead.score)}`}
-                      >
-                        {lead.score ?? "—"}
-                      </span>
-                    </div>
-                  </Link>
+                  <KanbanCard key={lead.id} lead={lead} />
                 ))}
                 {items.length === 0 && (
                   <p className="px-1 py-3 text-xs text-[var(--muted)]">Vide</p>
