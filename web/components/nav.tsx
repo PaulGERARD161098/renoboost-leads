@@ -6,8 +6,10 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/inbox", label: "Prospects" },
   { href: "/suivi", label: "Suivi" },
-  { href: "/recherche", label: "Nouvelle recherche" },
+  { href: "/recherche", label: "Recherches" },
   { href: "/cibles", label: "Cibles" },
+  { href: "/tableau-de-bord", label: "Tableau de bord" },
+  { href: "/agent", label: "Agent" },
   { href: "/mode-emploi", label: "Mode d'emploi" },
 ];
 

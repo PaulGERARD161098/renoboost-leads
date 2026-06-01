@@ -51,17 +51,25 @@ export default async function RecherchePage() {
                 {(runs as Run[]).map((run) => (
                   <tr
                     key={run.id}
-                    className="border-b border-[var(--border)] last:border-0"
+                    className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50"
                   >
-                    <td className="px-4 py-3">{formatDate(run.created_at)}</td>
                     <td className="px-4 py-3">
-                      {(run.zone as { departement?: string })?.departement
-                        ? `Dépt ${(run.zone as { departement?: string }).departement}`
-                        : "—"}
+                      <Link href={`/recherche/${run.id}`} className="block">
+                        {formatDate(run.created_at)}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link href={`/recherche/${run.id}`} className="block">
+                        {(run.zone as { departement?: string })?.departement
+                          ? `Dépt ${(run.zone as { departement?: string }).departement}`
+                          : "—"}
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-[var(--muted)]">
-                      {RUN_STATUS_LABEL[run.status]}
-                      {run.status === "en_cours" ? ` · ${run.progress}%` : ""}
+                      <Link href={`/recherche/${run.id}`} className="block">
+                        {RUN_STATUS_LABEL[run.status]}
+                        {run.status === "en_cours" ? ` · ${run.progress}%` : ""}
+                      </Link>
                     </td>
                   </tr>
                 ))}
