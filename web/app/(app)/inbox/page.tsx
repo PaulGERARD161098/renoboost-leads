@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadStatus } from "@/lib/database.types";
-import { LEAD_STATUS_COLOR, LEAD_STATUS_LABEL, scoreColor } from "@/lib/ui";
+import { LEAD_STATUS_LABEL } from "@/lib/ui";
+import { LeadsTable } from "@/components/leads-table";
 
 export const dynamic = "force-dynamic";
 
@@ -70,87 +71,7 @@ export default async function InboxPage({
         </div>
       )}
 
-      {leads && leads.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
-          <table className="w-full text-sm">
-            <thead className="border-b border-[var(--border)] bg-slate-50 text-left text-xs uppercase tracking-wide text-[var(--muted)]">
-              <tr>
-                <th className="px-4 py-3">Entreprise</th>
-                <th className="px-4 py-3">Ville</th>
-                <th className="px-4 py-3">Effectif</th>
-                <th className="px-4 py-3">Contact</th>
-                <th className="px-4 py-3">Score</th>
-                <th className="px-4 py-3">Statut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(leads as Lead[]).map((lead) => (
-                <tr
-                  key={lead.id}
-                  className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/leads/${lead.id}`}
-                      className="font-medium text-[var(--text)] hover:text-[var(--brand)]"
-                    >
-                      {lead.entreprise}
-                    </Link>
-                    {lead.libelle_naf && (
-                      <div className="text-xs text-[var(--muted)]">
-                        {lead.libelle_naf}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--muted)]">
-                    {lead.ville ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--muted)]">
-                    {lead.effectif ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {lead.contact_email ? (
-                      <span className="text-emerald-600" title={lead.contact_email}>
-                        ✓ email
-                      </span>
-                    ) : (
-                      <span className="text-[var(--muted)]">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${scoreColor(lead.score)}`}
-                      >
-                        {lead.score ?? "—"}
-                      </span>
-                      <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-100">
-                        <span
-                          className={`block h-full ${
-                            (lead.score ?? 0) >= 75
-                              ? "bg-emerald-500"
-                              : (lead.score ?? 0) >= 50
-                                ? "bg-amber-500"
-                                : "bg-slate-400"
-                          }`}
-                          style={{ width: `${Math.max(0, Math.min(100, lead.score ?? 0))}%` }}
-                        />
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${LEAD_STATUS_COLOR[lead.statut]}`}
-                    >
-                      {LEAD_STATUS_LABEL[lead.statut]}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {leads && leads.length > 0 && <LeadsTable leads={leads as Lead[]} />}
     </div>
   );
 }
