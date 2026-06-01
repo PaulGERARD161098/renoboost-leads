@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
 
 from worker.config import ConfigError, WorkerConfig
-from worker.pipeline import DemoPipeline, RunContext, build_pipeline
+from worker.pipeline import DemoPipeline, RealPipeline, RunContext, build_pipeline
 from worker.worker import Worker
 
 
@@ -122,14 +123,208 @@ def test_demo_pipeline_caps_at_50():
     assert len(result.leads) == 50
 
 
-def test_build_pipeline_real_not_implemented():
-    with pytest.raises(NotImplementedError):
-        build_pipeline("real")
+def test_build_pipeline_real_returns_realpipeline():
+    assert isinstance(build_pipeline("real"), RealPipeline)
 
 
 def test_build_pipeline_unknown():
     with pytest.raises(ValueError):
         build_pipeline("???")
+
+
+# --- RealPipeline (moteur mocké, zéro réseau) --------------------------------
+
+
+class _FakeSettings:
+    """Réglages factices : clés présentes par défaut, sans Dropcontact."""
+
+    def __init__(self, google=True, anthropic=True, dropcontact=False):
+        self._google, self._anthropic, self._dropcontact = google, anthropic, dropcontact
+
+    def has_google_places(self):
+        return self._google
+
+    def has_anthropic(self):
+        return self._anthropic
+
+    def has_dropcontact(self):
+        return self._dropcontact
+
+
+def _lead4(**over):
+    """Fabrique un LeadStage4 minimal pour tester le mapping."""
+    from renoboost_leads.models import LeadStage4
+
+    base = dict(
+        place_id="p1",
+        extraction_date=datetime.now(timezone.utc),
+        nom="Acme SAS",
+        ville="Lille",
+        code_postal="59000",
+        siren="123456789",
+        code_naf="49.41A",
+        libelle_naf="Transports routiers",
+        libelle_effectif="20 à 49 salariés",
+        dirigeant_prenom="Marie",
+        dirigeant_nom="Durand",
+        emails_verifies=["contact@acme.fr"],
+        telephone="0102030405",
+        site_web="https://acme.fr",
+        score_interet=82,
+        email_objet="Une idée pour Acme",
+        email_corps="Bonjour Marie, ...",
+        hors_filtre_entreprise=False,
+    )
+    base.update(over)
+    return LeadStage4(**base)
+
+
+def _real_ctx(vid="vid-1"):
+    run = {
+        "id": "run-abc",
+        "verticale_id": vid,
+        "zone": {"departement": "59", "effectif_min": 20},
+        "volume_cible": 5,
+        "budget_eur": 12.0,
+    }
+    return RunContext(
+        run=run,
+        verticale={"slug": "irve-flottes-b2b"},
+        max_leads=500,
+        max_budget_eur=50.0,
+    )
+
+
+def test_real_pipeline_maps_leads_and_emits(monkeypatch):
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+
+    captured: dict[str, object] = {}
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        captured["cfg"] = cfg
+        captured["stages"] = stages
+        stats.cout_total_eur = 1.23
+        emit = kwargs.get("emit")
+        if emit:
+            emit("Rédaction des e-mails", 95, {"decouverte": 2, "qualifies": 2, "leads": 1})
+        res = OrchestrationResult()
+        res.leads_l1 = [_lead4(place_id="a"), _lead4(place_id="b")]
+        res.leads_l2 = res.leads_l1
+        res.leads_l4 = [_lead4()]
+        res.nb_leads_finaux = 1
+        return res
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+
+    emitted: list[tuple] = []
+    result = RealPipeline().run(_real_ctx(), lambda e, p, c: emitted.append((e, p, c)))
+
+    # Mapping LeadStage4 → dict leads
+    assert len(result.leads) == 1
+    lead = result.leads[0]
+    assert lead["entreprise"] == "Acme SAS"
+    assert lead["siren"] == "123456789"
+    assert lead["naf"] == "49.41A"
+    assert lead["effectif"] == "20 à 49 salariés"
+    assert lead["score"] == 82
+    assert lead["contact_nom"] == "Marie Durand"
+    assert lead["contact_email"] == "contact@acme.fr"
+    assert lead["contact_tel"] == "0102030405"
+    assert lead["mail_sujet"] == "Une idée pour Acme"
+    assert lead["statut"] == "a_valider"
+    assert lead["run_id"] == "run-abc"
+    assert lead["verticale_id"] == "vid-1"
+
+    # Coût + counts + progression
+    assert result.cout_eur == pytest.approx(1.23)
+    assert result.counts == {"decouverte": 2, "qualifies": 2, "leads": 1}
+    assert emitted and emitted[-1][1] == 95
+
+    # Ciblage : la verticale fichier a écrasé le placeholder + override effectif.
+    assert len(captured["cfg"].secteurs) >= 1
+    assert captured["cfg"].filtres_entreprise.effectif_min == 20
+    assert captured["cfg"].volume.cible == 5
+    assert captured["cfg"].budget.max_eur == 12.0
+    assert 4 in captured["stages"]  # L4 toujours exécuté en real
+    assert 3.5 not in captured["stages"]  # pas de clé Dropcontact
+
+
+def test_real_pipeline_email_dropcontact_prioritaire(monkeypatch):
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        res = OrchestrationResult()
+        res.leads_l4 = [
+            _lead4(
+                email_dropcontact="dc@acme.fr",
+                telephone_direct_dropcontact="0600000000",
+            )
+        ]
+        return res
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+
+    result = RealPipeline().run(_real_ctx(), lambda *a: None)
+    assert result.leads[0]["contact_email"] == "dc@acme.fr"
+    assert result.leads[0]["contact_tel"] == "0600000000"
+
+
+def test_real_pipeline_missing_key_raises(monkeypatch):
+    import renoboost_leads.settings as settings_mod
+
+    monkeypatch.setattr(
+        settings_mod, "get_settings", lambda: _FakeSettings(google=False)
+    )
+    with pytest.raises(RuntimeError, match="GOOGLE_PLACES_API_KEY"):
+        RealPipeline().run(_real_ctx(), lambda *a: None)
+
+
+def test_real_pipeline_sans_verticale_raises(monkeypatch):
+    import renoboost_leads.settings as settings_mod
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+    ctx = RunContext(run={"id": "r", "zone": {}}, verticale=None)
+    with pytest.raises(RuntimeError, match="verticale"):
+        RealPipeline().run(ctx, lambda *a: None)
+
+
+def test_real_pipeline_zone_point_gps(monkeypatch):
+    """Mode point GPS (#38) : lat/lon dans la zone → Zone(type='point')."""
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+
+    seen: dict[str, object] = {}
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        seen["zone"] = cfg.zone
+        return OrchestrationResult()
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+
+    ctx = RunContext(
+        run={
+            "id": "r",
+            "verticale_id": "v",
+            "zone": {"latitude": 50.63, "longitude": 3.06, "rayon_par_point_km": 8},
+            "volume_cible": 3,
+        },
+        verticale={"slug": "irve-flottes-b2b"},
+    )
+    RealPipeline().run(ctx, lambda *a: None)
+    assert seen["zone"].type == "point"
+    assert seen["zone"].latitude == pytest.approx(50.63)
+    assert seen["zone"].rayon_par_point_km == pytest.approx(8.0)
 
 
 # --- Worker ------------------------------------------------------------------

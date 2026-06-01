@@ -43,7 +43,12 @@ class Worker:
         logger.info("Run %s : démarrage", run_id)
         try:
             verticale = self.db.get_verticale(run.get("verticale_id"))
-            ctx = RunContext(run=run, verticale=verticale, max_leads=self.config.max_leads)
+            ctx = RunContext(
+                run=run,
+                verticale=verticale,
+                max_leads=self.config.max_leads,
+                max_budget_eur=self.config.max_budget_eur,
+            )
 
             def emit(etape: str, progress: int, counts: dict[str, int]) -> None:
                 self.db.update_run_progress(
