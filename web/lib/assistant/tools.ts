@@ -3,7 +3,14 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LEAD_STATUS_LABEL, RUN_STATUS_LABEL } from "../ui";
-import type { Lead, LeadStatus, Run, Verticale } from "../database.types";
+import type {
+  AgentConfig,
+  AgentJournalEntry,
+  Lead,
+  LeadStatus,
+  Run,
+  Verticale,
+} from "../database.types";
 
 const STATUTS: LeadStatus[] = [
   "nouveau",
@@ -127,6 +134,12 @@ export const tools = [
         limit: { type: "number", description: "Nombre de leads (défaut 25, max 50)." },
       },
     },
+  },
+  {
+    name: "statut_agent",
+    description:
+      "État du mandat de l'agent autonome : autonomie on/off, périmètre, budget/jour, budget engagé aujourd'hui, dernières actions automatiques. Pour 'qu'a fait l'agent', 'l'autonomie est-elle active'.",
+    input_schema: { type: "object", properties: {} },
   },
 ];
 
@@ -496,6 +509,51 @@ export async function executeTool(
             statut: l.statut ? (LEAD_STATUS_LABEL[l.statut] ?? l.statut) : null,
             email: l.contact_email,
             activite: l.libelle_naf,
+          })),
+        });
+      }
+
+      case "statut_agent": {
+        const { data: cfgData } = await supabase
+          .from("agent_config")
+          .select("*")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        const cfg = cfgData as AgentConfig | null;
+        if (!cfg) return "Agent non configuré.";
+
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const { data: runsToday } = await supabase
+          .from("runs")
+          .select("budget_eur")
+          .gte("created_at", startOfDay.toISOString());
+        const engage = ((runsToday as { budget_eur: number | null }[]) ?? []).reduce(
+          (s, r) => s + Number(r.budget_eur ?? 0),
+          0,
+        );
+
+        const { data: jData } = await supabase
+          .from("agent_journal")
+          .select("at, type, message")
+          .order("at", { ascending: false })
+          .limit(8);
+        const journal = (jData as Partial<AgentJournalEntry>[]) ?? [];
+
+        return JSON.stringify({
+          autonomie: cfg.autonomie,
+          departements: cfg.departements,
+          cibles_autorisees_count: cfg.cibles_autorisees.length,
+          budget_jour_eur: cfg.budget_jour_eur,
+          budget_engage_aujourdhui_eur: Math.round(engage),
+          budget_run_eur: cfg.budget_run_eur,
+          max_runs_jour: cfg.max_runs_jour,
+          cadence_min: cfg.cadence_min,
+          dernieres_actions: journal.map((j) => ({
+            quand: j.at,
+            type: j.type,
+            message: j.message,
           })),
         });
       }

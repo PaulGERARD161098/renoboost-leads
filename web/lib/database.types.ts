@@ -93,6 +93,32 @@ export interface Lead {
   updated_at: string;
 }
 
+export interface AgentConfig {
+  id: string;
+  autonomie: boolean;
+  cibles_autorisees: string[];
+  departements: string[];
+  budget_jour_eur: number;
+  budget_run_eur: number;
+  volume_run: number;
+  effectif_min: number | null;
+  max_runs_jour: number;
+  cadence_min: number;
+  updated_by: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface AgentJournalEntry {
+  id: string;
+  at: string;
+  type: string;
+  message: string | null;
+  run_id: string | null;
+  cout_estime_eur: number | null;
+  payload: Record<string, unknown>;
+}
+
 export interface LeadEvent {
   id: string;
   lead_id: string;
