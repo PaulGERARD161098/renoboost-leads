@@ -5,10 +5,12 @@ import { useState, useRef, useEffect } from "react";
 type Message = { role: "user" | "assistant"; content: string };
 
 const SUGGESTIONS = [
+  "Compare mes 5 meilleurs leads",
+  "Quelles ont été mes meilleures recherches ?",
+  "Quels sont mes meilleurs départements ?",
+  "Écris-moi un exemple de cold mail pour mon top lead",
+  "Mon taux de réponse global ?",
   "Par où je commence ?",
-  "Quels sont mes meilleurs leads ?",
-  "Où en sont mes recherches ?",
-  "Comment lancer une recherche ?",
 ];
 
 export function AssistantWidget() {
@@ -59,23 +61,19 @@ export function AssistantWidget() {
       {/* Bouton flottant */}
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label="Assistant RénoBoost"
-        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-lg transition hover:scale-105"
+        aria-label="Magellan — assistant de navigation"
+        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand)] text-2xl text-white shadow-lg transition hover:scale-105"
       >
-        {open ? (
-          <span className="text-2xl leading-none">×</span>
-        ) : (
-          <span className="text-xl">💬</span>
-        )}
+        {open ? <span className="leading-none">×</span> : <span>🧭</span>}
       </button>
 
       {/* Panneau */}
       {open && (
         <div className="fixed bottom-24 right-5 z-40 flex h-[32rem] max-h-[calc(100vh-8rem)] w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-2xl">
           <header className="border-b border-[var(--border)] bg-[var(--brand)] px-4 py-3 text-white">
-            <div className="font-semibold">Assistant RénoBoost</div>
+            <div className="font-semibold">🧭 Magellan</div>
             <div className="text-xs opacity-80">
-              Guide & pilotage — consultation
+              Votre assistant de navigation commerciale
             </div>
           </header>
 

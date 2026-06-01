@@ -67,6 +67,23 @@ export const tools = [
     },
   },
   {
+    name: "stats_recherches",
+    description:
+      "Performance comparée des recherches (runs) : par recherche, nombre de leads, score moyen, nombre de top leads, nombre de réponses, coût et département. Pour 'quelles ont été mes meilleures recherches'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Nombre de recherches à comparer (défaut 10)." },
+      },
+    },
+  },
+  {
+    name: "stats_departements",
+    description:
+      "Performance agrégée par département (déduit du code postal des leads) : volume, score moyen, top leads, réponses, taux de réponse. Pour 'quels sont mes meilleurs départements'.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "lister_cibles",
     description: "Cibles (verticales) actives définies dans le CRM.",
     input_schema: { type: "object", properties: {} },
@@ -119,6 +136,8 @@ export async function executeTool(
           envoyes,
           ouverts,
           repondus,
+          taux_ouverture_pct: envoyes ? Math.round((ouverts / envoyes) * 100) : null,
+          taux_reponse_pct: envoyes ? Math.round((repondus / envoyes) * 100) : null,
         });
       }
 
@@ -180,6 +199,8 @@ export async function executeTool(
             email: l.contact_email,
             tel: l.contact_tel,
             site: l.site_web,
+            pitch_objet: l.mail_sujet,
+            pitch_corps: l.mail_corps,
           })),
         );
       }
@@ -206,6 +227,102 @@ export async function executeTool(
             date: r.created_at,
           })),
         );
+      }
+
+      case "stats_recherches": {
+        const limit = clampLimit(input.limit, 10, 30);
+        const { data: runsData, error: runsErr } = await supabase
+          .from("runs")
+          .select("id, zone, status, cout_eur, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (runsErr) return `Erreur: ${runsErr.message}`;
+        const runs = (runsData as Partial<Run>[]) ?? [];
+        if (runs.length === 0) return "Aucune recherche lancée pour l'instant.";
+
+        const { data: leadsData, error: leadsErr } = await supabase
+          .from("leads")
+          .select("run_id, score, statut")
+          .limit(5000);
+        if (leadsErr) return `Erreur: ${leadsErr.message}`;
+        const leads =
+          (leadsData as Pick<Lead, "run_id" | "score" | "statut">[]) ?? [];
+
+        type Agg = { n: number; somme: number; nbScore: number; top: number; repondus: number };
+        const par: Record<string, Agg> = {};
+        for (const l of leads) {
+          if (!l.run_id) continue;
+          const a = (par[l.run_id] ??= { n: 0, somme: 0, nbScore: 0, top: 0, repondus: 0 });
+          a.n++;
+          if (typeof l.score === "number") {
+            a.somme += l.score;
+            a.nbScore++;
+            if (l.score >= 75) a.top++;
+          }
+          if (l.statut === "repondu") a.repondus++;
+        }
+
+        const rows = runs
+          .map((r) => {
+            const a = par[r.id as string] ?? { n: 0, somme: 0, nbScore: 0, top: 0, repondus: 0 };
+            const zone = r.zone as { departement?: string } | undefined;
+            return {
+              departement: zone?.departement ?? null,
+              date: r.created_at,
+              statut: r.status ? (RUN_STATUS_LABEL[r.status] ?? r.status) : null,
+              leads: a.n,
+              score_moyen: a.nbScore ? Math.round(a.somme / a.nbScore) : null,
+              top_leads: a.top,
+              reponses: a.repondus,
+              cout_eur: r.cout_eur ?? 0,
+            };
+          })
+          .sort(
+            (x, y) =>
+              y.reponses - x.reponses ||
+              y.top_leads - x.top_leads ||
+              (y.score_moyen ?? 0) - (x.score_moyen ?? 0),
+          )
+          .slice(0, limit);
+        return JSON.stringify(rows);
+      }
+
+      case "stats_departements": {
+        const { data, error } = await supabase
+          .from("leads")
+          .select("code_postal, score, statut")
+          .limit(5000);
+        if (error) return `Erreur: ${error.message}`;
+        const leads =
+          (data as Pick<Lead, "code_postal" | "score" | "statut">[]) ?? [];
+        if (leads.length === 0) return "Aucun lead pour l'instant.";
+
+        type Agg = { n: number; somme: number; nbScore: number; top: number; envoyes: number; repondus: number };
+        const par: Record<string, Agg> = {};
+        for (const l of leads) {
+          const dep = l.code_postal ? l.code_postal.slice(0, 2) : "??";
+          const a = (par[dep] ??= { n: 0, somme: 0, nbScore: 0, top: 0, envoyes: 0, repondus: 0 });
+          a.n++;
+          if (typeof l.score === "number") {
+            a.somme += l.score;
+            a.nbScore++;
+            if (l.score >= 75) a.top++;
+          }
+          if (["envoye", "ouvert", "repondu"].includes(l.statut)) a.envoyes++;
+          if (l.statut === "repondu") a.repondus++;
+        }
+
+        const rows = Object.entries(par)
+          .map(([dep, a]) => ({
+            departement: dep,
+            leads: a.n,
+            score_moyen: a.nbScore ? Math.round(a.somme / a.nbScore) : null,
+            top_leads: a.top,
+            reponses: a.repondus,
+            taux_reponse_pct: a.envoyes ? Math.round((a.repondus / a.envoyes) * 100) : null,
+          }))
+          .sort((x, y) => y.top_leads - x.top_leads || y.leads - x.leads);
+        return JSON.stringify(rows);
       }
 
       case "lister_cibles": {
