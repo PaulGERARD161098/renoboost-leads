@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Nav } from "@/components/nav";
+import { AssistantWidget } from "@/components/assistant-widget";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
@@ -18,6 +19,7 @@ export default async function AppLayout({
     <div className="min-h-screen">
       <Nav email={user.email ?? null} />
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <AssistantWidget />
     </div>
   );
 }
