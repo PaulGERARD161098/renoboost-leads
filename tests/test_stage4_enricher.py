@@ -39,14 +39,14 @@ class TestFiltreLeadsAScorer:
         )
 
     def test_defaut_ne_score_que_qualifies(self):
-        from renoboost_leads.cli import _filtrer_leads_a_scorer
+        from renoboost_leads.orchestrateur import _filtrer_leads_a_scorer
 
         leads = [self._l2("A", False), self._l2("B", True), self._l2("C", False)]
         res = _filtrer_leads_a_scorer(leads, scorer_hors_filtre=False)
         assert [lead.place_id for lead in res] == ["A", "C"]
 
     def test_flag_actif_score_tout(self):
-        from renoboost_leads.cli import _filtrer_leads_a_scorer
+        from renoboost_leads.orchestrateur import _filtrer_leads_a_scorer
 
         leads = [self._l2("A", False), self._l2("B", True)]
         res = _filtrer_leads_a_scorer(leads, scorer_hors_filtre=True)

@@ -18,8 +18,11 @@ Process long-running qui transforme les **runs** créés dans le CRM (statut
 
 - `demo` (défaut) — génère des leads plausibles **sans API externe**. Permet de
   valider toute la chaîne UI → run → leads immédiatement.
-- `real` — point d'extension vers les étages réels (`renoboost_leads.stage0..4`).
-  Non branché tant que les clés API ne sont pas fournies ; lève une erreur claire.
+- `real` — exécute le **vrai moteur L1→L4** (`renoboost_leads`) via l'orchestrateur
+  partagé avec la CLI, puis écrit des leads réels dans Supabase. Le ciblage vient
+  de la **verticale fichier** (`verticales/<slug>/verticale.yaml`, source de
+  vérité) ; zone/volume/budget viennent du run. Échoue clairement au démarrage si
+  une clé L1/L4 manque (cf. ci-dessous).
 
 ## Variables d'environnement
 
@@ -30,11 +33,30 @@ Process long-running qui transforme les **runs** créés dans le CRM (statut
 | `WORKER_MODE` | — | `demo` | `demo` \| `real` |
 | `WORKER_POLL_INTERVAL_S` | — | `5` | Pause entre deux polls à vide |
 | `MAX_LEADS_PER_RUN` | — | `500` | Plafond de leads par run |
+| `MAX_BUDGET_EUR_PER_RUN` | — | `50` | Plafond budget par run (BudgetGuard) |
 | `WORKER_REQUEST_TIMEOUT_S` | — | `30` | Timeout des appels HTTP |
 | `LOG_LEVEL` | — | `INFO` | Niveau de log |
 
 ⚠️ Utiliser la clé **service_role**, pas la clé `anon` : le worker écrit dans
 `leads`/`runs` côté serveur.
+
+### Clés API du mode `real`
+
+Le moteur lit ses clés via `get_settings()` (mêmes variables que la CLI) :
+
+| Variable | Requis (real) | Étage | Rôle |
+|---|---|---|---|
+| `GOOGLE_PLACES_API_KEY` | ✅ | L1 | Découverte d'établissements (Google Places) |
+| `ANTHROPIC_API_KEY` | ✅ | L4 | Scoring + rédaction des e-mails (Claude) |
+| `CLAUDE_MODEL` | — | L4 | Modèle Claude (sinon Haiku 4.5 par défaut) |
+| `DROPCONTACT_API_KEY` | — | L3.5 | Enrichissement contacts (L3.5 sauté si absente) |
+| `PAPPERS_API_KEY` | — | L2 | Fallback firmographique (sinon data.gouv seul) |
+| `SOCIETEINFO_API_KEY` | — | L2/L3.7 | Registres officiels (optionnel) |
+
+En mode `real`, si `GOOGLE_PLACES_API_KEY` **ou** `ANTHROPIC_API_KEY` est absente,
+le worker marque le run `echoue` avec un message actionnable et ne consomme aucun
+crédit. L2 (data.gouv) est gratuit ; L3.5 n'est exécuté que si une clé Dropcontact
+est présente. Le `BudgetGuard` coupe le run dès `MAX_BUDGET_EUR_PER_RUN` atteint.
 
 ## Lancer en local
 

@@ -17,6 +17,7 @@ class WorkerConfig:
     poll_interval_s: float = 5.0
     mode: str = "demo"  # "demo" | "real"
     max_leads: int = 500
+    max_budget_eur: float = 50.0
     request_timeout_s: float = 30.0
 
     @property
@@ -50,5 +51,6 @@ class WorkerConfig:
             poll_interval_s=float(env.get("WORKER_POLL_INTERVAL_S", "5")),
             mode=mode,
             max_leads=int(env.get("MAX_LEADS_PER_RUN", "500")),
+            max_budget_eur=float(env.get("MAX_BUDGET_EUR_PER_RUN", "50")),
             request_timeout_s=float(env.get("WORKER_REQUEST_TIMEOUT_S", "30")),
         )
