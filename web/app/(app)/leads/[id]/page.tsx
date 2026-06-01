@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadEvent } from "@/lib/database.types";
 import { LeadEditor } from "@/components/lead-editor";
+import { LeadStatusActions } from "@/components/lead-status-actions";
 import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
@@ -100,6 +101,7 @@ export default async function LeadPage({
             Prochaine action recommandée
           </div>
           <p className="mt-1 text-sm font-medium">{action}</p>
+          <LeadStatusActions lead={l} />
         </div>
       </div>
 
