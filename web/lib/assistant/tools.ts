@@ -88,6 +88,46 @@ export const tools = [
     description: "Cibles (verticales) actives définies dans le CRM.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "lancer_recherche",
+    description:
+      "ACTION qui engage du budget : crée une nouvelle recherche (run). À n'appeler QU'APRÈS confirmation explicite de l'utilisateur sur les paramètres proposés. Le moteur exécute ensuite la recherche en tâche de fond.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cible: {
+          type: "string",
+          description: "Nom ou slug de la cible (verticale) active.",
+        },
+        departement: {
+          type: "string",
+          description: "Numéro de département, ex: '59'.",
+        },
+        budget_eur: {
+          type: "number",
+          description: "Budget plafond en euros pour cette recherche.",
+        },
+        volume_cible: { type: "number", description: "Nombre de leads visé (optionnel)." },
+        effectif_min: { type: "number", description: "Effectif minimum (optionnel)." },
+      },
+      required: ["cible", "departement", "budget_eur"],
+    },
+  },
+  {
+    name: "resultats_recherche",
+    description:
+      "Leads issus d'une recherche, triés par score, pour livrer un résultat propre. Par défaut la recherche la plus récente ; sinon préciser un département.",
+    input_schema: {
+      type: "object",
+      properties: {
+        departement: {
+          type: "string",
+          description: "Filtrer sur la recherche d'un département (optionnel).",
+        },
+        limit: { type: "number", description: "Nombre de leads (défaut 25, max 50)." },
+      },
+    },
+  },
 ];
 
 type Json = Record<string, unknown>;
@@ -342,6 +382,122 @@ export async function executeTool(
         return JSON.stringify(
           v.map((c) => ({ nom: c.nom, slug: c.slug, description: c.description })),
         );
+      }
+
+      case "lancer_recherche": {
+        const cible = typeof input.cible === "string" ? input.cible.trim() : "";
+        const departement =
+          typeof input.departement === "string" ? input.departement.trim() : "";
+        const budget = typeof input.budget_eur === "number" ? input.budget_eur : null;
+        const volume = typeof input.volume_cible === "number" ? input.volume_cible : null;
+        const effectifMin =
+          typeof input.effectif_min === "number" ? input.effectif_min : null;
+        if (!cible) return "Précise la cible (verticale).";
+        if (!departement) return "Précise le département (ex: 59).";
+        if (budget === null || budget <= 0)
+          return "Précise un budget plafond en euros (ex: 15).";
+
+        const { data: vData, error: vErr } = await supabase
+          .from("verticales")
+          .select("id, slug, nom")
+          .eq("active", true);
+        if (vErr) return `Erreur: ${vErr.message}`;
+        const verticales =
+          (vData as Pick<Verticale, "id" | "slug" | "nom">[]) ?? [];
+        const needle = cible.toLowerCase();
+        const matches = verticales.filter(
+          (v) =>
+            v.slug.toLowerCase().includes(needle) ||
+            v.nom.toLowerCase().includes(needle),
+        );
+        if (matches.length === 0)
+          return `Cible introuvable. Cibles actives : ${verticales.map((v) => v.nom).join(", ") || "aucune"}.`;
+        if (matches.length > 1)
+          return `Plusieurs cibles correspondent : ${matches.map((v) => v.nom).join(", ")}. Précise laquelle.`;
+        const verticale = matches[0];
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data, error } = await supabase
+          .from("runs")
+          .insert({
+            verticale_id: verticale.id,
+            zone: { departement, effectif_min: effectifMin },
+            volume_cible: volume,
+            budget_eur: budget,
+            status: "demande",
+            created_by: user?.id ?? null,
+          })
+          .select("id")
+          .single();
+        if (error) return `Erreur lors du lancement : ${error.message}`;
+        return JSON.stringify({
+          ok: true,
+          run_id: data.id,
+          cible: verticale.nom,
+          departement,
+          budget_eur: budget,
+          volume_cible: volume,
+          message:
+            "Recherche créée (statut : demandé). Le moteur va l'exécuter en tâche de fond ; les résultats arriveront dans l'onglet Prospects.",
+        });
+      }
+
+      case "resultats_recherche": {
+        const limit = clampLimit(input.limit, 25, 50);
+        const dep =
+          typeof input.departement === "string" ? input.departement.trim() : "";
+        const { data: runsData, error: runsErr } = await supabase
+          .from("runs")
+          .select("id, zone, status, created_at, cout_eur")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        if (runsErr) return `Erreur: ${runsErr.message}`;
+        const runs = (runsData as Partial<Run>[]) ?? [];
+        if (runs.length === 0) return "Aucune recherche lancée pour l'instant.";
+        let target = runs[0];
+        if (dep) {
+          const m = runs.find(
+            (r) => (r.zone as { departement?: string } | undefined)?.departement === dep,
+          );
+          if (m) target = m;
+        }
+        const { data: leadsData, error } = await supabase
+          .from("leads")
+          .select("entreprise, ville, score, statut, contact_email, libelle_naf")
+          .eq("run_id", target.id as string)
+          .order("score", { ascending: false, nullsFirst: false })
+          .limit(limit);
+        if (error) return `Erreur: ${error.message}`;
+        const leads = (leadsData as Partial<Lead>[]) ?? [];
+        const meta = {
+          statut_recherche: target.status
+            ? (RUN_STATUS_LABEL[target.status] ?? target.status)
+            : null,
+          departement:
+            (target.zone as { departement?: string } | undefined)?.departement ?? null,
+          cout_eur: target.cout_eur,
+          nb_resultats: leads.length,
+        };
+        if (leads.length === 0)
+          return JSON.stringify({
+            ...meta,
+            message:
+              "Pas encore de résultats — la recherche est probablement en cours.",
+            leads: [],
+          });
+        return JSON.stringify({
+          ...meta,
+          leads: leads.map((l) => ({
+            entreprise: l.entreprise,
+            ville: l.ville,
+            score: l.score,
+            statut: l.statut ? (LEAD_STATUS_LABEL[l.statut] ?? l.statut) : null,
+            email: l.contact_email,
+            activite: l.libelle_naf,
+          })),
+        });
       }
 
       default:

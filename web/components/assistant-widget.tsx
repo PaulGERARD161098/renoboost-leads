@@ -5,11 +5,11 @@ import { useState, useRef, useEffect } from "react";
 type Message = { role: "user" | "assistant"; content: string };
 
 const SUGGESTIONS = [
+  "Lance une recherche pour moi",
+  "Livre-moi les résultats de ma dernière recherche",
   "Compare mes 5 meilleurs leads",
-  "Quelles ont été mes meilleures recherches ?",
   "Quels sont mes meilleurs départements ?",
-  "Écris-moi un exemple de cold mail pour mon top lead",
-  "Mon taux de réponse global ?",
+  "Écris un cold mail pour mon top lead",
   "Par où je commence ?",
 ];
 
