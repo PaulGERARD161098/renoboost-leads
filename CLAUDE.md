@@ -3,7 +3,7 @@
 ## Convention "fin de session"
 
 Quand l'utilisateur écrit **`fin de session`** (ou variante : *fin de session.*,
-*on s'arrête*, *fin de journée*), produire **trois livrables**, dans l'ordre :
+*on s'arrête*, *fin de journée*), produire **quatre livrables**, dans l'ordre :
 
 1. **Synthèse du travail effectué** — le passage d'un point A (état d'ouverture)
    à un point B (état de fermeture) : ce qui a été livré, mergé, décidé.
@@ -12,6 +12,11 @@ Quand l'utilisateur écrit **`fin de session`** (ou variante : *fin de session.*
    résolus, fichiers temporaires). `ruff check` + `pytest` doivent rester verts.
 3. **Prompt de reprise** — prêt à coller dans une nouvelle session demain, dans
    un bloc ``` ``` ```.
+4. **Mise à jour de la fiche Notion** — rafraîchir la fiche canonique du repo
+   dans Notion (cf. lien ci-dessous) : ajouter une entrée datée dans *Journal
+   des sessions*, et mettre à jour *État actuel*, *Roadmap*, *Dettes techniques*.
+   Faite via le connecteur Notion. S'il n'est pas actif dans la session, le
+   signaler et proposer de le faire dès qu'il l'est (ne jamais inventer).
 
 Le prompt de reprise doit contenir :
 
@@ -28,6 +33,16 @@ Le prompt de reprise doit contenir :
 Le prompt doit être **autoportant** : un Claude qui ouvre la session demain
 sans aucun historique doit pouvoir reprendre sans poser de question préalable
 autre que le choix de porte.
+
+### Fiche Notion du repo (cible du livrable 4)
+
+La fiche canonique de **ce** repo est :
+**📦 Repo renoboost-leads — Fiche projet** →
+https://www.notion.so/372c68b11948813aa65fd381e365a00f
+
+C'est la page à mettre à jour à chaque `fin de session`. Structure à conserver :
+Vue d'ensemble · Architecture · État actuel · Journal des sessions · Roadmap ·
+Dettes techniques · Liens.
 
 ## Style général
 
