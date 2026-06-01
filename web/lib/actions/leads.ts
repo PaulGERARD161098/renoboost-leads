@@ -50,6 +50,20 @@ export async function setLeadStatus(leadId: string, statut: LeadStatus) {
   return { ok: true };
 }
 
+/** Mise à jour groupée du statut de plusieurs leads (actions de masse). */
+export async function setLeadsStatus(ids: string[], statut: LeadStatus) {
+  if (!ids.length) return { error: "Aucun lead sélectionné" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ statut })
+    .in("id", ids);
+  if (error) return { error: error.message };
+  revalidatePath("/inbox");
+  revalidatePath("/suivi");
+  return { ok: true, count: ids.length };
+}
+
 /**
  * Envoi via Instantly. Sans clé API configurée → mode simulation
  * (le lead passe « envoyé » mais aucun email réel n'est transmis).
