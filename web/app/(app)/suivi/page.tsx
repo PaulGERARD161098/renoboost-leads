@@ -31,6 +31,7 @@ export default async function SuiviPage() {
     ["ouvert", "repondu"].includes(l.statut),
   ).length;
   const replied = byStatus("repondu").length;
+  const bounced = leads.filter((l) => l.bounced_at).length;
 
   return (
     <div>
@@ -39,7 +40,7 @@ export default async function SuiviPage() {
         Pipeline d&apos;envoi et de réponses.
       </p>
 
-      <div className="mb-6 grid grid-cols-3 gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Envoyés" value={sent} />
         <Stat
           label="Taux d'ouverture"
@@ -48,6 +49,10 @@ export default async function SuiviPage() {
         <Stat
           label="Taux de réponse"
           value={sent ? `${Math.round((replied / sent) * 100)}%` : "—"}
+        />
+        <Stat
+          label="Rebonds"
+          value={sent ? `${bounced} (${Math.round((bounced / sent) * 100)}%)` : bounced}
         />
       </div>
 

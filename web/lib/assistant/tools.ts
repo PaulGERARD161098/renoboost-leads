@@ -107,10 +107,11 @@ export async function executeTool(
       case "compter_leads": {
         const { data, error } = await supabase
           .from("leads")
-          .select("statut, score")
+          .select("statut, score, bounced_at")
           .limit(5000);
         if (error) return `Erreur: ${error.message}`;
-        const leads = (data as Pick<Lead, "statut" | "score">[]) ?? [];
+        const leads =
+          (data as Pick<Lead, "statut" | "score" | "bounced_at">[]) ?? [];
         const parStatut: Record<string, number> = {};
         let sommeScore = 0;
         let nbScore = 0;
@@ -129,6 +130,7 @@ export async function executeTool(
           ["ouvert", "repondu"].includes(l.statut),
         ).length;
         const repondus = leads.filter((l) => l.statut === "repondu").length;
+        const bounces = leads.filter((l) => l.bounced_at).length;
         return JSON.stringify({
           total: leads.length,
           par_statut: parStatut,
@@ -136,8 +138,10 @@ export async function executeTool(
           envoyes,
           ouverts,
           repondus,
+          bounces,
           taux_ouverture_pct: envoyes ? Math.round((ouverts / envoyes) * 100) : null,
           taux_reponse_pct: envoyes ? Math.round((repondus / envoyes) * 100) : null,
+          taux_bounce_pct: envoyes ? Math.round((bounces / envoyes) * 100) : null,
         });
       }
 

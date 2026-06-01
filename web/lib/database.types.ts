@@ -20,6 +20,7 @@ export type LeadEventType =
   | "relance"
   | "ecarte"
   | "note"
+  | "rebond"
   | "oubli_rgpd";
 
 export interface Profile {
@@ -86,6 +87,7 @@ export interface Lead {
   sent_at: string | null;
   opened_at: string | null;
   replied_at: string | null;
+  bounced_at: string | null;
   owner: string | null;
   created_at: string;
   updated_at: string;
