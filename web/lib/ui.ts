@@ -36,6 +36,45 @@ export function scoreColor(score: number | null): string {
   return "bg-slate-100 text-slate-600";
 }
 
+/** Verdict commercial associé à un score (label + classe de couleur). */
+export function scoreVerdict(score: number | null): { label: string; tone: string } {
+  if (score === null) return { label: "Non scoré", tone: "bg-slate-100 text-slate-500" };
+  if (score >= 75)
+    return { label: "Top lead — à prioriser", tone: "bg-emerald-100 text-emerald-800" };
+  if (score >= 50) return { label: "Potentiel correct", tone: "bg-amber-100 text-amber-800" };
+  return { label: "Faible intérêt", tone: "bg-slate-100 text-slate-600" };
+}
+
+/** Prochaine action recommandée selon le statut, le score et la présence d'email. */
+export function nextAction(lead: {
+  statut: LeadStatus;
+  score: number | null;
+  contact_email: string | null;
+}): string {
+  switch (lead.statut) {
+    case "repondu":
+      return "A répondu — enchaîne le suivi commercial (RDV, devis).";
+    case "ouvert":
+      return "A ouvert sans répondre — prévois une relance ciblée.";
+    case "a_relancer":
+      return "À relancer — renvoie un message court de relance.";
+    case "envoye":
+      return "Email envoyé — surveille l'ouverture.";
+    case "ecarte":
+      return "Écarté — aucune action.";
+    case "valide":
+      return lead.contact_email
+        ? "Validé — prêt à envoyer."
+        : "Validé mais email manquant — complète le contact.";
+    default:
+      if (!lead.contact_email) return "Vérifie/complète l'email avant tout envoi.";
+      if ((lead.score ?? 0) >= 75)
+        return "Top lead jamais contacté — valide l'email et envoie en priorité.";
+      if ((lead.score ?? 0) >= 50) return "Potentiel correct — relis le pitch puis envoie.";
+      return "Score faible — à qualifier ou écarter.";
+  }
+}
+
 export function formatDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("fr-FR", {

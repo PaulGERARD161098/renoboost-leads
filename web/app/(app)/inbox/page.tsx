@@ -77,6 +77,8 @@ export default async function InboxPage({
               <tr>
                 <th className="px-4 py-3">Entreprise</th>
                 <th className="px-4 py-3">Ville</th>
+                <th className="px-4 py-3">Effectif</th>
+                <th className="px-4 py-3">Contact</th>
                 <th className="px-4 py-3">Score</th>
                 <th className="px-4 py-3">Statut</th>
               </tr>
@@ -103,12 +105,38 @@ export default async function InboxPage({
                   <td className="px-4 py-3 text-[var(--muted)]">
                     {lead.ville ?? "—"}
                   </td>
+                  <td className="px-4 py-3 text-[var(--muted)]">
+                    {lead.effectif ?? "—"}
+                  </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${scoreColor(lead.score)}`}
-                    >
-                      {lead.score ?? "—"}
-                    </span>
+                    {lead.contact_email ? (
+                      <span className="text-emerald-600" title={lead.contact_email}>
+                        ✓ email
+                      </span>
+                    ) : (
+                      <span className="text-[var(--muted)]">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${scoreColor(lead.score)}`}
+                      >
+                        {lead.score ?? "—"}
+                      </span>
+                      <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-100">
+                        <span
+                          className={`block h-full ${
+                            (lead.score ?? 0) >= 75
+                              ? "bg-emerald-500"
+                              : (lead.score ?? 0) >= 50
+                                ? "bg-amber-500"
+                                : "bg-slate-400"
+                          }`}
+                          style={{ width: `${Math.max(0, Math.min(100, lead.score ?? 0))}%` }}
+                        />
+                      </span>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span
