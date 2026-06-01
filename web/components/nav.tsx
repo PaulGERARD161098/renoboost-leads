@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/suivi", label: "Suivi" },
   { href: "/recherche", label: "Nouvelle recherche" },
   { href: "/cibles", label: "Cibles" },
+  { href: "/mode-emploi", label: "Mode d'emploi" },
 ];
 
 export function Nav({ email }: { email: string | null }) {
