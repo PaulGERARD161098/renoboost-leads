@@ -12,9 +12,19 @@ export default async function TableauDeBordPage() {
 
   const { data: leadsData } = await supabase
     .from("leads")
-    .select("id, entreprise, ville, score, statut, code_postal, bounced_at, relance_at")
+    .select(
+      "id, entreprise, ville, score, statut, code_postal, bounced_at, relance_at, vision_satellite",
+    )
     .limit(5000);
   const leads = (leadsData as Partial<Lead>[]) ?? [];
+
+  const solScore = (l: Partial<Lead>) =>
+    (l.vision_satellite as { score?: number } | null)?.score ?? null;
+  const topSolaire = leads
+    .filter((l) => typeof solScore(l) === "number")
+    .sort((a, b) => (solScore(b) ?? 0) - (solScore(a) ?? 0))
+    .slice(0, 8);
+  const fortSolaire = leads.filter((l) => (solScore(l) ?? 0) >= 75).length;
 
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
@@ -191,6 +201,44 @@ export default async function TableauDeBordPage() {
                     <td className="px-4 py-2.5 text-[var(--muted)]">{l.ville ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right text-xs text-rose-600">
                       {formatDate(l.relance_at ?? null)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Potentiel solaire (satellite) */}
+      {topSolaire.length > 0 && (
+        <>
+          <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            ☀️ Meilleurs potentiels solaires ({fortSolaire} à fort potentiel)
+          </h2>
+          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+            <table className="w-full text-sm">
+              <tbody>
+                {topSolaire.map((l) => (
+                  <tr
+                    key={l.id}
+                    className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-2.5">
+                      <Link
+                        href={`/leads/${l.id}`}
+                        className="font-medium hover:text-[var(--brand)]"
+                      >
+                        {l.entreprise}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--muted)]">{l.ville ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-xs font-semibold ${scoreColor(solScore(l))}`}
+                      >
+                        ☀️ {solScore(l)}
+                      </span>
                     </td>
                   </tr>
                 ))}
