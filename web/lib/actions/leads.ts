@@ -51,6 +51,15 @@ export async function setLeadStatus(leadId: string, statut: LeadStatus) {
   return { ok: true };
 }
 
+/** Ajoute une note libre à un lead (consignée dans l'historique). */
+export async function addLeadNote(leadId: string, texte: string) {
+  const t = texte.trim();
+  if (!t) return { error: "Note vide" };
+  await logEvent(leadId, "note", { texte: t });
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
 /** Marque un lead « à relancer » et trace l'événement de relance. */
 export async function relancerLead(leadId: string) {
   const supabase = await createClient();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { Markdown } from "@/components/markdown";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -102,13 +103,13 @@ export function AssistantWidget() {
                 className={m.role === "user" ? "text-right" : "text-left"}
               >
                 <div
-                  className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
+                  className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                     m.role === "user"
-                      ? "bg-[var(--brand)] text-white"
+                      ? "whitespace-pre-wrap bg-[var(--brand)] text-white"
                       : "bg-slate-100 text-slate-800"
                   }`}
                 >
-                  {m.content}
+                  {m.role === "user" ? m.content : <Markdown text={m.content} />}
                 </div>
               </div>
             ))}
