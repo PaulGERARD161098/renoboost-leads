@@ -3,16 +3,33 @@
 import { useState, useRef, useEffect } from "react";
 import { Markdown } from "@/components/markdown";
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = { role: "user" | "assistant"; content: string; steps?: string[] };
 
 const SUGGESTIONS = [
   "Lance une recherche pour moi",
   "Livre-moi les résultats de ma dernière recherche",
   "Compare mes 5 meilleurs leads",
   "Quels sont mes meilleurs départements ?",
-  "Écris un cold mail pour mon top lead",
+  "Analyse le potentiel solaire de mon top lead",
   "Par où je commence ?",
 ];
+
+// Libellés lisibles des outils, pour montrer "où on en est".
+const STEP_LABEL: Record<string, string> = {
+  compter_leads: "État des lieux",
+  lister_leads: "Lecture des leads",
+  detail_lead: "Fiche du lead",
+  lister_runs: "Recherches récentes",
+  stats_recherches: "Perf. des recherches",
+  stats_departements: "Perf. par département",
+  meilleures_zones: "Meilleures zones",
+  lister_zones_cibles: "Zones enregistrées",
+  lister_cibles: "Cibles actives",
+  lancer_recherche: "Lancement d'une recherche",
+  resultats_recherche: "Résultats d'une recherche",
+  statut_agent: "État de l'agent",
+  analyser_satellite: "Analyse satellite",
+};
 
 export function AssistantWidget() {
   const [open, setOpen] = useState(false);
@@ -43,7 +60,10 @@ export function AssistantWidget() {
         data.reply ??
         data.error ??
         "Une erreur est survenue. Réessaie dans un instant.";
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: reply, steps: data.steps },
+      ]);
     } catch {
       setMessages((m) => [
         ...m,
@@ -70,15 +90,25 @@ export function AssistantWidget() {
 
       {/* Panneau */}
       {open && (
-        <div className="fixed bottom-24 right-5 z-40 flex h-[32rem] max-h-[calc(100vh-8rem)] w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-2xl">
-          <header className="border-b border-[var(--border)] bg-[var(--brand)] px-4 py-3 text-white">
-            <div className="font-semibold">🧭 Magellan</div>
-            <div className="text-xs opacity-80">
-              Votre assistant de navigation commerciale
+        <div className="fixed bottom-24 right-5 z-40 flex h-[40rem] max-h-[calc(100vh-7rem)] w-[34rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-2xl">
+          <header className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--brand)] px-4 py-3 text-white">
+            <div>
+              <div className="font-semibold">🧭 Magellan</div>
+              <div className="text-xs opacity-80">
+                Votre assistant de navigation commerciale
+              </div>
             </div>
+            {messages.length > 0 && (
+              <button
+                onClick={() => setMessages([])}
+                className="rounded-md px-2 py-1 text-xs text-white/90 hover:bg-white/15"
+              >
+                Effacer
+              </button>
+            )}
           </header>
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
             {messages.length === 0 && (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--muted)]">
@@ -103,7 +133,7 @@ export function AssistantWidget() {
                 className={m.role === "user" ? "text-right" : "text-left"}
               >
                 <div
-                  className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                  className={`inline-block max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                     m.role === "user"
                       ? "whitespace-pre-wrap bg-[var(--brand)] text-white"
                       : "bg-slate-100 text-slate-800"
@@ -111,12 +141,29 @@ export function AssistantWidget() {
                 >
                   {m.role === "user" ? m.content : <Markdown text={m.content} />}
                 </div>
+                {m.role === "assistant" && m.steps && m.steps.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {m.steps.map((s, j) => (
+                      <span
+                        key={j}
+                        className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-[var(--muted)]"
+                      >
+                        🔧 {STEP_LABEL[s] ?? s}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {loading && (
               <div className="text-left">
-                <div className="inline-block rounded-2xl bg-slate-100 px-3 py-2 text-sm text-[var(--muted)]">
-                  …
+                <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-3.5 py-2.5 text-sm text-[var(--muted)]">
+                  <span className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--brand)] [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--brand)] [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--brand)]" />
+                  </span>
+                  Magellan travaille…
                 </div>
               </div>
             )}
@@ -127,7 +174,7 @@ export function AssistantWidget() {
               e.preventDefault();
               send(input);
             }}
-            className="flex items-center gap-2 border-t border-[var(--border)] p-2"
+            className="flex items-center gap-2 border-t border-[var(--border)] p-3"
           >
             <input
               value={input}
@@ -138,7 +185,7 @@ export function AssistantWidget() {
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="rounded-lg bg-[var(--brand)] px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+              className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
               Envoyer
             </button>

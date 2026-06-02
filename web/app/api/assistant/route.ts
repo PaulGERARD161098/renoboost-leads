@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const steps: string[] = [];
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
         const toolResults = [];
         for (const block of blocks) {
           if (block.type === "tool_use") {
+            steps.push(block.name as string);
             const result = await executeTool(
               block.name as string,
               (block.input as Record<string, unknown>) ?? {},
@@ -106,6 +108,7 @@ export async function POST(req: NextRequest) {
         .trim();
       return NextResponse.json({
         reply: text || "Je n'ai pas de réponse à formuler.",
+        steps,
       });
     }
 
