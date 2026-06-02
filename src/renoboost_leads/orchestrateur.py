@@ -338,7 +338,11 @@ def _executer_stage2(
 
     # Stats
     stats_e2 = enricheur.stats_l2(leads_l2)
-    stats.cout_total_eur += enricheur.cout_pappers_eur
+    # Coût Societeinfo en L2 (provider alternatif payant) : remonté dans le total
+    # et le StageStats au même titre que Pappers (sinon le run sous-estime le coût).
+    cout_societeinfo = getattr(rech_client, "cout_total_eur", 0.0)
+    cout_stage2 = enricheur.cout_pappers_eur + cout_societeinfo
+    stats.cout_total_eur += cout_stage2
     stats.etages_executes.append(
         StageStats(
             nom_etage="stage2_entreprises",
@@ -350,10 +354,14 @@ def _executer_stage2(
                 - stats_e2.get("siren_trouve", 0)
                 - stats_e2.get("chaines", 0)
             ),
-            cout_eur_estime=enricheur.cout_pappers_eur,
+            cout_eur_estime=cout_stage2,
             leads_collectes=len(leads_l2),
         )
     )
+
+    msg_societeinfo = ""
+    if cout_societeinfo:
+        msg_societeinfo = f"\n   Provider Societeinfo : {cout_societeinfo:.2f} €"
 
     msg_pappers = ""
     if enricheur.nb_fallback_pappers:
@@ -366,7 +374,7 @@ def _executer_stage2(
         f"   SIREN trouvé : {stats_e2.get('siren_pct', 0)}% — "
         f"Dirigeant trouvé : {stats_e2.get('dirigeant_pct', 0)}% — "
         f"Chaînes : {stats_e2.get('chaines_pct', 0)}%"
-        f"{msg_pappers}"
+        f"{msg_pappers}{msg_societeinfo}"
     )
     return leads_l2
 

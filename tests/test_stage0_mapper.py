@@ -19,7 +19,9 @@ def _entreprise_complete() -> dict[str, Any]:
         "nom_raison_sociale": "BONDUELLE FRESH",
         "nature_juridique": "5710",
         "activite_principale": "10.39A",
+        "libelle_activite_principale": "Autre transformation et conservation de légumes",
         "tranche_effectif_salarie": "12",
+        "libelle_tranche_effectif_salarie": "100 à 199 salariés",
         "categorie_entreprise": "PME",
         "etat_administratif": "A",
         "date_creation": "1947-01-01",
@@ -65,7 +67,9 @@ class TestMappingComplet:
         assert lead.nom == "BONDUELLE FRESH SAS"
         assert lead.siret == "40222222200015"
         assert lead.code_naf == "10.39A"
+        assert lead.libelle_naf == "Autre transformation et conservation de légumes"
         assert lead.tranche_effectif == "12"
+        assert lead.libelle_effectif == "100 à 199 salariés"
         assert lead.categorie_entreprise == "PME"
         assert lead.statut_actif is True
         assert lead.statut_business == "OPERATIONAL"
@@ -89,6 +93,23 @@ class TestMappingComplet:
         assert lead.score_matching == 100.0
         assert lead.match_incertain is False
         assert lead.hors_filtre_entreprise is False
+
+    def test_libelle_naf_fallback_siege(self):
+        """Si le libellé NAF n'est qu'au niveau siège, on le récupère quand même."""
+        e = _entreprise_complete()
+        del e["libelle_activite_principale"]
+        e["siege"]["libelle_activite_principale"] = "Libellé depuis le siège"
+        lead = entreprise_to_lead_stage2(e)
+        assert lead is not None
+        assert lead.libelle_naf == "Libellé depuis le siège"
+
+    def test_libelle_naf_absent_reste_none(self):
+        """Sans libellé renvoyé par l'API, le champ reste None (pas de crash)."""
+        e = _entreprise_complete()
+        del e["libelle_activite_principale"]
+        lead = entreprise_to_lead_stage2(e)
+        assert lead is not None
+        assert lead.libelle_naf is None
 
     def test_secteur_et_requete_passes(self):
         lead = entreprise_to_lead_stage2(

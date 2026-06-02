@@ -52,6 +52,12 @@ def aper_group() -> None:
               help="Avec --vers-staging : élargit aux leads de score ≥ N (défaut : top leads).")
 @click.option("--from-email", "from_email", default="",
               help="Avec --vers-staging : adresse expéditeur du staging.")
+@click.option("--no-geo", is_flag=True,
+              help="Désactive la résolution géoloc → SIREN des parkings sans enseigne (Phase C).")
+@click.option("--rayon-geo", "rayon_geo_km", type=float, default=0.2, show_default=True,
+              help="Rayon (km) de recherche near_point pour la résolution géoloc.")
+@click.option("--no-email", is_flag=True,
+              help="N'envoie pas l'email récapitulatif post-run même si SMTP est configuré.")
 def aper_run(
     fichier_parkings: Path,
     config_path: Path | None,
@@ -62,6 +68,9 @@ def aper_run(
     vers_staging: bool,
     min_score: int | None,
     from_email: str,
+    no_geo: bool,
+    rayon_geo_km: float,
+    no_email: bool,
 ) -> None:
     """Lance un run parkings APER sur un CSV inventaire."""
     settings = get_settings()
@@ -95,6 +104,20 @@ def aper_run(
     output_dir.mkdir(parents=True, exist_ok=True)
     setup_logger(output_dir=output_dir, level=settings.log_level)
 
+    smtp_config = None
+    if settings.has_smtp() and not no_email:
+        from ..veille_immatriculations.mailer import ConfigSMTP
+
+        smtp_config = ConfigSMTP(
+            host=settings.smtp_host,
+            port=settings.smtp_port,
+            user=settings.smtp_user,
+            password=settings.smtp_password.get_secret_value(),
+            expediteur=settings.smtp_from,
+            destinataires=settings.smtp_destinataires_list(),
+            use_tls=settings.smtp_use_tls,
+        )
+
     run_config = AperRunConfig(
         source_aper=source,
         aper_config=aper_config,
@@ -105,6 +128,9 @@ def aper_run(
             settings.anthropic_api_key.get_secret_value() if settings.has_anthropic() else None
         ),
         dry_run_l4=dry_run,
+        resoudre_geo=not no_geo,
+        rayon_geo_km=rayon_geo_km,
+        smtp_config=smtp_config,
     )
 
     console.print(
@@ -123,6 +149,7 @@ def aper_run(
         f"\n[green]✓ Run APER terminé[/green]\n"
         f"  Lignes brutes            : {resultat.nb_lignes_brutes}\n"
         f"  Parkings soumis APER      : {resultat.nb_parkings_aper}\n"
+        f"    ↳ résolus par géoloc    : {resultat.nb_resolus_geo}\n"
         f"    ↳ nouveaux              : {resultat.nb_nouveaux}\n"
         f"    ↳ déjà vus (flagués)    : {resultat.nb_deja_vus}\n"
         f"  Top leads (score ≥ {claude_scoring.seuil_top_lead}) : {resultat.nb_top_leads}\n"

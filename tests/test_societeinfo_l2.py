@@ -57,6 +57,30 @@ class TestClientL2:
         ok, _ = SocieteinfoL2Client(SocieteinfoClientDryRun()).health_check()
         assert ok is True
 
+    def test_cout_total_dry_run_est_nul(self):
+        client = SocieteinfoL2Client(SocieteinfoClientDryRun())
+        client.rechercher("Rossini Energy", code_postal="75001")
+        assert client.cout_total_eur == 0.0
+
+    def test_cout_total_remonte_le_budget_engage(self):
+        """Avec un BudgetGuard, le coût cumulé est exposé pour les run_stats."""
+        from renoboost_leads.common.budget_guard import BudgetGuard
+        from renoboost_leads.societeinfo_enrichment.client import (
+            SocieteinfoClient,
+            SocieteinfoClientConfig,
+        )
+
+        budget = BudgetGuard(plafond_eur=10.0)
+        si = SocieteinfoClient(
+            SocieteinfoClientConfig(
+                api_key="test", cout_par_lead_eur=0.10, budget=budget
+            )
+        )
+        # Simule deux enrichissements facturés sans appel réseau (budget seul).
+        budget.ajouter_cout(0.10, contexte="t1")
+        budget.ajouter_cout(0.10, contexte="t2")
+        assert SocieteinfoL2Client(si).cout_total_eur == 0.20
+
 
 class TestIntegrationEnricheur:
     def test_enricheur_l2_avec_provider_societeinfo(self):

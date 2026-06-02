@@ -16,8 +16,14 @@ FIXTURE = Path(__file__).parent / "fixtures_parkings" / "echantillon_parkings_de
 
 
 class _StubRechercheClient:
+    def __init__(self, near_point_candidats=None):
+        self._near = near_point_candidats or []
+
     def rechercher(self, query, code_postal=None, per_page=10):  # noqa: ARG002
         return []
+
+    def decouvrir_near_point(self, latitude, longitude, radius_km, **kwargs):  # noqa: ARG002
+        yield from self._near
 
 
 class _StubScraper:
@@ -108,3 +114,73 @@ class TestPipelineAperDryRun:
 
         base = ClaudeScoring(contexte_client="custom")
         assert _claude_scoring_avec_contexte(base).contexte_client == "custom"
+
+
+class TestPhaseCDIntegration:
+    """Phase C (géoloc → SIREN) + Phase D (email post-run) câblées au pipeline."""
+
+    def _csv_sans_enseigne(self, tmp_path: Path) -> Path:
+        # Parking sans NOM ni SIREN, mais avec coordonnées → cible Phase C.
+        csv = tmp_path / "inv.csv"
+        csv.write_text(
+            "IDENTIFIANT;NOM;SIREN;SURFACE_M2;LATITUDE;LONGITUDE\n"
+            "osm-9001;;;14500;50.4281;2.8319\n",
+            encoding="utf-8",
+        )
+        return csv
+
+    def test_phase_c_resout_par_geoloc(self, tmp_path, monkeypatch):
+        from renoboost_leads.parkings_aper import pipeline_aper
+
+        candidat = {
+            "siren": "552100554", "nom_complet": "Foncière Parc SA",
+            "tranche_effectif_salarie": "32",
+        }
+        monkeypatch.setattr(
+            pipeline_aper, "RechercheEntreprisesClient",
+            lambda *a, **kw: _StubRechercheClient(near_point_candidats=[candidat]),
+        )
+        monkeypatch.setattr(
+            pipeline_aper, "ScraperContact", lambda *a, **kw: _StubScraper()
+        )
+        config = AperRunConfig(
+            claude_scoring=ClaudeScoring(inclure_pitch=False), dry_run_l4=True
+        )
+        res = executer_cycle_aper(
+            self._csv_sans_enseigne(tmp_path), tmp_path / "out", config
+        )
+        assert res.nb_resolus_geo == 1
+
+    def test_phase_c_desactivable(self, tmp_path, stub_pipeline):
+        config = AperRunConfig(
+            claude_scoring=ClaudeScoring(inclure_pitch=False),
+            dry_run_l4=True,
+            resoudre_geo=False,
+        )
+        res = executer_cycle_aper(
+            self._csv_sans_enseigne(tmp_path), tmp_path / "out", config
+        )
+        assert res.nb_resolus_geo == 0
+
+    def test_phase_d_envoie_si_smtp(self, tmp_path, stub_pipeline, monkeypatch):
+        from renoboost_leads.parkings_aper import pipeline_aper
+        from renoboost_leads.veille_immatriculations.mailer import ConfigSMTP
+
+        envois: list = []
+        monkeypatch.setattr(
+            pipeline_aper, "envoyer_resume_aper",
+            lambda cfg, resume: envois.append(resume),
+        )
+        smtp = ConfigSMTP(
+            host="smtp.test", port=587, user="u@test.fr",
+            password="x",  # noqa: S106 — placeholder de test
+            expediteur="from@test.fr", destinataires=["a@test.fr"],
+        )
+        config = AperRunConfig(
+            claude_scoring=ClaudeScoring(inclure_pitch=False),
+            dry_run_l4=True,
+            smtp_config=smtp,
+        )
+        executer_cycle_aper(FIXTURE, tmp_path / "out", config)
+        assert len(envois) == 1
+        assert envois[0].nb_parkings_aper == 8

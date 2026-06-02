@@ -110,11 +110,17 @@ def entreprise_to_lead_stage2(
         siren=siren,
         siret=siege.get("siret"),
         code_naf=siege.get("activite_principale") or entreprise.get("activite_principale"),
-        libelle_naf=None,  # non renvoyé par l'API ; sera comblé via mapping NAF si besoin
+        libelle_naf=(
+            entreprise.get("libelle_activite_principale")
+            or siege.get("libelle_activite_principale")
+        ),
         forme_juridique=entreprise.get("nature_juridique"),  # code INSEE
         statut_actif=(etat == "A"),
         tranche_effectif=entreprise.get("tranche_effectif_salarie"),
-        libelle_effectif=None,  # idem libelle_naf
+        libelle_effectif=(
+            entreprise.get("libelle_tranche_effectif_salarie")
+            or siege.get("libelle_tranche_effectif_salarie")
+        ),
         dirigeant_nom=dirigeant.get("nom"),
         dirigeant_prenom=dirigeant.get("prenom"),
         dirigeant_qualite=dirigeant.get("qualite"),

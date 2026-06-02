@@ -327,6 +327,60 @@ def test_real_pipeline_zone_point_gps(monkeypatch):
     assert seen["zone"].rayon_par_point_km == pytest.approx(8.0)
 
 
+def test_real_pipeline_verticale_base_only_sirene_first(monkeypatch):
+    """Verticale CRM sans fichier repo : ciblage depuis config base + SIRENE-first."""
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+
+    captured: dict[str, object] = {}
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        captured["cfg"] = cfg
+        captured["stages"] = stages
+        return OrchestrationResult()
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+
+    ctx = RunContext(
+        run={
+            "id": "r-db",
+            "verticale_id": "v-db",
+            "zone": {"departement": "59", "effectif_min": 15},
+            "volume_cible": 8,
+        },
+        verticale={
+            "slug": "ma-cible-crm-sans-fichier",
+            "nom": "Cible CRM ad hoc",
+            "config": {"secteurs_naf": ["41", "43.21A"], "effectif_min": 30},
+        },
+    )
+    RealPipeline().run(ctx, lambda *a: None)
+
+    cfg = captured["cfg"]
+    # Découverte SIRENE-first (stage 0 présent, ciblage NAF depuis la base)
+    assert 0 in captured["stages"]
+    assert cfg.filtres_entreprise.naf_inclus == ["41", "43.21A"]
+    # L'override effectif de la zone CRM prime sur le config verticale
+    assert cfg.filtres_entreprise.effectif_min == 15
+    assert cfg.run.description == "Cible CRM ad hoc"
+
+
+def test_real_pipeline_base_only_sans_naf_raises(monkeypatch):
+    """Verticale base-only sans NAF : refus explicite (sinon ciblage trop large)."""
+    import renoboost_leads.settings as settings_mod
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+    ctx = RunContext(
+        run={"id": "r", "verticale_id": "v", "zone": {}, "volume_cible": 3},
+        verticale={"slug": "cible-vide", "config": {"secteurs_naf": []}},
+    )
+    with pytest.raises(RuntimeError, match="NAF"):
+        RealPipeline().run(ctx, lambda *a: None)
+
+
 # --- Worker ------------------------------------------------------------------
 
 

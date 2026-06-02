@@ -131,6 +131,22 @@ def _construire_corps_html(r: ResumeVeille) -> str:
     )
 
 
+def envoyer_message(config: ConfigSMTP, msg: EmailMessage) -> None:
+    """Envoie un EmailMessage déjà construit via SMTP.
+
+    Brique d'envoi générique partagée par la veille immatriculations et les
+    parkings APER (qui construisent chacun leur propre corps de message).
+
+    Raises:
+        smtplib.SMTPException si l'envoi échoue.
+    """
+    with smtplib.SMTP(config.host, config.port) as smtp:
+        if config.use_tls:
+            smtp.starttls()
+        smtp.login(config.user, config.password)
+        smtp.send_message(msg)
+
+
 def envoyer_resume_veille(config: ConfigSMTP, resume: ResumeVeille) -> None:
     """Envoie le résumé via SMTP. Phase A : non câblé au cron, testable seul.
 
@@ -138,12 +154,7 @@ def envoyer_resume_veille(config: ConfigSMTP, resume: ResumeVeille) -> None:
         smtplib.SMTPException si l'envoi échoue.
     """
     msg = _construire_message(config, resume)
-
-    with smtplib.SMTP(config.host, config.port) as smtp:
-        if config.use_tls:
-            smtp.starttls()
-        smtp.login(config.user, config.password)
-        smtp.send_message(msg)
+    envoyer_message(config, msg)
 
     logger.info(
         "Email veille envoyé à %d destinataires (%d top leads)",
