@@ -11,9 +11,10 @@ const TO_PROCESS: LeadStatus[] = ["nouveau", "a_valider", "valide"];
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ statut?: string }>;
+  searchParams: Promise<{ statut?: string; q?: string }>;
 }) {
-  const { statut } = await searchParams;
+  const { statut, q } = await searchParams;
+  const search = q?.trim();
   const supabase = await createClient();
 
   let query = supabase
@@ -22,7 +23,9 @@ export default async function InboxPage({
     .order("score", { ascending: false, nullsFirst: false })
     .limit(200);
 
-  if (statut && statut in LEAD_STATUS_LABEL) {
+  if (search) {
+    query = query.ilike("entreprise", `%${search}%`);
+  } else if (statut && statut in LEAD_STATUS_LABEL) {
     query = query.eq("statut", statut);
   } else {
     query = query.in("statut", TO_PROCESS);
@@ -36,9 +39,18 @@ export default async function InboxPage({
         <div>
           <h1 className="text-2xl font-bold">Prospects</h1>
           <p className="text-sm text-[var(--muted)]">
-            {statut
-              ? `Filtre : ${LEAD_STATUS_LABEL[statut as LeadStatus]}`
-              : "À traiter — triés par score"}
+            {search ? (
+              <>
+                Résultats pour «&nbsp;{search}&nbsp;» ·{" "}
+                <Link href="/inbox" className="text-[var(--brand)] underline">
+                  effacer
+                </Link>
+              </>
+            ) : statut ? (
+              `Filtre : ${LEAD_STATUS_LABEL[statut as LeadStatus]}`
+            ) : (
+              "À traiter — triés par score"
+            )}
           </p>
         </div>
       </div>

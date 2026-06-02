@@ -5,7 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function createRun(input: {
   verticaleId: string;
-  departement: string;
+  departement?: string | null;
+  adresse?: string | null;
+  rayonKm?: number | null;
   effectifMin?: number | null;
   budgetEur?: number | null;
   volumeCible?: number | null;
@@ -15,11 +17,22 @@ export async function createRun(input: {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Zone : autour d'une adresse (point GPS géocodé) si fournie, sinon département.
+  const zone: Record<string, unknown> = {
+    effectif_min: input.effectifMin ?? null,
+  };
+  if (input.adresse && input.adresse.trim()) {
+    zone.adresse = input.adresse.trim();
+    zone.rayon_par_point_km = input.rayonKm ?? 10;
+  } else {
+    zone.departement = input.departement ?? null;
+  }
+
   const { data, error } = await supabase
     .from("runs")
     .insert({
       verticale_id: input.verticaleId,
-      zone: { departement: input.departement, effectif_min: input.effectifMin ?? null },
+      zone,
       volume_cible: input.volumeCible ?? null,
       budget_eur: input.budgetEur ?? null,
       status: "demande",

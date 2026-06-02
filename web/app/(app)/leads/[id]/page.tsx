@@ -5,6 +5,7 @@ import type { Lead, LeadEvent } from "@/lib/database.types";
 import { LeadEditor } from "@/components/lead-editor";
 import { LeadStatusActions } from "@/components/lead-status-actions";
 import { LeadNotes } from "@/components/lead-notes";
+import { LeadRelance } from "@/components/lead-relance";
 import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
@@ -103,6 +104,7 @@ export default async function LeadPage({
           </div>
           <p className="mt-1 text-sm font-medium">{action}</p>
           <LeadStatusActions lead={l} />
+          <LeadRelance leadId={l.id} relanceAt={l.relance_at} />
         </div>
       </div>
 

@@ -108,7 +108,16 @@ export const tools = [
         },
         departement: {
           type: "string",
-          description: "Numéro de département, ex: '59'.",
+          description: "Numéro de département, ex: '59'. Utiliser SOIT départment SOIT adresse.",
+        },
+        adresse: {
+          type: "string",
+          description:
+            "Adresse/zone centrale pour une recherche géolocalisée (ex: 'ZA de Wambrechies, 59118'). Le moteur géocode et cherche dans un rayon. Alternative au département.",
+        },
+        rayon_km: {
+          type: "number",
+          description: "Rayon de recherche en km autour de l'adresse (défaut 10).",
         },
         budget_eur: {
           type: "number",
@@ -117,7 +126,7 @@ export const tools = [
         volume_cible: { type: "number", description: "Nombre de leads visé (optionnel)." },
         effectif_min: { type: "number", description: "Effectif minimum (optionnel)." },
       },
-      required: ["cible", "departement", "budget_eur"],
+      required: ["cible", "budget_eur"],
     },
   },
   {
@@ -139,6 +148,18 @@ export const tools = [
     name: "statut_agent",
     description:
       "État du mandat de l'agent autonome : autonomie on/off, périmètre, budget/jour, budget engagé aujourd'hui, dernières actions automatiques. Pour 'qu'a fait l'agent', 'l'autonomie est-elle active'.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "meilleures_zones",
+    description:
+      "Localités (villes) les plus performantes : volume, score moyen, top leads, réponses. Pour suggérer OÙ prospecter ensuite (quelle zone cibler).",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "lister_zones_cibles",
+    description:
+      "Zones cibles enregistrées (nom, adresse centrale, rayon km), réutilisables pour lancer une recherche géolocalisée.",
     input_schema: { type: "object", properties: {} },
   },
 ];
@@ -203,7 +224,7 @@ export async function executeTool(
         let q = supabase
           .from("leads")
           .select(
-            "entreprise, ville, code_postal, score, statut, contact_email, libelle_naf, effectif",
+            "id, entreprise, ville, code_postal, score, statut, contact_email, libelle_naf, effectif",
           )
           .order("score", { ascending: false, nullsFirst: false })
           .limit(limit);
@@ -220,6 +241,7 @@ export async function executeTool(
         if (leads.length === 0) return "Aucun lead ne correspond à ces critères.";
         return JSON.stringify(
           leads.map((l) => ({
+            id: l.id,
             entreprise: l.entreprise,
             ville: l.ville,
             score: l.score,
@@ -244,6 +266,7 @@ export async function executeTool(
         if (leads.length === 0) return `Aucun lead trouvé pour "${nom}".`;
         return JSON.stringify(
           leads.map((l) => ({
+            id: l.id,
             entreprise: l.entreprise,
             ville: l.ville,
             code_postal: l.code_postal,
@@ -401,12 +424,17 @@ export async function executeTool(
         const cible = typeof input.cible === "string" ? input.cible.trim() : "";
         const departement =
           typeof input.departement === "string" ? input.departement.trim() : "";
+        const adresse =
+          typeof input.adresse === "string" ? input.adresse.trim() : "";
+        const rayonKm =
+          typeof input.rayon_km === "number" ? input.rayon_km : 10;
         const budget = typeof input.budget_eur === "number" ? input.budget_eur : null;
         const volume = typeof input.volume_cible === "number" ? input.volume_cible : null;
         const effectifMin =
           typeof input.effectif_min === "number" ? input.effectif_min : null;
         if (!cible) return "Précise la cible (verticale).";
-        if (!departement) return "Précise le département (ex: 59).";
+        if (!departement && !adresse)
+          return "Précise une zone : un département (ex: 59) OU une adresse centrale.";
         if (budget === null || budget <= 0)
           return "Précise un budget plafond en euros (ex: 15).";
 
@@ -429,6 +457,14 @@ export async function executeTool(
           return `Plusieurs cibles correspondent : ${matches.map((v) => v.nom).join(", ")}. Précise laquelle.`;
         const verticale = matches[0];
 
+        const zone: Record<string, unknown> = { effectif_min: effectifMin };
+        if (adresse) {
+          zone.adresse = adresse;
+          zone.rayon_par_point_km = rayonKm;
+        } else {
+          zone.departement = departement;
+        }
+
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -436,7 +472,7 @@ export async function executeTool(
           .from("runs")
           .insert({
             verticale_id: verticale.id,
-            zone: { departement, effectif_min: effectifMin },
+            zone,
             volume_cible: volume,
             budget_eur: budget,
             status: "demande",
@@ -449,7 +485,7 @@ export async function executeTool(
           ok: true,
           run_id: data.id,
           cible: verticale.nom,
-          departement,
+          zone: adresse ? `${adresse} (${rayonKm} km)` : `Dépt ${departement}`,
           budget_eur: budget,
           volume_cible: volume,
           message:
@@ -478,7 +514,7 @@ export async function executeTool(
         }
         const { data: leadsData, error } = await supabase
           .from("leads")
-          .select("entreprise, ville, score, statut, contact_email, libelle_naf")
+          .select("id, entreprise, ville, score, statut, contact_email, libelle_naf")
           .eq("run_id", target.id as string)
           .order("score", { ascending: false, nullsFirst: false })
           .limit(limit);
@@ -503,6 +539,7 @@ export async function executeTool(
         return JSON.stringify({
           ...meta,
           leads: leads.map((l) => ({
+            id: l.id,
             entreprise: l.entreprise,
             ville: l.ville,
             score: l.score,
@@ -556,6 +593,54 @@ export async function executeTool(
             message: j.message,
           })),
         });
+      }
+
+      case "meilleures_zones": {
+        const { data, error } = await supabase
+          .from("leads")
+          .select("ville, score, statut")
+          .limit(5000);
+        if (error) return `Erreur: ${error.message}`;
+        const leads =
+          (data as Pick<Lead, "ville" | "score" | "statut">[]) ?? [];
+        type Agg = { n: number; somme: number; nbScore: number; top: number; rep: number };
+        const par: Record<string, Agg> = {};
+        for (const l of leads) {
+          const v = (l.ville ?? "").trim();
+          if (!v) continue;
+          const a = (par[v] ??= { n: 0, somme: 0, nbScore: 0, top: 0, rep: 0 });
+          a.n++;
+          if (typeof l.score === "number") {
+            a.somme += l.score;
+            a.nbScore++;
+            if (l.score >= 75) a.top++;
+          }
+          if (l.statut === "repondu") a.rep++;
+        }
+        const rows = Object.entries(par)
+          .map(([ville, a]) => ({
+            ville,
+            leads: a.n,
+            score_moyen: a.nbScore ? Math.round(a.somme / a.nbScore) : null,
+            top_leads: a.top,
+            reponses: a.rep,
+          }))
+          .sort((x, y) => y.top_leads - x.top_leads || y.leads - x.leads)
+          .slice(0, 12);
+        if (rows.length === 0) return "Pas encore de données par localité.";
+        return JSON.stringify(rows);
+      }
+
+      case "lister_zones_cibles": {
+        const { data, error } = await supabase
+          .from("zones_cibles")
+          .select("nom, adresse, rayon_km")
+          .order("created_at", { ascending: false });
+        if (error) return `Erreur: ${error.message}`;
+        const zones = (data as { nom: string; adresse: string; rayon_km: number }[]) ?? [];
+        if (zones.length === 0)
+          return "Aucune zone enregistrée. En créer dans l'onglet Recherches (mode adresse).";
+        return JSON.stringify(zones);
       }
 
       default:

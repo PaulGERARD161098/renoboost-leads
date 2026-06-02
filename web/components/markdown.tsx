@@ -1,10 +1,11 @@
 import { Fragment } from "react";
+import Link from "next/link";
 
 // Rendu Markdown minimal et sûr (pas de HTML brut) pour les réponses de Magellan :
-// gras, code inline, listes à puces, listes numérotées, titres, paragraphes.
+// gras, code inline, liens, listes à puces, listes numérotées, titres, paragraphes.
 
 function inline(text: string, base: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
   return parts.map((p, i) => {
     if (!p) return null;
     const key = `${base}-${i}`;
@@ -16,6 +17,27 @@ function inline(text: string, base: string): React.ReactNode[] {
           {p.slice(1, -1)}
         </code>
       );
+    const link = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (link) {
+      const [, label, url] = link;
+      if (url.startsWith("/"))
+        return (
+          <Link key={key} href={url} className="text-[var(--brand)] underline">
+            {label}
+          </Link>
+        );
+      return (
+        <a
+          key={key}
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[var(--brand)] underline"
+        >
+          {label}
+        </a>
+      );
+    }
     return <Fragment key={key}>{p}</Fragment>;
   });
 }
