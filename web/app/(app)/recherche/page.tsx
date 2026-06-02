@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import type { Run, Verticale } from "@/lib/database.types";
+import type { Run, Verticale, ZoneCible } from "@/lib/database.types";
 import { RechercheForm } from "@/components/recherche-form";
 import { RUN_STATUS_LABEL, formatDate } from "@/lib/ui";
 
@@ -18,8 +18,13 @@ export default async function RecherchePage() {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(10);
+  const { data: zonesData } = await supabase
+    .from("zones_cibles")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   const vlist = (verticales as Verticale[] | null) ?? [];
+  const zones = (zonesData as ZoneCible[] | null) ?? [];
 
   return (
     <div>
@@ -37,7 +42,7 @@ export default async function RecherchePage() {
           d&apos;abord.
         </div>
       ) : (
-        <RechercheForm verticales={vlist} />
+        <RechercheForm verticales={vlist} zones={zones} />
       )}
 
       {runs && runs.length > 0 && (

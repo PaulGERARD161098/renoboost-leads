@@ -1,19 +1,64 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createRun } from "@/lib/actions/runs";
-import type { Verticale } from "@/lib/database.types";
+import { createZoneCible, deleteZoneCible } from "@/lib/actions/zones";
+import type { Verticale, ZoneCible } from "@/lib/database.types";
 
-export function RechercheForm({ verticales }: { verticales: Verticale[] }) {
+export function RechercheForm({
+  verticales,
+  zones = [],
+}: {
+  verticales: Verticale[];
+  zones?: ZoneCible[];
+}) {
+  const router = useRouter();
   const [verticaleId, setVerticaleId] = useState(verticales[0]?.id ?? "");
   const [mode, setMode] = useState<"departement" | "adresse">("departement");
   const [departement, setDepartement] = useState("59");
   const [adresse, setAdresse] = useState("");
   const [rayon, setRayon] = useState("10");
+  const [nomZone, setNomZone] = useState("");
   const [effectifMin, setEffectifMin] = useState("50");
   const [budget, setBudget] = useState("50");
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  function appliquerZone(id: string) {
+    const z = zones.find((x) => x.id === id);
+    if (z) {
+      setAdresse(z.adresse);
+      setRayon(String(z.rayon_km));
+    }
+  }
+
+  function enregistrerZone() {
+    if (!adresse.trim() || !nomZone.trim()) {
+      setMsg("❌ Donne un nom et une adresse pour enregistrer la zone.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await createZoneCible({
+        nom: nomZone,
+        adresse,
+        rayonKm: Number(rayon) || 10,
+      });
+      if (res.error) setMsg(`❌ ${res.error}`);
+      else {
+        setNomZone("");
+        setMsg("✅ Zone enregistrée.");
+        router.refresh();
+      }
+    });
+  }
+
+  function supprimerZone(id: string) {
+    startTransition(async () => {
+      await deleteZoneCible(id);
+      router.refresh();
+    });
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -91,27 +136,90 @@ export function RechercheForm({ verticales }: { verticales: Verticale[] }) {
           />
         </div>
       ) : (
-        <div className="grid grid-cols-[1fr_auto] gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Adresse (centre de la zone)
-            </label>
-            <input
-              value={adresse}
-              onChange={(e) => setAdresse(e.target.value)}
-              placeholder="ex : Zone d'activité de Wambrechies, 59118"
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-            />
+        <div className="space-y-3">
+          {zones.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Zone enregistrée
+              </label>
+              <select
+                defaultValue=""
+                onChange={(e) => appliquerZone(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              >
+                <option value="">— Choisir une zone enregistrée —</option>
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.nom} ({z.rayon_km} km)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="grid grid-cols-[1fr_auto] gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Adresse (centre de la zone)
+              </label>
+              <input
+                value={adresse}
+                onChange={(e) => setAdresse(e.target.value)}
+                placeholder="ex : Zone d'activité de Wambrechies, 59118"
+                className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Rayon (km)</label>
+              <input
+                type="number"
+                value={rayon}
+                onChange={(e) => setRayon(e.target.value)}
+                className="w-24 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Rayon (km)</label>
-            <input
-              type="number"
-              value={rayon}
-              onChange={(e) => setRayon(e.target.value)}
-              className="w-24 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-            />
+          {/* Enregistrer la zone */}
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs text-[var(--muted)]">
+                Enregistrer cette zone (nom)
+              </label>
+              <input
+                value={nomZone}
+                onChange={(e) => setNomZone(e.target.value)}
+                placeholder="ex : ZA Wambrechies"
+                className="w-full rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={enregistrerZone}
+              disabled={pending || !adresse.trim() || !nomZone.trim()}
+              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-40"
+            >
+              💾 Enregistrer
+            </button>
           </div>
+          {zones.length > 0 && (
+            <ul className="flex flex-wrap gap-1.5">
+              {zones.map((z) => (
+                <li
+                  key={z.id}
+                  className="flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]"
+                >
+                  {z.nom}
+                  <button
+                    type="button"
+                    onClick={() => supprimerZone(z.id)}
+                    className="text-[var(--muted)] hover:text-red-600"
+                    aria-label={`Supprimer ${z.nom}`}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

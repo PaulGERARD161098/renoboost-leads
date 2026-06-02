@@ -95,6 +95,15 @@ export interface Lead {
   updated_at: string;
 }
 
+export interface ZoneCible {
+  id: string;
+  nom: string;
+  adresse: string;
+  rayon_km: number;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface AgentConfig {
   id: string;
   autonomie: boolean;
