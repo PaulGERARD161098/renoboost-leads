@@ -38,7 +38,8 @@ cibles:
     effectif_min: 50
     naf_inclus: ["47", "55", "86", "85", "93"]
     naf_exclus: []
-    forme_juridique_inclus: ["SAS", "SARL", "SA", "SNC"]
+    # Calibration : pas de filtre sur la forme (coops/SCA/SCI = cibles valides).
+    forme_juridique_inclus: []
     multi_sites_only: false
 
 signaux:

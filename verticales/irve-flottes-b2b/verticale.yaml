@@ -52,7 +52,8 @@ cibles:
     effectif_min: 50          # "moyenne taille" — ETI/PME
     naf_inclus: ["49", "45", "53", "81", "43"]
     naf_exclus: []
-    forme_juridique_inclus: ["SAS", "SARL", "SA"]
+    # Calibration : pas de filtre sur la forme (coops/SCA/SCI = cibles valides).
+    forme_juridique_inclus: []
     multi_sites_only: false
 
 signaux:

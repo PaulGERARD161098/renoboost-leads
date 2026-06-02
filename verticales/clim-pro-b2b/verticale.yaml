@@ -64,7 +64,8 @@ cibles:
       - "5520Z"     # hébergement touristique
       - "5530Z"     # terrains de camping
       - "5590Z"     # autres hébergements
-    forme_juridique_inclus: ["SAS", "SARL", "SA"]
+    # Calibration : pas de filtre sur la forme (coops/SCA/SCI = cibles valides).
+    forme_juridique_inclus: []
     multi_sites_only: false
 signaux:
   - Local tertiaire/commerce sans climatisation visible (pas de groupes extérieurs)

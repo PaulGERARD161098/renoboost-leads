@@ -68,7 +68,8 @@ cibles:
       - "47"                    # commerce de détail (retail / zones commerciales)
       - "55"                    # hôtellerie
       - "56"                    # restauration / événementiel
-    forme_juridique_inclus: ["SAS", "SARL", "SA"]
+    # Calibration : pas de filtre sur la forme (coops/SCA/SCI = cibles valides).
+    forme_juridique_inclus: []
     multi_sites_only: false     # multisites = critère "top", pas exclusion
 
 signaux:
