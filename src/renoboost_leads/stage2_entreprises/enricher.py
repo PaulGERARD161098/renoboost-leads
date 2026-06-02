@@ -36,20 +36,45 @@ logger = get_logger(__name__)
 # pour ne PAS couper les noms à trait d'union collé (Saint-Gobain, Neuville-en-F).
 _SEP_QUALIFICATIF = re.compile(r"\s+[-–—|]\s+.*$")
 
+# Qualificatif de site SANS tiret, fréquent sur les gros sites industriels
+# ("Candia Usine de Cambrai", "X Plateforme logistique", "Y Site de Lens") :
+# on coupe à partir du qualificatif pour ne garder que la marque qui précède.
+_SITE_QUALIFICATIF = re.compile(
+    r"\s+(usine|site|plate?-?forme|entrep[ôo]t|d[ée]p[ôo]t|[ée]tablissement)\b.*$",
+    flags=re.IGNORECASE,
+)
+
+# Descripteurs d'activité industrielle en tête de nom ("Sucrerie Tereos" → Tereos).
+# Liste volontairement restreinte à des mots qui ne sont presque jamais la raison
+# sociale elle-même (≠ "Établissements", "Compagnie", "Société"...).
+_LEADING_ACTIVITE = re.compile(
+    r"^(sucrerie|laiterie|fromagerie|brasserie|distillerie|raffinerie|abattoir|"
+    r"minoterie|malterie|conserverie|fonderie|aci[ée]rie|verrerie|cimenterie|"
+    r"papeterie|scierie|tannerie|tuilerie|huilerie)\s+(?=\S)",
+    flags=re.IGNORECASE,
+)
+
 
 def nettoyer_nom_pour_recherche(nom: str | None) -> str:
     """Nettoie un nom Google pour une recherche SIREN de repli.
 
-    Retire le contenu entre parenthèses, coupe au 1er séparateur de qualificatif
-    de site, et enlève quelques mots parasites ('France', 'siège social').
-    Sert UNIQUEMENT au fallback : ne remplace pas la requête primaire.
+    Retire le contenu entre parenthèses, coupe aux qualificatifs de site (avec ou
+    sans tiret), enlève les descripteurs d'activité en tête et quelques mots
+    parasites ('France', 'siège social'). Sert UNIQUEMENT au fallback : ne
+    remplace pas la requête primaire, et un éventuel sur-nettoyage est rattrapé
+    par le score de matching (flag match_incertain si < seuil).
     """
     if not nom:
         return ""
     s = re.sub(r"\([^)]*\)", " ", nom)
     s = _SEP_QUALIFICATIF.sub("", s)
+    s = _SITE_QUALIFICATIF.sub("", s)
     s = re.sub(r"\b(france|si[èe]ge social)\b", " ", s, flags=re.IGNORECASE)
     s = re.sub(r"\s+", " ", s).strip()
+    # Strip d'un descripteur d'activité en tête seulement s'il reste un nom derrière.
+    s_sans_activite = _LEADING_ACTIVITE.sub("", s).strip()
+    if s_sans_activite:
+        s = s_sans_activite
     return s or nom.strip()
 
 

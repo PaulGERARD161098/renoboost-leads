@@ -153,6 +153,25 @@ class TestNettoyageNomRecherche:
         got = nettoyer_nom_pour_recherche("Auchan Logistique (Plateforme) France")
         assert got == "Auchan Logistique"
 
+    def test_coupe_qualificatif_site_sans_tiret(self):
+        from renoboost_leads.stage2_entreprises.enricher import nettoyer_nom_pour_recherche
+
+        # Gros site industriel sans tiret : on ne garde que la marque.
+        assert nettoyer_nom_pour_recherche("Candia Usine de Cambrai") == "Candia"
+        assert nettoyer_nom_pour_recherche("Lactalis Site de Lens") == "Lactalis"
+
+    def test_strip_descripteur_activite_en_tete(self):
+        from renoboost_leads.stage2_entreprises.enricher import nettoyer_nom_pour_recherche
+
+        # "Sucrerie Tereos - Escaudœuvres" → coupe tiret puis retire "Sucrerie".
+        assert nettoyer_nom_pour_recherche("Sucrerie Tereos - Escaudœuvres") == "Tereos"
+
+    def test_ne_vide_pas_un_nom_reduit_a_un_descripteur(self):
+        from renoboost_leads.stage2_entreprises.enricher import nettoyer_nom_pour_recherche
+
+        # Pas de mot derrière le descripteur → on ne le retire pas (sinon nom vide).
+        assert nettoyer_nom_pour_recherche("Brasserie") == "Brasserie"
+
 
 class TestFallbackRechercheSIREN:
     """D5 : fallback additif quand la requête primaire est vide."""
