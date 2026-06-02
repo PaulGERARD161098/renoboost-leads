@@ -3,6 +3,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LEAD_STATUS_LABEL, RUN_STATUS_LABEL } from "../ui";
+import { analyseSatellite } from "../satellite";
 import type {
   AgentConfig,
   AgentJournalEntry,
@@ -161,6 +162,18 @@ export const tools = [
     description:
       "Zones cibles enregistrées (nom, adresse centrale, rayon km), réutilisables pour lancer une recherche géolocalisée.",
     input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "analyser_satellite",
+    description:
+      "Analyse le potentiel solaire d'un lead (toiture + parking + ombrières) via sa vue aérienne IGN et l'IA vision. ACTION (consomme un appel IA). Donne le nom de l'entreprise.",
+    input_schema: {
+      type: "object",
+      properties: {
+        entreprise: { type: "string", description: "Nom (ou partie) de l'entreprise du lead." },
+      },
+      required: ["entreprise"],
+    },
   },
 ];
 
@@ -641,6 +654,22 @@ export async function executeTool(
         if (zones.length === 0)
           return "Aucune zone enregistrée. En créer dans l'onglet Recherches (mode adresse).";
         return JSON.stringify(zones);
+      }
+
+      case "analyser_satellite": {
+        const nom = typeof input.entreprise === "string" ? input.entreprise.trim() : "";
+        if (!nom) return "Précise le nom de l'entreprise.";
+        const { data, error } = await supabase
+          .from("leads")
+          .select("id, entreprise")
+          .ilike("entreprise", `%${nom}%`)
+          .limit(1)
+          .maybeSingle();
+        if (error) return `Erreur: ${error.message}`;
+        if (!data) return `Aucun lead trouvé pour "${nom}".`;
+        const res = await analyseSatellite(supabase, data.id as string);
+        if ("error" in res) return res.error;
+        return JSON.stringify({ entreprise: data.entreprise, ...res.result });
       }
 
       default:

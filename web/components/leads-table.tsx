@@ -15,11 +15,17 @@ function effectifNum(e: string | null): number {
   return m ? parseInt(m[0], 10) : -1;
 }
 
+function solaireScore(l: Lead): number {
+  const v = l.vision_satellite as { score?: number } | null;
+  return typeof v?.score === "number" ? v.score : -1;
+}
+
 export function LeadsTable({ leads }: { leads: Lead[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [scoreMin, setScoreMin] = useState(0);
   const [onlyEmail, setOnlyEmail] = useState(false);
+  const [onlySolaire, setOnlySolaire] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -32,6 +38,7 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
       if (q && !l.entreprise.toLowerCase().includes(q)) return false;
       if (scoreMin && (l.score ?? 0) < scoreMin) return false;
       if (onlyEmail && !l.contact_email) return false;
+      if (onlySolaire && solaireScore(l) < 75) return false;
       return true;
     });
     const dir = sortDir === "asc" ? 1 : -1;
@@ -52,7 +59,7 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
       if (x > y) return 1 * dir;
       return 0;
     });
-  }, [leads, search, scoreMin, onlyEmail, sortKey, sortDir]);
+  }, [leads, search, scoreMin, onlyEmail, onlySolaire, sortKey, sortDir]);
 
   const allSelected = rows.length > 0 && rows.every((l) => selected.has(l.id));
 
@@ -119,6 +126,14 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
             onChange={(e) => setOnlyEmail(e.target.checked)}
           />
           Avec email
+        </label>
+        <label className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={onlySolaire}
+            onChange={(e) => setOnlySolaire(e.target.checked)}
+          />
+          ☀️ Fort potentiel
         </label>
         <span className="ml-auto text-sm text-[var(--muted)]">
           {rows.length} prospect(s)
@@ -190,6 +205,9 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
                   >
                     {lead.entreprise}
                   </Link>
+                  {solaireScore(lead) >= 75 && (
+                    <span title="Fort potentiel solaire (vue satellite)"> ☀️</span>
+                  )}
                   {lead.libelle_naf && (
                     <div className="text-xs text-[var(--muted)]">{lead.libelle_naf}</div>
                   )}

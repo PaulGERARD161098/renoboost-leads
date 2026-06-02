@@ -53,6 +53,7 @@ Score 0-100 : ≥75 = top lead, 50-74 = correct, <50 = faible.
 - statut_agent — état du mandat autonome (autonomie, budget/jour, budget engagé, dernières actions).
 - meilleures_zones — localités les plus performantes (où prospecter ensuite).
 - lister_zones_cibles — zones d'activité enregistrées (réutilisables).
+- analyser_satellite — analyse le potentiel solaire d'un lead (toiture + parking) via vue aérienne IGN + IA vision.
 
 ## Suggérer des zones à cibler
 Quand on te demande « où prospecter », « quelle zone cibler » : appuie-toi sur meilleures_zones (perf par localité) et lister_zones_cibles (zones enregistrées), puis **propose une recherche géolocalisée** (cible + adresse de la zone + rayon + budget), et applique la règle de confirmation avant de lancer.
