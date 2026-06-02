@@ -14,6 +14,7 @@ export function AgentConfigForm({
 }) {
   const router = useRouter();
   const [autonomie, setAutonomie] = useState(config.autonomie);
+  const [satelliteAuto, setSatelliteAuto] = useState(config.satellite_auto);
   const [cibles, setCibles] = useState<string[]>(config.cibles_autorisees);
   const [departements, setDepartements] = useState(
     config.departements.join(", "),
@@ -50,6 +51,7 @@ export function AgentConfigForm({
       effectif_min: effectifMin.trim() ? Number(effectifMin) : null,
       max_runs_jour: Number(maxRuns) || 0,
       cadence_min: Number(cadence) || 0,
+      satellite_auto: satelliteAuto,
     });
     setSaving(false);
     if (res.error) setMsg(`Erreur : ${res.error}`);
@@ -80,6 +82,30 @@ export function AgentConfigForm({
           <span
             className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
               autonomie ? "left-[1.375rem]" : "left-0.5"
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Analyse satellite auto */}
+      <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-white p-4">
+        <div>
+          <div className="font-semibold">Analyse satellite automatique</div>
+          <div className="text-sm text-[var(--muted)]">
+            L&apos;agent analyse aussi le potentiel solaire (toiture/parking) des
+            meilleurs leads non encore analysés, par petits lots.
+          </div>
+        </div>
+        <button
+          onClick={() => setSatelliteAuto((a) => !a)}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+            satelliteAuto ? "bg-[var(--brand)]" : "bg-slate-300"
+          }`}
+          aria-pressed={satelliteAuto}
+        >
+          <span
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+              satelliteAuto ? "left-[1.375rem]" : "left-0.5"
             }`}
           />
         </button>

@@ -119,6 +119,7 @@ export interface AgentConfig {
   effectif_min: number | null;
   max_runs_jour: number;
   cadence_min: number;
+  satellite_auto: boolean;
   updated_by: string | null;
   updated_at: string;
   created_at: string;

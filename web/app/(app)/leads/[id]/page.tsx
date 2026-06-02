@@ -13,6 +13,7 @@ import {
   formatDate,
   nextAction,
   scoreColor,
+  scoreGlobal,
   scoreVerdict,
 } from "@/lib/ui";
 
@@ -55,6 +56,7 @@ export default async function LeadPage({
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
+  const satScore = (l.vision_satellite as { score?: number } | null)?.score ?? null;
 
   return (
     <div>
@@ -97,6 +99,15 @@ export default async function LeadPage({
               {verdict.label}
             </span>
             <ScoreBar score={l.score} />
+            {satScore !== null && (
+              <div className="mt-1.5 text-xs text-[var(--muted)]">
+                Score global{" "}
+                <span className="font-semibold text-[var(--text)]">
+                  {scoreGlobal(l)}
+                </span>{" "}
+                · commercial {l.score ?? "—"} · ☀️ foncier {satScore}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex flex-col justify-center">

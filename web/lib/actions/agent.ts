@@ -14,6 +14,7 @@ export async function updateAgentConfig(input: {
   effectif_min: number | null;
   max_runs_jour: number;
   cadence_min: number;
+  satellite_auto: boolean;
 }) {
   const supabase = await createClient();
   const {
@@ -32,6 +33,7 @@ export async function updateAgentConfig(input: {
       effectif_min: input.effectif_min,
       max_runs_jour: input.max_runs_jour,
       cadence_min: input.cadence_min,
+      satellite_auto: input.satellite_auto,
       updated_by: user?.id ?? null,
       updated_at: new Date().toISOString(),
     })
