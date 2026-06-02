@@ -89,6 +89,7 @@ export interface Lead {
   opened_at: string | null;
   replied_at: string | null;
   bounced_at: string | null;
+  relance_at: string | null;
   owner: string | null;
   created_at: string;
   updated_at: string;

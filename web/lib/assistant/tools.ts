@@ -203,7 +203,7 @@ export async function executeTool(
         let q = supabase
           .from("leads")
           .select(
-            "entreprise, ville, code_postal, score, statut, contact_email, libelle_naf, effectif",
+            "id, entreprise, ville, code_postal, score, statut, contact_email, libelle_naf, effectif",
           )
           .order("score", { ascending: false, nullsFirst: false })
           .limit(limit);
@@ -220,6 +220,7 @@ export async function executeTool(
         if (leads.length === 0) return "Aucun lead ne correspond à ces critères.";
         return JSON.stringify(
           leads.map((l) => ({
+            id: l.id,
             entreprise: l.entreprise,
             ville: l.ville,
             score: l.score,
@@ -244,6 +245,7 @@ export async function executeTool(
         if (leads.length === 0) return `Aucun lead trouvé pour "${nom}".`;
         return JSON.stringify(
           leads.map((l) => ({
+            id: l.id,
             entreprise: l.entreprise,
             ville: l.ville,
             code_postal: l.code_postal,
@@ -478,7 +480,7 @@ export async function executeTool(
         }
         const { data: leadsData, error } = await supabase
           .from("leads")
-          .select("entreprise, ville, score, statut, contact_email, libelle_naf")
+          .select("id, entreprise, ville, score, statut, contact_email, libelle_naf")
           .eq("run_id", target.id as string)
           .order("score", { ascending: false, nullsFirst: false })
           .limit(limit);
@@ -503,6 +505,7 @@ export async function executeTool(
         return JSON.stringify({
           ...meta,
           leads: leads.map((l) => ({
+            id: l.id,
             entreprise: l.entreprise,
             ville: l.ville,
             score: l.score,

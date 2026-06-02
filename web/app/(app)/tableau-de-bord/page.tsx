@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, Run } from "@/lib/database.types";
-import { scoreColor } from "@/lib/ui";
+import { formatDate, scoreColor } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +12,20 @@ export default async function TableauDeBordPage() {
 
   const { data: leadsData } = await supabase
     .from("leads")
-    .select("id, entreprise, ville, score, statut, code_postal, bounced_at")
+    .select("id, entreprise, ville, score, statut, code_postal, bounced_at, relance_at")
     .limit(5000);
   const leads = (leadsData as Partial<Lead>[]) ?? [];
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+  const relancesDues = leads
+    .filter(
+      (l) =>
+        l.relance_at &&
+        new Date(l.relance_at) <= endOfDay &&
+        !["ecarte", "repondu"].includes(l.statut ?? ""),
+    )
+    .sort((a, b) => (a.relance_at! < b.relance_at! ? -1 : 1));
 
   const { data: runsData } = await supabase.from("runs").select("status, cout_eur");
   const runs = (runsData as Pick<Run, "status" | "cout_eur">[]) ?? [];
@@ -154,6 +165,40 @@ export default async function TableauDeBordPage() {
           </div>
         </div>
       </div>
+
+      {/* Relances à faire */}
+      {relancesDues.length > 0 && (
+        <>
+          <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            ⏰ Relances à faire ({relancesDues.length})
+          </h2>
+          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+            <table className="w-full text-sm">
+              <tbody>
+                {relancesDues.slice(0, 10).map((l) => (
+                  <tr
+                    key={l.id}
+                    className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-2.5">
+                      <Link
+                        href={`/leads/${l.id}`}
+                        className="font-medium hover:text-[var(--brand)]"
+                      >
+                        {l.entreprise}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--muted)]">{l.ville ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-right text-xs text-rose-600">
+                      {formatDate(l.relance_at ?? null)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {/* Funnel */}
       <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">

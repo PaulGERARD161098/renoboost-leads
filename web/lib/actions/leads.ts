@@ -51,6 +51,21 @@ export async function setLeadStatus(leadId: string, statut: LeadStatus) {
   return { ok: true };
 }
 
+/** Planifie (ou efface) la date de prochaine relance d'un lead. */
+export async function planifierRelance(leadId: string, dateISO: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ relance_at: dateISO })
+    .eq("id", leadId);
+  if (error) return { error: error.message };
+  await logEvent(leadId, "note", { action: "relance_planifiee", date: dateISO });
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/inbox");
+  revalidatePath("/suivi");
+  return { ok: true };
+}
+
 /** Ajoute une note libre à un lead (consignée dans l'historique). */
 export async function addLeadNote(leadId: string, texte: string) {
   const t = texte.trim();

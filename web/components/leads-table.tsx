@@ -153,8 +153,8 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-white">
+        <table className="w-full min-w-[680px] text-sm">
           <thead className="border-b border-[var(--border)] bg-slate-50 text-left text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
               <th className="w-10 px-4 py-3">
