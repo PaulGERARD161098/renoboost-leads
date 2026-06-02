@@ -35,7 +35,10 @@ cibles:
     effectif_min: 20
     naf_inclus: ["10", "11", "20", "22", "25", "28", "29", "52"]
     naf_exclus: ["56"]
-    forme_juridique_inclus: ["SAS", "SARL", "SA"]
+    # Calibration (essai réel dépt 59) : pas de filtre sur la forme juridique.
+    # [SAS,SARL,SA] évinçait coopératives (ex. Canelia, forme 5202) et SCI
+    # propriétaires du bâtiment — cibles solaires valides. NAF + effectif suffisent.
+    forme_juridique_inclus: []
     multi_sites_only: false
 
 signaux:
