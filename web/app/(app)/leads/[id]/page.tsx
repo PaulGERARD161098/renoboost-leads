@@ -6,6 +6,7 @@ import { LeadEditor } from "@/components/lead-editor";
 import { LeadStatusActions } from "@/components/lead-status-actions";
 import { LeadNotes } from "@/components/lead-notes";
 import { LeadRelance } from "@/components/lead-relance";
+import { SatellitePanel } from "@/components/satellite-panel";
 import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
@@ -129,6 +130,11 @@ export default async function LeadPage({
               </p>
             )}
           </div>
+
+          <SatellitePanel
+            leadId={l.id}
+            initial={(l.vision_satellite as Record<string, unknown> | null) ?? null}
+          />
 
           <LeadEditor lead={l} />
         </div>
