@@ -282,6 +282,7 @@ class RealPipeline:
         )
 
         leads = [self._mapper_lead(lead, ctx) for lead in result.leads_finaux]
+        self._enrichir_satellite(leads, emit)
 
         base = result.leads_l2 if result.leads_l2 is not None else result.leads_l1
         decouverte = len(base) if base is not None else 0
@@ -388,6 +389,35 @@ class RealPipeline:
                 rayon_par_point_km=float(z.get("rayon_par_point_km") or 10.0),
             )
         return Zone(type="departement", codes=[ctx.departement])
+
+    @staticmethod
+    def _enrichir_satellite(leads: list[dict[str, Any]], emit: EmitFn) -> None:
+        """Analyse 'potentiel solaire' (IGN + vision) si WORKER_SATELLITE est activé."""
+        import os
+
+        from .satellite import analyser_potentiel, satellite_active, satellite_max
+
+        if not satellite_active():
+            return
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if not api_key:
+            return
+        # Priorité aux meilleurs scores, dans la limite du plafond.
+        candidats = [
+            lead
+            for lead in leads
+            if lead.get("latitude") is not None and lead.get("longitude") is not None
+        ]
+        candidats.sort(key=lambda x: x.get("score") or 0, reverse=True)
+        candidats = candidats[: satellite_max()]
+        for i, lead in enumerate(candidats):
+            res = analyser_potentiel(
+                float(lead["latitude"]), float(lead["longitude"]), api_key
+            )
+            if res is not None:
+                lead["vision_satellite"] = res
+            if (i + 1) % 5 == 0:
+                emit("Analyse satellite", 97, {"satellite": i + 1})
 
     @staticmethod
     def _mapper_lead(lead: Any, ctx: RunContext) -> dict[str, Any]:
