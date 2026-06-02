@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadEvent } from "@/lib/database.types";
 import { LeadEditor } from "@/components/lead-editor";
 import { LeadStatusActions } from "@/components/lead-status-actions";
+import { LeadNotes } from "@/components/lead-notes";
 import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
@@ -157,18 +158,33 @@ export default async function LeadPage({
 
           <div className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Historique
+              Historique & notes
             </h2>
+            <LeadNotes leadId={l.id} />
             <ul className="space-y-3 text-sm">
               {(events as LeadEvent[] | null)?.length ? (
-                (events as LeadEvent[]).map((ev) => (
-                  <li key={ev.id} className="flex justify-between gap-2">
-                    <span>{EVENT_LABEL[ev.type] ?? ev.type}</span>
-                    <span className="text-xs text-[var(--muted)]">
-                      {formatDate(ev.at)}
-                    </span>
-                  </li>
-                ))
+                (events as LeadEvent[]).map((ev) => {
+                  const note =
+                    ev.type === "note" &&
+                    typeof ev.payload?.texte === "string"
+                      ? (ev.payload.texte as string)
+                      : null;
+                  return (
+                    <li key={ev.id}>
+                      <div className="flex justify-between gap-2">
+                        <span>{EVENT_LABEL[ev.type] ?? ev.type}</span>
+                        <span className="text-xs text-[var(--muted)]">
+                          {formatDate(ev.at)}
+                        </span>
+                      </div>
+                      {note && (
+                        <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-[var(--muted)]">
+                          {note}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })
               ) : (
                 <li className="text-[var(--muted)]">Aucune activité.</li>
               )}
