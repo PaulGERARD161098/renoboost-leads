@@ -255,12 +255,15 @@ class RealPipeline:
         settings = get_settings()
         self._verifier_cles(settings)
 
-        cfg = self._construire_config(ctx, settings)
+        cfg, sirene_first = self._construire_config(ctx, settings)
 
-        # L3.5 (Dropcontact) seulement si une clé est dispo ; sinon on saute.
-        stages: list[float | int] = (
-            [1, 2, 3, 3.5, 4] if settings.has_dropcontact() else [1, 2, 3, 4]
-        )
+        # Découverte : verticale fichier → Places-first (ciblage riche) ; verticale
+        # base-only (créée dans le CRM, sans fichier) → SIRENE-first par NAF (stage 0),
+        # qui n'a pas besoin de requêtes Google Places. L3.5 seulement si clé dispo.
+        if sirene_first:
+            stages = [0, 1, 2, 3, 3.5, 4] if settings.has_dropcontact() else [0, 1, 2, 3, 4]
+        else:
+            stages = [1, 2, 3, 3.5, 4] if settings.has_dropcontact() else [1, 2, 3, 4]
 
         stats = RunStats(
             session_id=str(ctx.run.get("id")),
@@ -307,7 +310,13 @@ class RealPipeline:
                 + ". Définis-les dans l'environnement Railway, ou repasse en WORKER_MODE=demo."
             )
 
-    def _construire_config(self, ctx: RunContext, settings: Any) -> Any:
+    def _construire_config(self, ctx: RunContext, settings: Any) -> tuple[Any, bool]:
+        """Construit la CampaignConfig et indique le mode de découverte.
+
+        Returns:
+            (cfg, sirene_first) — `sirene_first=True` quand le ciblage vient de la
+            base (verticale CRM sans fichier repo) → découverte par NAF (stage 0).
+        """
         from datetime import date
 
         from renoboost_leads.models import (
@@ -318,7 +327,6 @@ class RealPipeline:
             StagesFlags,
             Volume,
         )
-        from renoboost_leads.verticale import load_verticale
 
         if not ctx.verticale or not ctx.verticale.get("slug"):
             raise RuntimeError(
@@ -326,10 +334,12 @@ class RealPipeline:
                 "Associe une verticale (slug) au run avant de le lancer."
             )
         slug = str(ctx.verticale["slug"])
-        try:
-            verticale = load_verticale(slug)
-        except Exception as exc:  # noqa: BLE001 — on remonte un message actionnable
-            raise RuntimeError(f"Verticale '{slug}' illisible : {exc}") from exc
+        verticale_fichier = self._charger_verticale_fichier(slug)
+        description = (
+            verticale_fichier.verticale.nom
+            if verticale_fichier is not None
+            else (ctx.verticale.get("nom") or slug)
+        )
 
         volume_cible = max(1, min(ctx.volume_cible, ctx.max_leads))
         budget_eur = min(ctx.budget_eur, ctx.max_budget_eur)
@@ -337,7 +347,7 @@ class RealPipeline:
         cfg = CampaignConfig(
             run=RunInfo(
                 client_name=slug[:80],
-                description=verticale.verticale.nom,
+                description=description,
                 campaign_date=date.today().isoformat(),
             ),
             stages=StagesFlags(
@@ -347,20 +357,26 @@ class RealPipeline:
                 enable_stage_3_5_enrichment=settings.has_dropcontact(),
                 enable_stage_4_prospection=True,
             ),
-            # Placeholder requis (secteurs min 1) — écrasé juste après par la verticale.
+            # Placeholder requis (secteurs min 1) — écrasé par la verticale fichier ;
+            # inutilisé en SIRENE-first (stage 1 sauté).
             secteurs=[SecteurCible(type="establishment", query=slug)],
             zone=self._construire_zone(ctx),
             volume=Volume(cible=volume_cible),
             budget=Budget(max_eur=budget_eur),
         )
-
-        # Ciblage = verticale fichier (porte a : moteur source de vérité, zéro drift).
-        cfg.secteurs = verticale.cibles.secteurs_places
-        cfg.filtres_entreprise = verticale.cibles.filtres_entreprise
-        cfg.claude_scoring.seuil_top_lead = verticale.qualification.seuil_score_top
-        # Le CRM doit voir TOUS les leads découverts (flagués hors-filtre compris),
-        # pas seulement les qualifiés : on score donc l'ensemble.
+        # Le CRM doit voir TOUS les leads découverts (flagués hors-filtre compris).
         cfg.claude_scoring.scorer_hors_filtre = True
+
+        if verticale_fichier is not None:
+            # Ciblage = verticale fichier (source de vérité, ciblage riche Places).
+            cfg.secteurs = verticale_fichier.cibles.secteurs_places
+            cfg.filtres_entreprise = verticale_fichier.cibles.filtres_entreprise
+            cfg.claude_scoring.seuil_top_lead = verticale_fichier.qualification.seuil_score_top
+            sirene_first = False
+        else:
+            # Ciblage = config CRM (base) → découverte SIRENE-first par NAF.
+            cfg.filtres_entreprise = self._filtres_depuis_config_crm(ctx.verticale, slug)
+            sirene_first = True
 
         # Override per-run : effectif min depuis la zone du CRM, sans toucher au
         # ciblage NAF porté par la verticale.
@@ -368,7 +384,49 @@ class RealPipeline:
         if effectif_min is not None:
             cfg.filtres_entreprise.effectif_min = int(effectif_min)
 
-        return cfg
+        return cfg, sirene_first
+
+    @staticmethod
+    def _charger_verticale_fichier(slug: str) -> Any | None:
+        """Charge la verticale fichier si elle existe, sinon None (verticale base-only).
+
+        Un fichier présent mais corrompu lève une erreur actionnable (vs absent,
+        qui bascule proprement sur le ciblage base).
+        """
+        from renoboost_leads.verticale import load_verticale
+        from renoboost_leads.verticale.loader import VERTICALES_DIR
+
+        if not (VERTICALES_DIR / slug / "verticale.yaml").exists():
+            return None
+        try:
+            return load_verticale(slug)
+        except Exception as exc:  # noqa: BLE001 — message actionnable
+            raise RuntimeError(f"Verticale '{slug}' présente mais illisible : {exc}") from exc
+
+    @staticmethod
+    def _filtres_depuis_config_crm(verticale_row: dict[str, Any], slug: str) -> Any:
+        """Construit les FiltresEntreprise depuis le `config` d'une verticale CRM.
+
+        Le CRM stocke {offre, secteurs_naf, effectif_min, signaux}. Le ciblage NAF
+        est requis pour la découverte SIRENE-first (sinon on draguerait toute la
+        zone) : on refuse explicitement une verticale base-only sans NAF.
+        """
+        from renoboost_leads.models import FiltresEntreprise
+
+        config = verticale_row.get("config") or {}
+        naf = [str(x) for x in (config.get("secteurs_naf") or []) if str(x).strip()]
+        if not naf:
+            raise RuntimeError(
+                f"Verticale '{slug}' sans fichier repo ni ciblage NAF en base "
+                "(config.secteurs_naf vide) : impossible de cibler. Renseigne des "
+                "codes NAF (secteurs) dans la fiche Cible du CRM, ou ajoute un "
+                "fichier verticale au repo."
+            )
+        effectif_min = config.get("effectif_min")
+        return FiltresEntreprise(
+            naf_inclus=naf,
+            effectif_min=int(effectif_min) if effectif_min is not None else None,
+        )
 
     @staticmethod
     def _construire_zone(ctx: RunContext) -> Any:
