@@ -45,6 +45,24 @@ export function scoreVerdict(score: number | null): { label: string; tone: strin
   return { label: "Faible intérêt", tone: "bg-slate-100 text-slate-600" };
 }
 
+/**
+ * Score global = mélange du score commercial (intérêt) et du score foncier
+ * (potentiel solaire satellite). Pondération 60/40 ; retombe sur l'un si l'autre
+ * est absent.
+ */
+export function scoreGlobal(lead: {
+  score?: number | null;
+  vision_satellite?: Record<string, unknown> | null;
+}): number | null {
+  const com = typeof lead.score === "number" ? lead.score : null;
+  const v = lead.vision_satellite as { score?: number } | null;
+  const sat = typeof v?.score === "number" ? v.score : null;
+  if (com === null && sat === null) return null;
+  if (sat === null) return com;
+  if (com === null) return sat;
+  return Math.round(0.6 * com + 0.4 * sat);
+}
+
 /** Prochaine action recommandée selon le statut, le score et la présence d'email. */
 export function nextAction(lead: {
   statut: LeadStatus;

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, Run } from "@/lib/database.types";
-import { formatDate, scoreColor } from "@/lib/ui";
+import { formatDate, scoreColor, scoreGlobal } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,7 @@ export default async function TableauDeBordPage() {
   // À traiter en priorité : non contactés, score décroissant.
   const priorite = leads
     .filter((l) => A_TRAITER.includes(l.statut ?? "") && (l.score ?? 0) > 0)
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .sort((a, b) => (scoreGlobal(b) ?? 0) - (scoreGlobal(a) ?? 0))
     .slice(0, 8);
 
   // Distribution des scores.
@@ -139,9 +139,10 @@ export default async function TableauDeBordPage() {
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <span
-                          className={`rounded px-1.5 py-0.5 text-xs font-semibold ${scoreColor(l.score ?? null)}`}
+                          className={`rounded px-1.5 py-0.5 text-xs font-semibold ${scoreColor(scoreGlobal(l))}`}
+                          title="Score global (commercial + foncier)"
                         >
-                          {l.score ?? "—"}
+                          {scoreGlobal(l) ?? "—"}
                         </span>
                       </td>
                     </tr>

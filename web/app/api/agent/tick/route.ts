@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { analyseSatellite } from "@/lib/satellite";
 import type { AgentConfig, Run, Verticale } from "@/lib/database.types";
+
+const SATELLITE_PAR_TICK = 5;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +35,29 @@ async function handle(req: NextRequest) {
   const cfg = cfgData as AgentConfig | null;
   if (!cfg) return NextResponse.json({ skipped: "no_config" });
   if (!cfg.autonomie) return NextResponse.json({ skipped: "disabled" });
+
+  // Passe satellite : analyse quelques leads non encore analysés (si activé).
+  let satelliteAnalyses = 0;
+  if (cfg.satellite_auto) {
+    const { data: aAnalyser } = await admin
+      .from("leads")
+      .select("id")
+      .is("vision_satellite", null)
+      .not("latitude", "is", null)
+      .neq("statut", "ecarte")
+      .order("score", { ascending: false, nullsFirst: false })
+      .limit(SATELLITE_PAR_TICK);
+    for (const l of (aAnalyser as { id: string }[]) ?? []) {
+      const r = await analyseSatellite(admin, l.id);
+      if ("ok" in r) satelliteAnalyses++;
+    }
+    if (satelliteAnalyses > 0) {
+      await admin.from("agent_journal").insert({
+        type: "info",
+        message: `Analyse satellite auto : ${satelliteAnalyses} lead(s).`,
+      });
+    }
+  }
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
