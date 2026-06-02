@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..common.naf import libelle_naf_pour_code
+
 
 def _safe_get(d: dict[str, Any] | None, *keys: str, default: Any = None) -> Any:
     cur: Any = d
@@ -113,15 +115,18 @@ def candidat_to_l2_fields(candidat: dict[str, Any]) -> dict[str, Any]:
     siege = candidat.get("siege") or {}
     ca, resultat_net, annee_finances = _extraire_finances(candidat)
 
+    code_naf = _safe_get(candidat, "activite_principale") or _safe_get(
+        siege, "activite_principale"
+    )
     return {
         "siren": candidat.get("siren"),
         "siret": _safe_get(siege, "siret") or candidat.get("siret"),
-        "code_naf": (
-            _safe_get(candidat, "activite_principale") or _safe_get(siege, "activite_principale")
-        ),
+        "code_naf": code_naf,
         "libelle_naf": (
             _safe_get(candidat, "libelle_activite_principale")
             or _safe_get(siege, "libelle_activite_principale")
+            # Repli local (l'API ne renvoie pas toujours le libellé).
+            or libelle_naf_pour_code(code_naf)
         ),
         "forme_juridique": candidat.get("nature_juridique"),
         "statut_actif": (candidat.get("etat_administratif") or "").upper() == "A",

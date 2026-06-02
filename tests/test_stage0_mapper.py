@@ -103,10 +103,20 @@ class TestMappingComplet:
         assert lead is not None
         assert lead.libelle_naf == "Libellé depuis le siège"
 
-    def test_libelle_naf_absent_reste_none(self):
-        """Sans libellé renvoyé par l'API, le champ reste None (pas de crash)."""
+    def test_libelle_naf_absent_repli_division(self):
+        """Sans libellé API, on retombe sur le libellé de division NAF (code 10.39A)."""
         e = _entreprise_complete()
         del e["libelle_activite_principale"]
+        lead = entreprise_to_lead_stage2(e)
+        assert lead is not None
+        assert lead.libelle_naf == "Industries alimentaires"  # division 10
+
+    def test_libelle_naf_absent_et_code_absent_reste_none(self):
+        """Ni libellé API ni code NAF exploitable → None (pas de crash)."""
+        e = _entreprise_complete()
+        del e["libelle_activite_principale"]
+        e["activite_principale"] = None
+        e["siege"]["activite_principale"] = None
         lead = entreprise_to_lead_stage2(e)
         assert lead is not None
         assert lead.libelle_naf is None

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..common.logger import get_logger
+from ..common.naf import libelle_naf_pour_code
 from ..models import LeadStage2
 
 logger = get_logger(__name__)
@@ -113,6 +114,10 @@ def entreprise_to_lead_stage2(
         libelle_naf=(
             entreprise.get("libelle_activite_principale")
             or siege.get("libelle_activite_principale")
+            # Repli local (l'API ne renvoie pas toujours le libellé).
+            or libelle_naf_pour_code(
+                siege.get("activite_principale") or entreprise.get("activite_principale")
+            )
         ),
         forme_juridique=entreprise.get("nature_juridique"),  # code INSEE
         statut_actif=(etat == "A"),
