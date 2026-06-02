@@ -73,6 +73,10 @@ export interface Lead {
   effectif: string | null;
   ville: string | null;
   code_postal: string | null;
+  adresse: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  vision_satellite: Record<string, unknown> | null;
   score: number | null;
   score_raison: string | null;
   contact_nom: string | null;
