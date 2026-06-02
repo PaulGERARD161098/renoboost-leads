@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LEAD_STATUS_LABEL, RUN_STATUS_LABEL } from "../ui";
 import { analyseSatellite } from "../satellite";
+import { runVeille } from "../veille";
 import type {
   AgentConfig,
   AgentJournalEntry,
@@ -174,6 +175,18 @@ export const tools = [
       },
       required: ["entreprise"],
     },
+  },
+  {
+    name: "lister_veille",
+    description:
+      "Signaux de veille récents non traités (intentions détectées sur le web : flotte VE, ombrières, électrification) avec déclencheur, scores et source.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "lancer_veille",
+    description:
+      "Lance une veille web maintenant (ACTION, consomme des recherches web). Détecte de nouveaux signaux d'intention sur le périmètre des cibles.",
+    input_schema: { type: "object", properties: {} },
   },
 ];
 
@@ -670,6 +683,27 @@ export async function executeTool(
         const res = await analyseSatellite(supabase, data.id as string);
         if ("error" in res) return res.error;
         return JSON.stringify({ entreprise: data.entreprise, ...res.result });
+      }
+
+      case "lister_veille": {
+        const { data, error } = await supabase
+          .from("veille_signaux")
+          .select(
+            "entreprise, ville, type, declencheur, score_intention, score_fit, angle, source_url",
+          )
+          .eq("statut", "nouveau")
+          .order("created_at", { ascending: false })
+          .limit(15);
+        if (error) return `Erreur: ${error.message}`;
+        const sig = data ?? [];
+        if (sig.length === 0) return "Aucun signal de veille en attente.";
+        return JSON.stringify(sig);
+      }
+
+      case "lancer_veille": {
+        const res = await runVeille(supabase);
+        if ("error" in res) return res.error;
+        return `Veille terminée : ${res.inserted} nouveau(x) signal(aux) détecté(s) (sur ${res.total} trouvés). À consulter dans l'onglet Veille.`;
       }
 
       default:
