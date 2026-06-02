@@ -65,6 +65,11 @@ class SocieteinfoL2Client:
     def __init__(self, client: SocieteinfoClient):
         self.client = client
 
+    @property
+    def cout_total_eur(self) -> float:
+        """Coût cumulé engagé par les appels Societeinfo (0 en dry-run)."""
+        return self.client.cout_total_eur
+
     def rechercher(
         self,
         query: str,

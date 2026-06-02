@@ -175,6 +175,12 @@ class SocieteinfoClient:
             brut=bloc,
         )
 
+    @property
+    def cout_total_eur(self) -> float:
+        """Coût cumulé réellement engagé (0 en dry-run ou sans BudgetGuard)."""
+        budget = getattr(getattr(self, "config", None), "budget", None)
+        return budget.cout_actuel_eur if budget is not None else 0.0
+
     def health_check(self) -> tuple[bool, str]:
         try:
             self._appeler({"siren": "552100554"})  # SIREN test (EDF)
