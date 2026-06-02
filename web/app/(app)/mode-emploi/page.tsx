@@ -12,6 +12,7 @@ const ETAGES = [
 const ONGLETS = [
   { nom: "Prospects", desc: "La liste à traiter. Recherche, filtres (score, email, ☀️ potentiel), tri, sélection multiple + actions groupées (valider/écarter)." },
   { nom: "Suivi", desc: "Le pipeline en Kanban actionnable : Envoyer · Marquer répondu · Relancer · Écarter directement sur les cartes." },
+  { nom: "Veille", desc: "Signaux d'intention détectés sur le web (flotte VE, ombrières, électrification) ; à transformer en leads." },
   { nom: "Recherches", desc: "Lancer une recherche (par département OU autour d'une adresse + rayon) et voir le détail/résultats de chaque run." },
   { nom: "Cibles", desc: "Définir les verticales (type d'activité + critères) — préalable à toute recherche." },
   { nom: "Tableau de bord", desc: "Vue d'ensemble : KPIs, à traiter en priorité, distribution des scores, funnel, meilleurs départements, relances dues, potentiels solaires." },
@@ -127,6 +128,18 @@ export default function ModeEmploiPage() {
           <li><strong>analyser le potentiel solaire</strong> d&apos;un lead ;</li>
           <li>livrer un résultat propre (leads cliquables vers leur fiche).</li>
         </ul>
+      </Card>
+
+      <Card emoji="🔔" titre="Veille d'intentions">
+        <p>
+          Chaque jour, l&apos;agent cherche sur le web des <strong>signaux d&apos;achat</strong>{" "}
+          sur le périmètre des cibles (PME du Nord qui électrifient leur flotte,
+          projettent des ombrières, etc.). Chaque signal a un <strong>déclencheur daté</strong>,
+          une <strong>source</strong>, des scores intention/fit et un <strong>angle</strong>{" "}
+          de prise de contact. Tu les retrouves dans l&apos;onglet <strong>Veille</strong>{" "}
+          (et un badge à la connexion) ; un clic « En faire un lead » les bascule dans
+          le pipeline.
+        </p>
       </Card>
 
       <Card emoji="🤖" titre="L'agent autonome">

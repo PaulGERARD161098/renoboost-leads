@@ -3,6 +3,10 @@
     {
       "path": "/api/agent/tick",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/veille/tick",
+      "schedule": "0 6 * * *"
     }
   ]
 }

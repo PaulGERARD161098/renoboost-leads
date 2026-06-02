@@ -108,6 +108,23 @@ export interface ZoneCible {
   created_at: string;
 }
 
+export interface VeilleSignal {
+  id: string;
+  entreprise: string;
+  ville: string | null;
+  type: string | null;
+  declencheur: string | null;
+  resume: string | null;
+  source_url: string | null;
+  source_date: string | null;
+  score_intention: number | null;
+  score_fit: number | null;
+  angle: string | null;
+  statut: string;
+  lead_id: string | null;
+  created_at: string;
+}
+
 export interface AgentConfig {
   id: string;
   autonomie: boolean;

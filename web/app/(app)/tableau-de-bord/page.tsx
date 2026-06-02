@@ -40,6 +40,11 @@ export default async function TableauDeBordPage() {
   const { data: runsData } = await supabase.from("runs").select("status, cout_eur");
   const runs = (runsData as Pick<Run, "status" | "cout_eur">[]) ?? [];
 
+  const { count: veilleNouveaux } = await supabase
+    .from("veille_signaux")
+    .select("id", { count: "exact", head: true })
+    .eq("statut", "nouveau");
+
   const total = leads.length;
   const sent = leads.filter((l) =>
     ["envoye", "ouvert", "repondu"].includes(l.statut ?? ""),
@@ -98,6 +103,16 @@ export default async function TableauDeBordPage() {
       <p className="mb-5 text-sm text-[var(--muted)]">
         Santé du pipeline et prochaines actions.
       </p>
+
+      {(veilleNouveaux ?? 0) > 0 && (
+        <Link
+          href="/veille"
+          className="mb-5 flex items-center gap-2 rounded-xl border border-[var(--brand)] bg-blue-50/50 px-4 py-3 text-sm font-medium hover:bg-blue-50"
+        >
+          🔔 {veilleNouveaux} nouveau(x) signal(aux) de veille à examiner
+          <span className="text-[var(--brand)]">→</span>
+        </Link>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Leads au total" value={total} />
