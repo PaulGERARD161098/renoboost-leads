@@ -38,10 +38,13 @@ from ..stage4_prospection.cache import CacheStage4
 from ..stage4_prospection.client import ClaudeClient, ClaudeClientConfig
 from ..stage4_prospection.dry_run import ClaudeClientDryRun
 from ..stage4_prospection.enricher import EnricheurStage4
+from ..veille_immatriculations.mailer import ConfigSMTP
 from .adaptateur_lead_l2 import ligne_parking_vers_lead_stage1
 from .etat_historique import EtatHistoriqueParkings
 from .exporter_aper import export_aper_csv
 from .filtre_parkings import filtrer_parkings
+from .mailer import ResumeAper, envoyer_resume_aper
+from .matching_geo import resoudre_lignes_sans_enseigne
 from .models import AperConfig, LigneParking
 from .parser_parkings import lire_csv_parkings
 
@@ -70,6 +73,7 @@ class ResultatAper:
     nb_nouveaux: int = 0
     nb_deja_vus: int = 0
     nb_top_leads: int = 0
+    nb_resolus_geo: int = 0  # Phase C : parkings sans enseigne résolus par géoloc
     cout_l4_eur: float = 0.0
     leads: list[LeadAper] = field(default_factory=list)
     erreurs_parsing: list[str] = field(default_factory=list)
@@ -88,6 +92,11 @@ class AperRunConfig:
     anthropic_api_key: str | None = None
     dry_run_l4: bool = False
     rate_limit_per_min: int = 60
+    # Phase C : résolution géoloc → SIREN des parkings sans enseigne
+    resoudre_geo: bool = True
+    rayon_geo_km: float = 0.2
+    # Phase D : email récapitulatif post-run (None = pas d'envoi)
+    smtp_config: ConfigSMTP | None = None
 
 
 def _lead_stage4_vers_lead_aper(
@@ -155,6 +164,18 @@ def executer_cycle_aper(
                        fichier_parkings.name)
         return resultat
 
+    # Client recherche-entreprises (gratuit) — partagé Phase C + L2.
+    limiter = RateLimiter(config.rate_limit_per_min)
+    rech_client = RechercheEntreprisesClient(RechercheClientConfig(rate_limiter=limiter))
+
+    # 2.5 Phase C — résolution géoloc → SIREN des parkings sans enseigne, AVANT
+    # l'anti-doublon (l'identifiant stable devient SIREN une fois résolu).
+    if config.resoudre_geo:
+        stats_geo = resoudre_lignes_sans_enseigne(
+            lignes_filtrees, rech_client, rayon_km=config.rayon_geo_km
+        )
+        resultat.nb_resolus_geo = stats_geo["resolu"]
+
     # 3. Anti-doublon (flag, pas d'exclusion)
     etat_path = etat_db_path or (output_dir.parent / "etat_parkings.sqlite")
     etat = EtatHistoriqueParkings(etat_path)
@@ -171,10 +192,8 @@ def executer_cycle_aper(
     # 4. Conversion en LeadStage1
     leads_l1 = [ligne_parking_vers_lead_stage1(lg) for lg in lignes_filtrees]
 
-    # 5. L2 — enrichissement entreprise
+    # 5. L2 — enrichissement entreprise (réutilise le client créé pour la Phase C)
     cache = SessionCache(output_dir / "cache.sqlite")
-    limiter = RateLimiter(config.rate_limit_per_min)
-    rech_client = RechercheEntreprisesClient(RechercheClientConfig(rate_limiter=limiter))
     enricheur_l2 = EnricheurStage2(
         client=rech_client,
         cache=cache,
@@ -244,4 +263,45 @@ def executer_cycle_aper(
         duree,
         resultat.cout_l4_eur,
     )
+
+    # 10. Phase D — email récapitulatif post-run (si SMTP configuré)
+    if config.smtp_config is not None:
+        try:
+            _envoyer_resume(resultat, csv_final, config.smtp_config)
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Envoi email APER post-run échoué : %s", e)
+
     return resultat
+
+
+def _envoyer_resume(
+    resultat: ResultatAper, csv_final: Path, smtp_config: ConfigSMTP
+) -> None:
+    """Construit un ResumeAper à partir du ResultatAper et l'envoie."""
+    extraits = [
+        {
+            "nom": la.nom or "?",
+            "siren": la.siren or "?",
+            "score": str(la.score_interet) if la.score_interet is not None else "—",
+            "surface": str(int(la.surface_parking_m2)),
+            "echeance": la.echeance_aper or "?",
+            "priorite": la.priorite_aper or "?",
+            "raison": (la.raison_score or "")[:120],
+        }
+        for la in sorted(
+            resultat.leads, key=lambda la: la.score_interet or 0, reverse=True
+        )
+        if la.top_lead
+    ]
+    resume = ResumeAper(
+        date_run=resultat.date_run,
+        nb_lignes_brutes=resultat.nb_lignes_brutes,
+        nb_parkings_aper=resultat.nb_parkings_aper,
+        nb_nouveaux=resultat.nb_nouveaux,
+        nb_deja_vus=resultat.nb_deja_vus,
+        nb_top_leads=resultat.nb_top_leads,
+        cout_l4_eur=resultat.cout_l4_eur,
+        chemin_csv=csv_final,
+        extraits_top=extraits,
+    )
+    envoyer_resume_aper(smtp_config, resume)

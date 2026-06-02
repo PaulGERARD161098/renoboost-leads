@@ -127,8 +127,19 @@ représentatifs, dont 2 sous le seuil).
 | Phase | Statut | Contenu |
 |---|---|---|
 | A — Module + tests | ✅ | parser, filtre, état, adaptateur, pipeline, CLI, tests |
-| B — Connecteur géospatial | à venir | extraction auto OSM/IGN → CSV (surface réelle) |
-| C — Matching renforcé | à venir | géoloc parking → SIREN exploitant (fallback Pappers/Societeinfo) |
-| D — Notification email | à venir | résumé matinal (réutiliser le mailer veille) |
+| B — Connecteur géospatial | ✅ | `aper geo` : extraction OSM/Overpass → CSV (surface réelle) |
+| C — Matching renforcé | ✅ | géoloc parking → SIREN exploitant via `near_point` (`matching_geo.py`) ; flags `--no-geo` / `--rayon-geo` |
+| D — Notification email | ✅ | résumé matinal post-run (`mailer.py`, réutilise `ConfigSMTP` + `envoyer_message` de la veille) ; flag `--no-email` |
+
+**Phase C** se déclenche pour les parkings *sans enseigne ni SIREN* mais
+géolocalisés : on interroge `recherche-entreprises/near_point` dans un petit
+rayon (0,2 km par défaut) et on retient l'exploitant le plus plausible (effectif
+le plus élevé parmi les plus proches), avant l'anti-doublon (l'identifiant stable
+devient alors le SIREN). Le fallback Pappers/Societeinfo reste une évolution
+possible si `near_point` ne suffit pas.
+
+**Phase D** envoie un email récapitulatif (KPIs + top leads avec surface, échéance
+et priorité APER + CSV joint) si SMTP est configuré (`SMTP_*` dans `.env`), sauf
+`--no-email`.
 
 [geodatamine.fr]: https://geodatamine.fr/
