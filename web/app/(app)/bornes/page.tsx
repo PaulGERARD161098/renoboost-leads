@@ -3,6 +3,8 @@ import { BornesAdmin } from "@/components/bornes-admin";
 import { BornesAnalytics } from "@/components/bornes-analytics";
 import { BornesRadar } from "@/components/bornes-radar";
 import { BornesMapLoader } from "@/components/bornes-map-loader";
+import { BornesVeille } from "@/components/bornes-veille";
+import type { VeilleSignal } from "@/lib/database.types";
 import { formatDate } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +23,18 @@ export default async function BornesPage() {
   const operateurs = (ops as { operateur: string; n: number }[] | null) ?? [];
   const totalOps = operateurs.reduce((s, o) => s + o.n, 0) || 1;
   const maxOp = operateurs[0]?.n ?? 1;
+
+  const { data: veilleData } = await supabase
+    .from("veille_signaux")
+    .select("*")
+    .in("statut", ["nouveau", "retenu", "converti"])
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const signaux = ((veilleData as VeilleSignal[] | null) ?? []).sort(
+    (a, b) =>
+      (b.score_intention ?? 0) + (b.score_fit ?? 0) -
+      ((a.score_intention ?? 0) + (a.score_fit ?? 0)),
+  );
 
   const { data: journal } = await supabase
     .from("agent_journal")
@@ -99,6 +113,10 @@ export default async function BornesPage() {
       )}
 
       <BornesAnalytics depts={depts} />
+
+      <div className="mt-5">
+        <BornesVeille signaux={signaux} />
+      </div>
 
       {dernier && (
         <p className="mt-4 text-xs text-[var(--muted)]">

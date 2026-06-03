@@ -37,9 +37,16 @@ function parseArray(text: string): Signal[] | null {
 
 export async function runVeille(
   supabase: SupabaseClient,
+  opts?: { departement?: string },
 ): Promise<{ error: string } | { ok: true; inserted: number; total: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "ANTHROPIC_API_KEY manquante côté serveur." };
+
+  // Périmètre géographique : un département précis (depuis l'onglet Bornes VE)
+  // ou le périmètre cibles par défaut.
+  const perimetre = opts?.departement
+    ? `le département ${opts.departement}`
+    : DEPARTEMENTS;
 
   // Thèmes alignés sur les cibles actives.
   const { data: vData } = await supabase
@@ -52,7 +59,7 @@ export async function runVeille(
 
   const prompt = `Tu es analyste en intelligence commerciale pour une société qui vend aux PME/ETI : solaire en toiture (autoconsommation), ombrières photovoltaïques de parking, et solutions d'électrification de flotte / bornes IRVE.
 
-OBJECTIF : trouver sur le web des SIGNAUX D'INTENTION D'ACHAT concernant des entreprises, collectivités ou ERP du périmètre ${DEPARTEMENTS}. Un signal = un fait récent et sourcé montrant qu'une organisation :
+OBJECTIF : trouver sur le web des SIGNAUX D'INTENTION D'ACHAT concernant des entreprises, collectivités ou ERP du périmètre ${perimetre}. Un signal = un fait récent et sourcé montrant qu'une organisation :
 - passe sa flotte en véhicules électriques / installe des bornes de recharge IRVE,
 - installe ou projette des ombrières photovoltaïques de parking,
 - solarise sa toiture / lance un projet d'autoconsommation ou d'électrification de site,
