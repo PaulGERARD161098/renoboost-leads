@@ -36,11 +36,50 @@ export function AssistantWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  // Actions proposées dynamiquement par le briefing (sinon repli sur SUGGESTIONS).
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const briefed = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, loading]);
+  }, [messages, loading, briefingLoading]);
+
+  // Point d'ouverture proactif : à la première ouverture, Magellan fait le point
+  // tout seul et propose des actions, au lieu de l'écran d'attente.
+  async function briefing() {
+    if (briefed.current) return;
+    briefed.current = true;
+    setBriefingLoading(true);
+    try {
+      const res = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ briefing: true }),
+      });
+      const data = await res.json();
+      if (data.reply) {
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: data.reply, steps: data.steps },
+        ]);
+        if (Array.isArray(data.suggestions) && data.suggestions.length)
+          setSuggestions(data.suggestions);
+      }
+    } catch {
+      /* en cas d'échec, on retombe sur l'écran d'accueil classique */
+      briefed.current = false;
+    } finally {
+      setBriefingLoading(false);
+    }
+  }
+
+  // Déclenche le briefing dès qu'on ouvre le panneau pour la première fois.
+  useEffect(() => {
+    if (open && !briefed.current && messages.length === 0) briefing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   async function send(text: string) {
     const content = text.trim();
@@ -64,6 +103,8 @@ export function AssistantWidget() {
         ...m,
         { role: "assistant", content: reply, steps: data.steps },
       ]);
+      if (Array.isArray(data.suggestions) && data.suggestions.length)
+        setSuggestions(data.suggestions);
     } catch {
       setMessages((m) => [
         ...m,
@@ -100,7 +141,11 @@ export function AssistantWidget() {
             </div>
             {messages.length > 0 && (
               <button
-                onClick={() => setMessages([])}
+                onClick={() => {
+                  setMessages([]);
+                  setSuggestions([]);
+                  briefed.current = false;
+                }}
                 className="rounded-md px-2 py-1 text-xs text-white/90 hover:bg-white/15"
               >
                 Effacer
@@ -109,7 +154,7 @@ export function AssistantWidget() {
           </header>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.length === 0 && (
+            {messages.length === 0 && !briefingLoading && (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--muted)]">
                   Pose-moi une question sur l&apos;outil ou tes prospects.
@@ -155,7 +200,7 @@ export function AssistantWidget() {
                 )}
               </div>
             ))}
-            {loading && (
+            {(loading || briefingLoading) && (
               <div className="text-left">
                 <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-3.5 py-2.5 text-sm text-[var(--muted)]">
                   <span className="flex gap-1">
@@ -163,8 +208,25 @@ export function AssistantWidget() {
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--brand)] [animation-delay:-0.15s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--brand)]" />
                   </span>
-                  Magellan travaille…
+                  {briefingLoading
+                    ? "Magellan prépare ton point d’ouverture…"
+                    : "Magellan travaille…"}
                 </div>
+              </div>
+            )}
+
+            {/* Actions proposées par le briefing : cliquables comme des raccourcis. */}
+            {!loading && !briefingLoading && suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="rounded-full border border-[var(--brand)] bg-[var(--brand)]/5 px-3 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--brand)]/10"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
           </div>
