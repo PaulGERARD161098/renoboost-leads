@@ -16,6 +16,8 @@ const SUGGESTIONS = [
 
 // Libellés lisibles des outils, pour montrer "où on en est".
 const STEP_LABEL: Record<string, string> = {
+  contexte: "Contexte (objectif/deadlines)",
+  plan_du_jour: "Plan du jour",
   compter_leads: "État des lieux",
   lister_leads: "Lecture des leads",
   detail_lead: "Fiche du lead",
