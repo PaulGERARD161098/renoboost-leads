@@ -18,7 +18,10 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen">
       <Nav email={user.email ?? null} />
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      {/* Décalage = largeur de la sidebar repliée (elle s'étend en overlay au survol). */}
+      <main className="ml-16 px-4 py-6">
+        <div className="mx-auto max-w-6xl">{children}</div>
+      </main>
       <AssistantWidget />
     </div>
   );
