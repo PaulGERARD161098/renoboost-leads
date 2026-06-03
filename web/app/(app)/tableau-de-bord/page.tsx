@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import type { Lead, Run } from "@/lib/database.types";
+import type { AppContext, Lead, Run } from "@/lib/database.types";
+import { RepriseBanner } from "@/components/reprise-banner";
 import { formatDate, scoreColor, scoreGlobal } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,30 @@ export default async function TableauDeBordPage() {
     .sort((x, y) => y.top - x.top || y.n - x.n)
     .slice(0, 8);
 
+  // Couche contexte (reprise au login) + prochaines actions prioritaires.
+  const { data: ctxData } = await supabase
+    .from("app_context")
+    .select("*")
+    .eq("id", "main")
+    .maybeSingle();
+  const context = (ctxData as AppContext | null) ?? {
+    id: "main",
+    objectif_final: null,
+    client_actif: null,
+    deadlines: [],
+    resume_session: null,
+    updated_by: null,
+    updated_at: new Date().toISOString(),
+  };
+  const aValider = leads.filter((l) =>
+    ["nouveau", "a_valider"].includes(l.statut ?? ""),
+  ).length;
+  const repriseActions = [
+    { label: "Réponses à traiter", href: "/inbox?statut=repondu", n: replied },
+    { label: "Leads à valider", href: "/inbox", n: aValider },
+    { label: "Relances dues", href: "/suivi", n: relancesDues.length },
+  ];
+
   return (
     <div>
       <h1 className="mb-1 text-2xl font-bold">Tableau de bord</h1>
@@ -104,9 +129,11 @@ export default async function TableauDeBordPage() {
         Santé du pipeline et prochaines actions.
       </p>
 
+      <RepriseBanner context={context} actions={repriseActions} />
+
       {(veilleNouveaux ?? 0) > 0 && (
         <Link
-          href="/veille"
+          href="/bornes"
           className="mb-5 flex items-center gap-2 rounded-xl border border-[var(--brand)] bg-blue-50/50 px-4 py-3 text-sm font-medium hover:bg-blue-50"
         >
           🔔 {veilleNouveaux} nouveau(x) signal(aux) de veille à examiner

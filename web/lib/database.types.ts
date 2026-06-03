@@ -261,3 +261,15 @@ export interface LeadMessage {
   instantly_message_id: string | null;
   at: string;
 }
+
+export type Deadline = { label: string; date: string };
+
+export interface AppContext {
+  id: string;
+  objectif_final: string | null;
+  client_actif: string | null;
+  deadlines: Deadline[];
+  resume_session: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
