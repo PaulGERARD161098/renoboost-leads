@@ -1,5 +1,34 @@
 # CLAUDE.md — consignes session Claude Code
 
+## 🧭 Cap produit — exigence « agent-first » (à respecter à CHAQUE session)
+
+RénoBoost n'est **pas** une plateforme de données : c'est un **copilote de travail**.
+À chaque évolution, on pousse l'outil vers plus d'**autonomie**, d'**assistance** et
+d'**interconnexion**. Objectif transverse, valable pour tout nouvel onglet/feature :
+
+1. **Reprise au login** — au niveau de l'app (pas seulement la bulle Magellan) :
+   récap de la session précédente, **objectif final**, **deadlines**, et les
+   prochaines actions prioritaires. « Voilà où on en est, voilà ce qu'on vise. »
+2. **Chaque onglet crée de la valeur** et suit le même pattern :
+   **Contexte (où on en est) → Actions recommandées → Données**. On *propose*, on
+   n'affiche pas seulement.
+3. **Autonomisation maximale** par onglet, sous garde-fous : *propose → l'utilisateur
+   valide → auto sous budget/limites*. Jamais d'action sortante sans validation.
+4. **Interconnexion** entre les briques (veille → lead, bornes « whitespace » →
+   recherche, campagne → relances, réponse mail → action) : l'agent **traverse** le
+   graphe runs↔leads↔campagnes↔messages↔bornes↔veille, pas de silo.
+5. **Exigence visuelle** : esthétique **+** pratique **+** orientée objectif final.
+   Clarté > densité ; *progressive disclosure* (badges dépliables) ; présence agent
+   **proactive mais non intrusive et dismissable** (ne jamais être bavard/bloquant).
+6. **Itération v1 → vN** : chaque incrément **shippable, simple et clair**, meilleur
+   que le précédent ; CI verte + code mort retiré à chaque fois.
+7. **Mesurer la valeur** : une suggestion utile = une suggestion *suivie* (tracer le
+   clic → alimente la boucle d'apprentissage).
+
+**Prérequis technique identifié** (clé de voûte) : une **couche contexte** stockant
+*objectif final + deadlines + client actif + résumé de session* — sans elle, l'agent
+ne peut pas « rappeler » au login. À construire en premier quand on reprend ce chantier.
+
 ## Convention "fin de session"
 
 Quand l'utilisateur écrit **`fin de session`** (ou variante : *fin de session.*,
