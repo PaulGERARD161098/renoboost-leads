@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "leadId manquant." }, { status: 400 });
 
   const res = await analyseSatellite(supabase, leadId);
-  if ("error" in res) return NextResponse.json({ error: res.error });
+  if ("error" in res)
+    return NextResponse.json({ error: res.error, action: res.action, retry: res.retry });
   return NextResponse.json({ ok: true, result: res.result });
 }

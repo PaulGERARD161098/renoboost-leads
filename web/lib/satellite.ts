@@ -52,8 +52,13 @@ function parseJson(text: string): Record<string, unknown> | null {
   }
 }
 
+// Erreur d'analyse : `error` = cause lisible, `action` = quoi faire pour
+// débloquer, `retry` = vrai si une simple nouvelle tentative peut suffire
+// (panne transitoire IGN/IA) — faux pour les causes structurelles (config,
+// adresse manquante).
+type AnalyseError = { error: string; action: string; retry: boolean };
 type AnalyseResult =
-  | { error: string }
+  | AnalyseError
   | { ok: true; result: Record<string, unknown> };
 
 export async function analyseSatellite(
@@ -62,21 +67,31 @@ export async function analyseSatellite(
 ): Promise<AnalyseResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey)
-    return { error: "Analyse indisponible : ANTHROPIC_API_KEY manquante côté serveur." };
+    return {
+      error: "Clé d'API IA absente côté serveur (ANTHROPIC_API_KEY).",
+      action: "Configurer la variable d'environnement, puis rouvrir la fiche.",
+      retry: false,
+    };
 
   const { data: lead } = await supabase
     .from("leads")
     .select("id, entreprise, adresse, ville, code_postal, latitude, longitude")
     .eq("id", leadId)
     .single();
-  if (!lead) return { error: "Lead introuvable." };
+  if (!lead)
+    return { error: "Lead introuvable.", action: "Recharger la page.", retry: false };
 
   // 1) Coordonnées : connues, sinon géocodage BAN.
   let lat = lead.latitude as number | null;
   let lon = lead.longitude as number | null;
   if (lat == null || lon == null) {
     const q = [lead.adresse || lead.entreprise, lead.ville].filter(Boolean).join(" ");
-    if (!q.trim()) return { error: "Pas d'adresse pour localiser ce lead." };
+    if (!q.trim())
+      return {
+        error: "Pas de localisation : ni coordonnées, ni adresse, ni ville.",
+        action: "Renseigner l'adresse ou la ville du lead, puis réessayer.",
+        retry: false,
+      };
     const url = new URL("https://api-adresse.data.gouv.fr/search/");
     url.searchParams.set("q", q);
     url.searchParams.set("limit", "1");
@@ -93,7 +108,11 @@ export async function analyseSatellite(
       /* ignore */
     }
     if (lat == null || lon == null)
-      return { error: "Localisation impossible (géocodage échoué)." };
+      return {
+        error: "Géocodage impossible : l'adresse n'a pas pu être localisée.",
+        action: "Préciser ou corriger l'adresse, puis réessayer.",
+        retry: true,
+      };
     await supabase.from("leads").update({ latitude: lat, longitude: lon }).eq("id", leadId);
   }
 
@@ -109,7 +128,11 @@ export async function analyseSatellite(
     b64 = buf.toString("base64");
   } catch (e) {
     console.error("IGN fetch", e);
-    return { error: "Image satellite indisponible pour ce point." };
+    return {
+      error: "Image aérienne IGN indisponible sur ce point.",
+      action: "Souvent temporaire : réessayer dans un instant.",
+      retry: true,
+    };
   }
 
   // 3) Claude Vision.
@@ -140,7 +163,11 @@ export async function analyseSatellite(
     });
     if (!res.ok) {
       console.error("Anthropic vision", res.status, await res.text());
-      return { error: "Analyse IA momentanément indisponible." };
+      return {
+        error: "Service d'analyse IA momentanément indisponible.",
+        action: "Réessayer dans un instant.",
+        retry: true,
+      };
     }
     const data = await res.json();
     const text = (data.content ?? [])
@@ -148,13 +175,22 @@ export async function analyseSatellite(
       .map((b: { text: string }) => b.text)
       .join("\n");
     const parsed = parseJson(text);
-    if (!parsed) return { error: "Réponse IA illisible, réessaie." };
+    if (!parsed)
+      return {
+        error: "Réponse de l'IA illisible.",
+        action: "Réessayer.",
+        retry: true,
+      };
 
     const result = { ...parsed, image_url: imageUrl, analyse_le: new Date().toISOString() };
     await supabase.from("leads").update({ vision_satellite: result }).eq("id", leadId);
     return { ok: true, result };
   } catch (e) {
     console.error("vision error", e);
-    return { error: "Erreur lors de l'analyse." };
+    return {
+      error: "Erreur inattendue pendant l'analyse.",
+      action: "Réessayer.",
+      retry: true,
+    };
   }
 }

@@ -145,6 +145,9 @@ export default async function LeadPage({
           <SatellitePanel
             leadId={l.id}
             initial={(l.vision_satellite as Record<string, unknown> | null) ?? null}
+            canAnalyse={Boolean(
+              (l.latitude != null && l.longitude != null) || l.adresse || l.ville,
+            )}
           />
 
           <LeadEditor lead={l} />
