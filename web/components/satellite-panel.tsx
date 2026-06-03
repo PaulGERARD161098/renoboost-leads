@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { scoreColor } from "@/lib/ui";
 
 type Vision = {
@@ -17,20 +17,28 @@ type Vision = {
   analyse_le?: string;
 };
 
+type Echec = { message: string; action: string; retry: boolean };
+
 export function SatellitePanel({
   leadId,
   initial,
+  canAnalyse,
 }: {
   leadId: string;
   initial: Record<string, unknown> | null;
+  // Faux quand le lead n'a ni coordonnées, ni adresse, ni ville : inutile de
+  // tenter l'analyse, on affiche directement la cause.
+  canAnalyse: boolean;
 }) {
   const [result, setResult] = useState<Vision | null>((initial as Vision) ?? null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [echec, setEchec] = useState<Echec | null>(null);
+  // Empêche le double-déclenchement automatique (StrictMode monte deux fois).
+  const autoLance = useRef(false);
 
   async function analyser() {
     setLoading(true);
-    setError(null);
+    setEchec(null);
     try {
       const res = await fetch("/api/lead/satellite", {
         method: "POST",
@@ -38,14 +46,40 @@ export function SatellitePanel({
         body: JSON.stringify({ leadId }),
       });
       const data = await res.json();
-      if (data.error) setError(data.error);
+      if (data.error)
+        setEchec({
+          message: data.error,
+          action: data.action ?? "Réessayer.",
+          retry: data.retry ?? true,
+        });
       else setResult(data.result as Vision);
     } catch {
-      setError("Connexion impossible. Réessaie.");
+      setEchec({
+        message: "Connexion au serveur impossible.",
+        action: "Vérifier la connexion, puis réessayer.",
+        retry: true,
+      });
     } finally {
       setLoading(false);
     }
   }
+
+  // Auto-analyse à l'ouverture : si aucune analyse en cache, on la lance
+  // (ou on affiche pourquoi elle ne peut pas tourner).
+  useEffect(() => {
+    if (autoLance.current || result) return;
+    autoLance.current = true;
+    if (canAnalyse) {
+      analyser();
+    } else {
+      setEchec({
+        message: "Pas de localisation : ni coordonnées, ni adresse, ni ville.",
+        action: "Renseigner l'adresse ou la ville du lead, puis réessayer.",
+        retry: false,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-white p-5">
@@ -62,13 +96,26 @@ export function SatellitePanel({
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {!result && !error && (
+      {loading && !result && (
         <p className="text-sm text-[var(--muted)]">
-          Lance une analyse de la vue aérienne pour estimer le potentiel toiture &
-          ombrières de parking.
+          Analyse de la vue aérienne en cours…
         </p>
+      )}
+
+      {!loading && echec && !result && (
+        <div className="rounded-lg bg-amber-50 p-3 text-sm">
+          <p className="font-medium text-amber-900">Analyse non disponible</p>
+          <p className="mt-1 text-amber-800">{echec.message}</p>
+          <p className="mt-1 text-amber-700">→ {echec.action}</p>
+          {echec.retry && (
+            <button
+              onClick={analyser}
+              className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+            >
+              Réessayer
+            </button>
+          )}
+        </div>
       )}
 
       {result && (

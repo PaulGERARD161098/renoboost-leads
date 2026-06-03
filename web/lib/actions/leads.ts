@@ -127,6 +127,15 @@ export async function sendLead(leadId: string) {
     .eq("id", leadId);
   if (error) return { error: error.message };
   await logEvent(leadId, "envoye", { simulation });
+  // Trace le mail sortant dans le fil de conversation.
+  await supabase.from("lead_messages").insert({
+    lead_id: leadId,
+    direction: "out",
+    sujet: lead.mail_sujet,
+    corps: lead.mail_corps,
+    to_email: lead.contact_email,
+    source: simulation ? "systeme" : "instantly",
+  });
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/inbox");
   revalidatePath("/suivi");

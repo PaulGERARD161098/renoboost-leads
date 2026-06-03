@@ -56,7 +56,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Retrouve le lead par instantly_id en priorité, sinon par email.
-  let query = admin.from("leads").select("id, statut").limit(1);
+  let query = admin
+    .from("leads")
+    .select("id, statut, contact_email, mail_sujet")
+    .limit(1);
   query = instantlyId
     ? query.eq("instantly_id", instantlyId)
     : query.ilike("contact_email", email!);
@@ -94,6 +97,33 @@ export async function POST(req: NextRequest) {
   await admin
     .from("lead_events")
     .insert({ lead_id: found.id, type: kind, payload: { source: "instantly" } });
+
+  // Alimente le fil de conversation : on capte le corps de la réponse entrante
+  // (et, par sécurité, le mail sortant si Instantly nous le renvoie).
+  if (kind === "repondu") {
+    const corps = pick(body, [
+      "reply_text",
+      "reply_text_snippet",
+      "reply_html",
+      "reply_body",
+      "body",
+      "text",
+      "message",
+    ]);
+    const sujet =
+      pick(body, ["reply_subject", "subject"]) ??
+      (found.mail_sujet as string | null) ??
+      null;
+    await admin.from("lead_messages").insert({
+      lead_id: found.id,
+      direction: "in",
+      sujet,
+      corps,
+      from_email: (found.contact_email as string | null) ?? email,
+      source: "instantly",
+      instantly_message_id: instantlyId,
+    });
+  }
 
   return NextResponse.json({ ok: true, matched: true, kind });
 }

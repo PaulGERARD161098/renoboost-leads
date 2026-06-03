@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Lead, LeadEvent } from "@/lib/database.types";
+import type { Lead, LeadEvent, LeadMessage, Voicemail } from "@/lib/database.types";
 import { LeadEditor } from "@/components/lead-editor";
 import { LeadStatusActions } from "@/components/lead-status-actions";
 import { LeadNotes } from "@/components/lead-notes";
 import { LeadRelance } from "@/components/lead-relance";
 import { SatellitePanel } from "@/components/satellite-panel";
+import { MailThread } from "@/components/mail-thread";
+import { ColdCallPanel } from "@/components/cold-call-panel";
+import { twilioConfigure } from "@/lib/twilio";
 import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
@@ -29,6 +32,8 @@ const EVENT_LABEL: Record<string, string> = {
   note: "Note",
   rebond: "Rebond (bounce)",
   oubli_rgpd: "Données effacées (RGPD)",
+  message_vocal_depose: "Message vocal déposé",
+  rappel_recu: "Rappel reçu",
 };
 
 export default async function LeadPage({
@@ -53,6 +58,18 @@ export default async function LeadPage({
     .select("*")
     .eq("lead_id", id)
     .order("at", { ascending: false });
+
+  const { data: messages } = await supabase
+    .from("lead_messages")
+    .select("*")
+    .eq("lead_id", id)
+    .order("at", { ascending: true });
+
+  const { data: voicemails } = await supabase
+    .from("voicemails")
+    .select("*")
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false });
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
@@ -145,6 +162,18 @@ export default async function LeadPage({
           <SatellitePanel
             leadId={l.id}
             initial={(l.vision_satellite as Record<string, unknown> | null) ?? null}
+            canAnalyse={Boolean(
+              (l.latitude != null && l.longitude != null) || l.adresse || l.ville,
+            )}
+          />
+
+          <MailThread messages={(messages as LeadMessage[] | null) ?? []} />
+
+          <ColdCallPanel
+            leadId={l.id}
+            initial={(voicemails as Voicemail[] | null) ?? []}
+            configured={twilioConfigure()}
+            hasPhone={Boolean(l.contact_tel)}
           />
 
           <LeadEditor lead={l} />
