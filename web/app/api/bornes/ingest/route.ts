@@ -37,6 +37,16 @@ async function handle(req: NextRequest) {
   } catch (e) {
     out.irve = { error: String(e) };
   }
+  // Trace le résultat en base (observabilité : lisible même sans logs Vercel).
+  try {
+    await admin.from("agent_journal").insert({
+      type: "bornes_ingest",
+      message: `Ingestion bornes (source=${source})`,
+      payload: out,
+    });
+  } catch {
+    /* le log ne doit jamais casser l'ingestion */
+  }
   return NextResponse.json({ ok: true, ...out });
 }
 
