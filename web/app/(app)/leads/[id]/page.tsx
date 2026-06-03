@@ -9,9 +9,8 @@ import { LeadRelance } from "@/components/lead-relance";
 import { SatellitePanel } from "@/components/satellite-panel";
 import { MailThread } from "@/components/mail-thread";
 import { ColdCallPanel } from "@/components/cold-call-panel";
-import { BornesBadge } from "@/components/bornes-badge";
+import { BornesLinks } from "@/components/bornes-links";
 import { twilioConfigure } from "@/lib/twilio";
-import { bornesProximite, type ProximiteBornes } from "@/lib/bornes";
 import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
@@ -73,11 +72,6 @@ export default async function LeadPage({
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
 
-  // Équipement VE autour du lead (si on connaît ses coordonnées).
-  let bornesProx: ProximiteBornes | null = null;
-  if (l.latitude != null && l.longitude != null) {
-    bornesProx = await bornesProximite(supabase, l.latitude, l.longitude, 10);
-  }
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
@@ -175,7 +169,7 @@ export default async function LeadPage({
             )}
           />
 
-          <BornesBadge prox={bornesProx} hasLocation={l.latitude != null && l.longitude != null} />
+          <BornesLinks adresse={l.adresse} ville={l.ville} codePostal={l.code_postal} />
 
           <MailThread messages={(messages as LeadMessage[] | null) ?? []} />
 
