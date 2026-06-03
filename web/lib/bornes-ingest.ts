@@ -148,19 +148,23 @@ export async function ingestIrve(admin: SupabaseClient) {
     batch = [];
   };
 
-  const rows: Borne[] = [];
+  // Dédoublonnage par identifiant : le fichier IRVE contient des clés en double
+  // (mêmes id_pdc_itinerance, ou points co-localisés via le repli lat,lng). Sans
+  // ça, un lot contenant deux fois la même clé fait échouer tout le lot à l'upsert
+  // (ON CONFLICT ... cannot affect row a second time).
+  const byId = new Map<string, Borne>();
   lus = forEachCsvRow(text, delim, (r) => {
     const b = mapIrve(r);
     if (b) {
       geocodes++;
-      rows.push(b);
+      byId.set(b.source_id, b);
     }
   });
-  for (const b of rows) {
+  for (const b of byId.values()) {
     batch.push(b);
     if (batch.length >= BATCH) await flush();
   }
   await flush();
 
-  return { source: "irve", lus, geocodes, inserted, errors };
+  return { source: "irve", lus, geocodes, uniques: byId.size, inserted, errors };
 }
