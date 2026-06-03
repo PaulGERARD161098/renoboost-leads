@@ -7,10 +7,6 @@
     {
       "path": "/api/veille/tick",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/bornes/ingest",
-      "schedule": "0 4 * * 1"
     }
   ]
 }
