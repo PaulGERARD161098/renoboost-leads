@@ -10,6 +10,32 @@ const MODEL = "claude-haiku-4-5";
 const MAX_ITERATIONS = 6;
 const MAX_TOKENS = 1024;
 
+// Consigne du « point d'ouverture » proactif : Magellan démarre la session en
+// faisant le point tout seul et en proposant des actions, au lieu d'attendre.
+const BRIEFING_INSTRUCTION = `[DÉMARRAGE DE SESSION] Fais un point d'ouverture, bref et chaleureux, pour lancer la journée commerciale.
+1. Lis l'état réel avec tes outils : compter_leads, lister_runs (recherches récentes) et statut_agent.
+2. En 3-4 lignes maximum, résume la situation utile : leads à valider/relancer, réponses reçues, recherches en cours ou terminées.
+3. Propose 2 à 4 actions concrètes et priorisées (les plus utiles maintenant).
+4. Termine par une question d'ouverture courte (ex. « Par quoi on commence ? »).
+Style direct et concret, pas de remplissage.
+Termine IMPÉRATIVEMENT ton message par une ligne au format exact :
+===ACTIONS=== action 1 | action 2 | action 3
+où chaque action est une phrase que je peux te renvoyer telle quelle (ex. « Valide mes leads en attente »).`;
+
+// Extrait la ligne ===ACTIONS=== en suggestions cliquables, et la retire du texte.
+function parseActions(text: string): { reply: string; suggestions: string[] } {
+  const idx = text.lastIndexOf("===ACTIONS===");
+  if (idx === -1) return { reply: text, suggestions: [] };
+  const reply = text.slice(0, idx).trim();
+  const suggestions = text
+    .slice(idx + "===ACTIONS===".length)
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  return { reply: reply || text, suggestions };
+}
+
 type Msg = { role: "user" | "assistant"; content: unknown };
 
 export async function POST(req: NextRequest) {
@@ -30,20 +56,28 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  const incoming: unknown[] = Array.isArray(body?.messages) ? body.messages : [];
-  const messages: Msg[] = incoming
-    .filter(
-      (m): m is { role: "user" | "assistant"; content: string } =>
-        !!m &&
-        typeof m === "object" &&
-        ((m as Msg).role === "user" || (m as Msg).role === "assistant") &&
-        typeof (m as Msg).content === "string",
-    )
-    .slice(-12)
-    .map((m) => ({ role: m.role, content: m.content }));
+  const briefing = body?.briefing === true;
 
-  if (messages.length === 0) {
-    return NextResponse.json({ error: "Message vide." }, { status: 400 });
+  let messages: Msg[];
+  if (briefing) {
+    // Point d'ouverture proactif : on amorce avec la consigne de briefing.
+    messages = [{ role: "user", content: BRIEFING_INSTRUCTION }];
+  } else {
+    const incoming: unknown[] = Array.isArray(body?.messages) ? body.messages : [];
+    messages = incoming
+      .filter(
+        (m): m is { role: "user" | "assistant"; content: string } =>
+          !!m &&
+          typeof m === "object" &&
+          ((m as Msg).role === "user" || (m as Msg).role === "assistant") &&
+          typeof (m as Msg).content === "string",
+      )
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    if (messages.length === 0) {
+      return NextResponse.json({ error: "Message vide." }, { status: 400 });
+    }
   }
 
   try {
@@ -106,9 +140,11 @@ export async function POST(req: NextRequest) {
         .map((b) => b.text as string)
         .join("\n")
         .trim();
+      const { reply, suggestions } = parseActions(text);
       return NextResponse.json({
-        reply: text || "Je n'ai pas de réponse à formuler.",
+        reply: reply || "Je n'ai pas de réponse à formuler.",
         steps,
+        suggestions,
       });
     }
 
