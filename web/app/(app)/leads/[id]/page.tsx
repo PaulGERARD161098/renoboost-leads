@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Lead, LeadEvent } from "@/lib/database.types";
+import type { Lead, LeadEvent, LeadMessage } from "@/lib/database.types";
 import { LeadEditor } from "@/components/lead-editor";
 import { LeadStatusActions } from "@/components/lead-status-actions";
 import { LeadNotes } from "@/components/lead-notes";
 import { LeadRelance } from "@/components/lead-relance";
 import { SatellitePanel } from "@/components/satellite-panel";
+import { MailThread } from "@/components/mail-thread";
 import {
   LEAD_STATUS_COLOR,
   LEAD_STATUS_LABEL,
@@ -53,6 +54,12 @@ export default async function LeadPage({
     .select("*")
     .eq("lead_id", id)
     .order("at", { ascending: false });
+
+  const { data: messages } = await supabase
+    .from("lead_messages")
+    .select("*")
+    .eq("lead_id", id)
+    .order("at", { ascending: true });
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
@@ -149,6 +156,8 @@ export default async function LeadPage({
               (l.latitude != null && l.longitude != null) || l.adresse || l.ville,
             )}
           />
+
+          <MailThread messages={(messages as LeadMessage[] | null) ?? []} />
 
           <LeadEditor lead={l} />
         </div>

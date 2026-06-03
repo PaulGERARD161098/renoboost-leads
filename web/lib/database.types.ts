@@ -167,3 +167,19 @@ export interface LeadEvent {
   actor: string | null;
   at: string;
 }
+
+export type MailDirection = "out" | "in";
+export type MailSource = "manuel" | "instantly" | "systeme";
+
+export interface LeadMessage {
+  id: string;
+  lead_id: string;
+  direction: MailDirection;
+  sujet: string | null;
+  corps: string | null;
+  from_email: string | null;
+  to_email: string | null;
+  source: MailSource;
+  instantly_message_id: string | null;
+  at: string;
+}
