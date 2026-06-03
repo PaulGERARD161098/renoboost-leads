@@ -17,6 +17,11 @@ export default async function BornesPage() {
   const { data: stats } = await supabase.rpc("bornes_stats_departements");
   const depts = (stats as { departement: string; n: number }[] | null) ?? [];
 
+  const { data: ops } = await supabase.rpc("bornes_stats_operateurs");
+  const operateurs = (ops as { operateur: string; n: number }[] | null) ?? [];
+  const totalOps = operateurs.reduce((s, o) => s + o.n, 0) || 1;
+  const maxOp = operateurs[0]?.n ?? 1;
+
   const { data: journal } = await supabase
     .from("agent_journal")
     .select("at, payload")
@@ -60,6 +65,36 @@ export default async function BornesPage() {
       {depts.length > 0 && (
         <div className="mb-5">
           <BornesRadar depts={depts} />
+        </div>
+      )}
+
+      {operateurs.length > 0 && (
+        <div className="mb-5 rounded-xl border border-[var(--border)] bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            🥊 Parts de marché — opérateurs
+          </h2>
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            Qui équipe le marché (national). Repère les acteurs dominants et les angles
+            de différenciation.
+          </p>
+          <ul className="space-y-2">
+            {operateurs.map((o) => (
+              <li key={o.operateur} className="flex items-center gap-3 text-sm">
+                <span className="w-48 shrink-0 truncate" title={o.operateur}>
+                  {o.operateur}
+                </span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                  <span
+                    className="block h-full rounded-full bg-[var(--brand)]"
+                    style={{ width: `${(o.n / maxOp) * 100}%` }}
+                  />
+                </span>
+                <span className="w-28 shrink-0 text-right text-[var(--muted)]">
+                  {o.n.toLocaleString("fr-FR")} ({((o.n / totalOps) * 100).toFixed(1)} %)
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
