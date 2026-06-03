@@ -25,15 +25,17 @@ async function handle(req: NextRequest) {
 
   const source = (req.nextUrl.searchParams.get("source") || "all").toLowerCase();
   const out: Record<string, unknown> = {};
-  try {
-    if (source === "irve" || source === "all") out.irve = await ingestIrve(admin);
-  } catch (e) {
-    out.irve = { error: String(e) };
-  }
+  // Rossini D'ABORD : petit et fiable, il aboutit même si IRVE (gros fichier)
+  // dépasse ensuite le temps imparti.
   try {
     if (source === "rossini" || source === "all") out.rossini = await ingestRossini(admin);
   } catch (e) {
     out.rossini = { error: String(e) };
+  }
+  try {
+    if (source === "irve" || source === "all") out.irve = await ingestIrve(admin);
+  } catch (e) {
+    out.irve = { error: String(e) };
   }
   return NextResponse.json({ ok: true, ...out });
 }
