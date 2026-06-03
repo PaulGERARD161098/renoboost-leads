@@ -43,6 +43,8 @@ export interface Verticale {
   updated_at: string;
 }
 
+export type RunQualite = "bonne" | "moyenne" | "mauvaise";
+
 export interface Run {
   id: string;
   verticale_id: string | null;
@@ -56,6 +58,11 @@ export interface Run {
   cout_eur: number;
   log_url: string | null;
   erreur: string | null;
+  is_test: boolean;
+  nom: string | null;
+  note: string | null;
+  archive: boolean;
+  qualite: RunQualite | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

@@ -6,22 +6,40 @@ import { createRun } from "@/lib/actions/runs";
 import { createZoneCible, deleteZoneCible } from "@/lib/actions/zones";
 import type { Verticale, ZoneCible } from "@/lib/database.types";
 
+export type RechercheInitial = {
+  verticaleId?: string;
+  mode?: "departement" | "adresse";
+  departement?: string;
+  adresse?: string;
+  rayon?: string;
+  effectifMin?: string;
+  budget?: string;
+  isTest?: boolean;
+};
+
 export function RechercheForm({
   verticales,
   zones = [],
+  initial,
 }: {
   verticales: Verticale[];
   zones?: ZoneCible[];
+  initial?: RechercheInitial;
 }) {
   const router = useRouter();
-  const [verticaleId, setVerticaleId] = useState(verticales[0]?.id ?? "");
-  const [mode, setMode] = useState<"departement" | "adresse">("departement");
-  const [departement, setDepartement] = useState("59");
-  const [adresse, setAdresse] = useState("");
-  const [rayon, setRayon] = useState("10");
+  const [verticaleId, setVerticaleId] = useState(
+    initial?.verticaleId ?? verticales[0]?.id ?? "",
+  );
+  const [mode, setMode] = useState<"departement" | "adresse">(
+    initial?.mode ?? "departement",
+  );
+  const [departement, setDepartement] = useState(initial?.departement ?? "59");
+  const [adresse, setAdresse] = useState(initial?.adresse ?? "");
+  const [rayon, setRayon] = useState(initial?.rayon ?? "10");
   const [nomZone, setNomZone] = useState("");
-  const [effectifMin, setEffectifMin] = useState("50");
-  const [budget, setBudget] = useState("50");
+  const [effectifMin, setEffectifMin] = useState(initial?.effectifMin ?? "50");
+  const [budget, setBudget] = useState(initial?.budget ?? "50");
+  const [isTest, setIsTest] = useState(initial?.isTest ?? false);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -75,11 +93,14 @@ export function RechercheForm({
         rayonKm: mode === "adresse" ? Number(rayon) || 10 : null,
         effectifMin: effectifMin ? Number(effectifMin) : null,
         budgetEur: budget ? Number(budget) : null,
+        isTest,
       });
       if (res.error) setMsg(`❌ ${res.error}`);
       else
         setMsg(
-          "✅ Recherche demandée. Le moteur la traitera ; les prospects apparaîtront dans Prospects.",
+          isTest
+            ? "✅ Recherche test demandée (mode démo, gratuit). Les faux prospects apparaîtront dans Prospects."
+            : "✅ Recherche demandée. Le moteur la traitera ; les prospects apparaîtront dans Prospects.",
         );
     });
   }
@@ -245,12 +266,36 @@ export function RechercheForm({
         />
       </div>
 
+      <label className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-slate-50 p-3 text-sm">
+        <input
+          type="checkbox"
+          checked={isTest}
+          onChange={(e) => setIsTest(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="font-medium">Recherche test (mode démo, gratuit)</span>
+          <span className="block text-xs text-[var(--muted)]">
+            Génère de faux prospects sans appel externe ni coût — pour essayer
+            l&apos;interface.
+          </span>
+        </span>
+      </label>
+
       <button
         type="submit"
         disabled={pending || !verticaleId}
-        className="w-full rounded-lg bg-[var(--brand)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--brand-dark)] disabled:opacity-50"
+        className={`w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${
+          isTest
+            ? "bg-violet-600 hover:bg-violet-700"
+            : "bg-[var(--brand)] hover:bg-[var(--brand-dark)]"
+        }`}
       >
-        {pending ? "Envoi…" : "Lancer la recherche"}
+        {pending
+          ? "Envoi…"
+          : isTest
+            ? "Lancer la recherche test"
+            : "Lancer la recherche"}
       </button>
       {msg && <p className="text-sm">{msg}</p>}
     </form>
