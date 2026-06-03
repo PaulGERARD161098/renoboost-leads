@@ -9,10 +9,13 @@ export function BornesLinks({
   adresse,
   ville,
   codePostal,
+  irve,
 }: {
   adresse: string | null;
   ville: string | null;
   codePostal: string | null;
+  // Synthèse IRVE (bornes publiques) calculée si le lead est géolocalisé.
+  irve?: { rayon: number; rayonKm: number; surSite: number; plusProcheKm: number | null } | null;
 }) {
   const [copie, setCopie] = useState(false);
   const adresseComplete = [adresse, codePostal, ville].filter(Boolean).join(" ").trim();
@@ -34,6 +37,25 @@ export function BornesLinks({
         Vérifie sur les cartes si ce prospect (ou un voisin) a déjà une borne.
         {adresseComplete ? " Recherche l’adresse ci-dessous sur la carte ouverte." : ""}
       </p>
+
+      {irve && (
+        <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+          {irve.surSite > 0 ? (
+            <span className="font-medium text-amber-700">
+              ⚡ Borne publique sur site — probablement déjà équipé.
+            </span>
+          ) : irve.rayon > 0 ? (
+            <span className="text-slate-700">
+              ⚡ {irve.rayon} borne(s) publique(s) dans {irve.rayonKm} km
+              {irve.plusProcheKm != null ? ` · la plus proche à ${irve.plusProcheKm} km` : ""} — non équipé sur site.
+            </span>
+          ) : (
+            <span className="text-[var(--muted)]">
+              Aucune borne publique connue dans {irve.rayonKm} km (données IRVE).
+            </span>
+          )}
+        </div>
+      )}
 
       {adresseComplete && (
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">

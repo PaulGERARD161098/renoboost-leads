@@ -10,6 +10,7 @@ import { SatellitePanel } from "@/components/satellite-panel";
 import { MailThread } from "@/components/mail-thread";
 import { ColdCallPanel } from "@/components/cold-call-panel";
 import { BornesLinks } from "@/components/bornes-links";
+import { bornesProximite } from "@/lib/bornes";
 import { twilioConfigure } from "@/lib/twilio";
 import {
   LEAD_STATUS_COLOR,
@@ -71,6 +72,23 @@ export default async function LeadPage({
     .select("*")
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
+
+  // Proximité IRVE (bornes publiques) si le lead est géolocalisé.
+  let irveProx: {
+    rayon: number;
+    rayonKm: number;
+    surSite: number;
+    plusProcheKm: number | null;
+  } | null = null;
+  if (l.latitude != null && l.longitude != null) {
+    const p = await bornesProximite(supabase, l.latitude, l.longitude, 10);
+    irveProx = {
+      rayon: p.rayon,
+      rayonKm: p.rayon_km,
+      surSite: p.sur_site,
+      plusProcheKm: p.plus_proche_km,
+    };
+  }
 
 
   const verdict = scoreVerdict(l.score);
@@ -169,7 +187,12 @@ export default async function LeadPage({
             )}
           />
 
-          <BornesLinks adresse={l.adresse} ville={l.ville} codePostal={l.code_postal} />
+          <BornesLinks
+            adresse={l.adresse}
+            ville={l.ville}
+            codePostal={l.code_postal}
+            irve={irveProx}
+          />
 
           <MailThread messages={(messages as LeadMessage[] | null) ?? []} />
 
