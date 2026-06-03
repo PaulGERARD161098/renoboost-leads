@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { BornesAdmin } from "@/components/bornes-admin";
+import { BornesAnalytics } from "@/components/bornes-analytics";
 import { formatDate } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -46,26 +47,7 @@ export default async function BornesPage() {
         <BornesAdmin />
       </div>
 
-      {depts.length > 0 ? (
-        <div className="rounded-xl border border-[var(--border)] bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Bornes par département
-          </h2>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3 md:grid-cols-4">
-            {depts.map((d) => (
-              <div key={d.departement} className="flex justify-between border-b border-[var(--border)] py-1">
-                <span className="text-[var(--muted)]">Dépt {d.departement}</span>
-                <span className="font-medium">{d.n.toLocaleString("fr-FR")}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="rounded-xl border border-dashed border-[var(--border)] bg-white p-6 text-center text-sm text-[var(--muted)]">
-          Aucune borne chargée. Clique « Importer / rafraîchir IRVE » ci-dessus
-          (le résultat s’affiche aussitôt).
-        </p>
-      )}
+      <BornesAnalytics depts={depts} />
 
       {dernier && (
         <p className="mt-4 text-xs text-[var(--muted)]">
