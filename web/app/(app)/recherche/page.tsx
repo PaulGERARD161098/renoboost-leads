@@ -35,9 +35,9 @@ function initialFromRun(run: Run): RechercheInitial {
 export default async function RecherchePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; dept?: string }>;
 }) {
-  const { from } = await searchParams;
+  const { from, dept } = await searchParams;
   const supabase = await createClient();
   const { data: verticales } = await supabase
     .from("verticales")
@@ -69,6 +69,17 @@ export default async function RecherchePage({
       .eq("id", from)
       .maybeSingle();
     if (src) initial = initialFromRun(src as Run);
+  } else if (dept) {
+    // Pré-remplissage depuis « Lancer une recherche ici » (radar Bornes VE).
+    initial = {
+      mode: "departement",
+      departement: dept,
+      adresse: "",
+      rayon: "10",
+      effectifMin: "50",
+      budget: "50",
+      isTest: false,
+    };
   }
 
   // Compteurs par recherche + nom de cible (pour les cartouches).
