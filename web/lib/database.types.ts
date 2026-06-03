@@ -110,6 +110,29 @@ export interface Lead {
   updated_at: string;
 }
 
+export type BorneSource = "irve" | "rossini" | "chargemap";
+
+export interface BorneRecharge {
+  id: string;
+  source: BorneSource;
+  source_id: string | null;
+  nom_station: string | null;
+  operateur: string | null;
+  amenageur: string | null;
+  enseigne: string | null;
+  lat: number | null;
+  lng: number | null;
+  puissance_kw: number | null;
+  nb_points: number | null;
+  adresse: string | null;
+  code_postal: string | null;
+  commune: string | null;
+  departement: string | null;
+  date_maj: string | null;
+  raw: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export type CallStatut =
   | "a_appeler"
   | "message_depose"
