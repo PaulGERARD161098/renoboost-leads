@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Lead, Run } from "@/lib/database.types";
 import { RunCard, type RunCounts } from "./run-card";
+import { RunActions } from "./run-actions";
 import { LeadsTable } from "./leads-table";
 
 /**
@@ -44,6 +45,7 @@ export function RunGroup({
           variant="header"
           chevron={open ? "open" : "closed"}
           detailHref={`/recherche/${run.id}`}
+          actions={<RunActions run={run} />}
         />
       </div>
       {open && (

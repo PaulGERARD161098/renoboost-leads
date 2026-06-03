@@ -14,12 +14,18 @@ const TO_PROCESS: LeadStatus[] = ["nouveau", "a_valider", "valide"];
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ statut?: string; q?: string; vue?: string }>;
+  searchParams: Promise<{
+    statut?: string;
+    q?: string;
+    vue?: string;
+    archives?: string;
+  }>;
 }) {
-  const { statut, q, vue } = await searchParams;
+  const { statut, q, vue, archives } = await searchParams;
   const search = q?.trim();
   // Les filtres niveau-lead (recherche texte, statut) forcent la vue à plat.
   const flat = vue === "plat" || !!search || !!statut;
+  const showArchived = archives === "1";
   const supabase = await createClient();
 
   if (flat) {
@@ -29,11 +35,13 @@ export default async function InboxPage({
   }
 
   // Vue groupée par recherche (run) — la plus récente d'abord.
-  const { data: runsData } = await supabase
+  let runsQuery = supabase
     .from("runs")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(30);
+  if (!showArchived) runsQuery = runsQuery.eq("archive", false);
+  const { data: runsData } = await runsQuery;
   const runs = (runsData as Run[] | null) ?? [];
 
   const { data: vData } = await supabase.from("verticales").select("id, nom");
@@ -77,12 +85,24 @@ export default async function InboxPage({
             prospects.
           </p>
         </div>
-        <Link
-          href="/inbox?vue=plat"
-          className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-slate-50"
-        >
-          Vue à plat
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href={showArchived ? "/inbox" : "/inbox?archives=1"}
+            className={`rounded-lg border px-3 py-1.5 text-sm hover:bg-slate-50 ${
+              showArchived
+                ? "border-[var(--brand)] bg-blue-50 text-[var(--brand)]"
+                : "border-[var(--border)] bg-white text-[var(--muted)]"
+            }`}
+          >
+            {showArchived ? "Masquer archivées" : "Archivées"}
+          </Link>
+          <Link
+            href="/inbox?vue=plat"
+            className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-slate-50"
+          >
+            Vue à plat
+          </Link>
+        </div>
       </div>
 
       {activeRun && (

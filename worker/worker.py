@@ -18,12 +18,22 @@ class Worker:
         config: WorkerConfig,
         db: SupabaseRest | None = None,
         pipeline: Pipeline | None = None,
+        demo_pipeline: Pipeline | None = None,
     ) -> None:
         self.config = config
         self.db = db or SupabaseRest(
             config.rest_url, config.service_role_key, config.request_timeout_s
         )
         self.pipeline = pipeline or build_pipeline(config.mode)
+        # Pipeline utilisé pour les runs marqués « test » : mode démo (faux leads,
+        # zéro appel externe), quel que soit WORKER_MODE.
+        self._demo_pipeline = demo_pipeline
+
+    def _pipeline_for(self, run: dict[str, Any]) -> Pipeline:
+        """Choisit le pipeline d'un run : démo si `is_test`, sinon le pipeline configuré."""
+        if run.get("is_test"):
+            return self._demo_pipeline or build_pipeline("demo")
+        return self.pipeline
 
     def poll_once(self) -> int:
         """Traite les runs en attente. Renvoie le nombre de runs traités."""
@@ -55,7 +65,7 @@ class Worker:
                     run_id, etape=etape, progress=progress, counts=counts
                 )
 
-            result = self.pipeline.run(ctx, emit)
+            result = self._pipeline_for(run).run(ctx, emit)
             self.db.insert_leads(result.leads)
             self.db.finalize_run(
                 run_id,
