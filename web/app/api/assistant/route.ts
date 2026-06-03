@@ -12,15 +12,14 @@ const MAX_TOKENS = 1024;
 
 // Consigne du « point d'ouverture » proactif : Magellan démarre la session en
 // faisant le point tout seul et en proposant des actions, au lieu d'attendre.
-const BRIEFING_INSTRUCTION = `[DÉMARRAGE DE SESSION] Fais un point d'ouverture, bref et chaleureux, pour lancer la journée commerciale.
-1. Lis l'état réel avec tes outils : compter_leads, lister_runs (recherches récentes) et statut_agent.
-2. En 3-4 lignes maximum, résume la situation utile : leads à valider/relancer, réponses reçues, recherches en cours ou terminées.
-3. Propose 2 à 4 actions concrètes et priorisées (les plus utiles maintenant).
-4. Termine par une question d'ouverture courte (ex. « Par quoi on commence ? »).
-Style direct et concret, pas de remplissage.
-Termine IMPÉRATIVEMENT ton message par une ligne au format exact :
-===ACTIONS=== action 1 | action 2 | action 3
-où chaque action est une phrase que je peux te renvoyer telle quelle (ex. « Valide mes leads en attente »).`;
+const BRIEFING_INSTRUCTION = `[DÉMARRAGE DE SESSION] Tu ouvres la session, sois actif et bref.
+1. Salue en une ligne.
+2. Demande POUR QUEL CLIENT / VERTICALE on travaille aujourd'hui. Utilise lister_cibles pour connaître les verticales existantes et propose-les. Formule comme une vraie proposition (ex: « On reprend pour Rossini Energy ? Si oui je te fais l'état des lieux complet. »).
+3. NE déroule PAS encore l'état des lieux ni le plan : attends le choix du client.
+Style direct, chaleureux, 2-3 lignes max.
+Termine IMPÉRATIVEMENT par une ligne au format exact :
+===ACTIONS=== On reprend pour <Verticale A> | On reprend pour <Verticale B> | Vue d'ensemble (tous clients)
+en remplaçant par les vraies verticales renvoyées par lister_cibles (max 4 actions). Chaque action est une phrase que je peux te renvoyer telle quelle.`;
 
 // Extrait la ligne ===ACTIONS=== en suggestions cliquables, et la retire du texte.
 function parseActions(text: string): { reply: string; suggestions: string[] } {

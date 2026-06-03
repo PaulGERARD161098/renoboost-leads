@@ -81,6 +81,49 @@ export function AssistantWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Dictée vocale (API navigateur Web Speech) : on parle, ça remplit le champ.
+  const [listening, setListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    setSpeechSupported(
+      typeof window !== "undefined" &&
+        ("SpeechRecognition" in window || "webkitSpeechRecognition" in window),
+    );
+  }, []);
+
+  function toggleMic() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Ctor) return;
+    const rec = new Ctor();
+    rec.lang = "fr-FR";
+    rec.interimResults = true;
+    rec.continuous = false;
+    let finalText = "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const tr = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += tr;
+        else interim += tr;
+      }
+      setInput((finalText + interim).trim());
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recognitionRef.current = rec;
+    setListening(true);
+    rec.start();
+  }
+
   async function send(text: string) {
     const content = text.trim();
     if (!content || loading) return;
@@ -238,10 +281,25 @@ export function AssistantWidget() {
             }}
             className="flex items-center gap-2 border-t border-[var(--border)] p-3"
           >
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-label={listening ? "Arrêter la dictée" : "Dicter à la voix"}
+                title={listening ? "Arrêter la dictée" : "Parler à Magellan"}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-base transition ${
+                  listening
+                    ? "animate-pulse border-red-400 bg-red-50 text-red-600"
+                    : "border-[var(--border)] text-[var(--muted)] hover:bg-slate-50"
+                }`}
+              >
+                🎙️
+              </button>
+            )}
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Écris ta question…"
+              placeholder={listening ? "Parle…" : "Écris ta question…"}
               className="flex-1 rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             />
             <button
