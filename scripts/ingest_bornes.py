@@ -106,7 +106,11 @@ def open_source(args: argparse.Namespace) -> io.TextIOBase:
         return open(args.file, encoding="utf-8-sig", newline="")
     url = args.url or IRVE_CSV_URL
     print(f"Téléchargement : {url}", file=sys.stderr)
-    raw = urllib.request.urlopen(url, timeout=300).read()  # noqa: S310
+    # User-Agent explicite : data.gouv.fr refuse (403) les requêtes anonymes.
+    req = urllib.request.Request(  # noqa: S310
+        url, headers={"User-Agent": "renoboost-leads/1.0 (ingestion bornes IRVE)"}
+    )
+    raw = urllib.request.urlopen(req, timeout=300).read()  # noqa: S310
     return io.StringIO(raw.decode("utf-8-sig", errors="replace"))
 
 
