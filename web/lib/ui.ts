@@ -29,6 +29,26 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   echoue: "Échoué",
 };
 
+export const RUN_STATUS_COLOR: Record<RunStatus, string> = {
+  demande: "bg-slate-100 text-slate-600",
+  en_cours: "bg-blue-100 text-blue-800",
+  termine: "bg-emerald-100 text-emerald-800",
+  echoue: "bg-red-100 text-red-700",
+};
+
+/** Libellé court de la zone d'un run (département ou adresse + rayon). */
+export function zoneLabel(zone: Record<string, unknown> | null | undefined): string {
+  if (!zone) return "Zone non précisée";
+  const dep = (zone as { departement?: string }).departement;
+  if (dep) return `Dépt ${dep}`;
+  const adr = (zone as { adresse?: string }).adresse;
+  if (adr) {
+    const r = (zone as { rayon_par_point_km?: number }).rayon_par_point_km;
+    return r ? `${adr} · ${r} km` : adr;
+  }
+  return "Zone non précisée";
+}
+
 export function scoreColor(score: number | null): string {
   if (score === null) return "bg-slate-100 text-slate-500";
   if (score >= 75) return "bg-emerald-100 text-emerald-800";

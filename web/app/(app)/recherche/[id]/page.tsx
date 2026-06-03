@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, Run, Verticale } from "@/lib/database.types";
 import { RUN_STATUS_LABEL, LEAD_STATUS_LABEL, scoreColor, formatDate } from "@/lib/ui";
+import { RunMapLoader } from "@/components/run-map-loader";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +35,27 @@ export default async function RechercheDetailPage({
 
   const { data: leadsData } = await supabase
     .from("leads")
-    .select("id, entreprise, ville, score, statut, contact_email")
+    .select("id, entreprise, ville, score, statut, contact_email, latitude, longitude")
     .eq("run_id", id)
     .order("score", { ascending: false, nullsFirst: false })
     .limit(500);
   const leads = (leadsData as Partial<Lead>[]) ?? [];
 
-  const zone = run.zone as { departement?: string } | undefined;
+  const zone = run.zone as
+    | { departement?: string; adresse?: string; rayon_par_point_km?: number }
+    | undefined;
+  const mapLeads = leads.map((l) => ({
+    id: l.id as string,
+    entreprise: (l.entreprise as string) ?? "—",
+    ville: l.ville ?? null,
+    score: l.score ?? null,
+    latitude: l.latitude ?? null,
+    longitude: l.longitude ?? null,
+  }));
+  const hasGeo = mapLeads.some(
+    (l) => l.latitude != null && l.longitude != null,
+  );
+  const showMap = !!zone?.departement || !!zone?.adresse || hasGeo;
 
   return (
     <div>
@@ -65,6 +80,26 @@ export default async function RechercheDetailPage({
         <Stat label="Budget" value={run.budget_eur ? `${run.budget_eur} €` : "—"} />
         <Stat label="Coût réel" value={`${Math.round(Number(run.cout_eur ?? 0))} €`} />
       </div>
+
+      {showMap && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Carte de la zone
+          </h2>
+          <RunMapLoader
+            departement={zone?.departement ?? null}
+            adresse={zone?.adresse ?? null}
+            rayonKm={zone?.rayon_par_point_km ?? null}
+            leads={mapLeads}
+          />
+          {!hasGeo && (
+            <p className="mt-2 text-xs text-[var(--muted)]">
+              Zone affichée ; les prospects n&apos;ont pas encore de
+              géolocalisation (drapeaux indisponibles).
+            </p>
+          )}
+        </div>
+      )}
 
       {run.erreur && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">

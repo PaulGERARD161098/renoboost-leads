@@ -1,21 +1,54 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import type { Run, Verticale, ZoneCible } from "@/lib/database.types";
-import { RechercheForm } from "@/components/recherche-form";
-import { RUN_STATUS_LABEL, formatDate } from "@/lib/ui";
+import type { Lead, Run, Verticale, ZoneCible } from "@/lib/database.types";
+import {
+  RechercheForm,
+  type RechercheInitial,
+} from "@/components/recherche-form";
+import { RunCard, type RunCounts } from "@/components/run-card";
+import { RunActions } from "@/components/run-actions";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export const dynamic = "force-dynamic";
 
-export default async function RecherchePage() {
+/** Construit les valeurs de pré-remplissage du formulaire à partir d'un run source. */
+function initialFromRun(run: Run): RechercheInitial {
+  const zone = run.zone as {
+    departement?: string;
+    adresse?: string;
+    rayon_par_point_km?: number;
+    effectif_min?: number;
+  };
+  const isAdresse = !!zone.adresse;
+  return {
+    verticaleId: run.verticale_id ?? undefined,
+    mode: isAdresse ? "adresse" : "departement",
+    departement: zone.departement ?? "59",
+    adresse: zone.adresse ?? "",
+    rayon: zone.rayon_par_point_km ? String(zone.rayon_par_point_km) : "10",
+    effectifMin: zone.effectif_min != null ? String(zone.effectif_min) : "50",
+    budget: run.budget_eur != null ? String(run.budget_eur) : "50",
+    isTest: run.is_test,
+  };
+}
+
+export default async function RecherchePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const { from } = await searchParams;
   const supabase = await createClient();
   const { data: verticales } = await supabase
     .from("verticales")
     .select("*")
     .eq("active", true)
     .order("nom");
-  const { data: runs } = await supabase
+  // Recherches récentes non archivées.
+  const { data: runsData } = await supabase
     .from("runs")
     .select("*")
+    .eq("archive", false)
     .order("created_at", { ascending: false })
     .limit(10);
   const { data: zonesData } = await supabase
@@ -25,12 +58,50 @@ export default async function RecherchePage() {
 
   const vlist = (verticales as Verticale[] | null) ?? [];
   const zones = (zonesData as ZoneCible[] | null) ?? [];
+  const runs = (runsData as Run[] | null) ?? [];
+
+  // Pré-remplissage si on relance une recherche existante (?from=runId).
+  let initial: RechercheInitial | undefined;
+  if (from) {
+    const { data: src } = await supabase
+      .from("runs")
+      .select("*")
+      .eq("id", from)
+      .maybeSingle();
+    if (src) initial = initialFromRun(src as Run);
+  }
+
+  // Compteurs par recherche + nom de cible (pour les cartouches).
+  const vmap = new Map(vlist.map((v) => [v.id, v.nom]));
+  const countsByRun = new Map<string, RunCounts>();
+  const runIds = runs.map((r) => r.id);
+  if (runIds.length > 0) {
+    const { data: leadsData } = await supabase
+      .from("leads")
+      .select("run_id, score, hors_filtre")
+      .in("run_id", runIds)
+      .limit(5000);
+    for (const l of (leadsData as Pick<Lead, "run_id" | "score" | "hors_filtre">[] | null) ?? []) {
+      if (!l.run_id) continue;
+      const c = countsByRun.get(l.run_id) ?? { total: 0, top: 0, horsFiltre: 0 };
+      c.total += 1;
+      if ((l.score ?? 0) >= 75) c.top += 1;
+      if (l.hors_filtre) c.horsFiltre += 1;
+      countsByRun.set(l.run_id, c);
+    }
+  }
+  const activeRun = runs.find(
+    (r) => r.status === "en_cours" || r.status === "demande",
+  );
 
   return (
     <div>
+      <AutoRefresh enabled={!!activeRun} />
       <h1 className="mb-1 text-2xl font-bold">Nouvelle recherche</h1>
       <p className="mb-5 text-sm text-[var(--muted)]">
-        Décris la cible : le moteur trouve et qualifie les prospects.
+        {initial
+          ? "Recherche pré-remplie depuis une recherche existante — ajuste puis relance."
+          : "Décris la cible : le moteur trouve et qualifie les prospects."}
       </p>
 
       {vlist.length === 0 ? (
@@ -42,44 +113,27 @@ export default async function RecherchePage() {
           d&apos;abord.
         </div>
       ) : (
-        <RechercheForm verticales={vlist} zones={zones} />
+        <RechercheForm verticales={vlist} zones={zones} initial={initial} />
       )}
 
-      {runs && runs.length > 0 && (
+      {runs.length > 0 && (
         <div className="mt-8">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
             Recherches récentes
           </h2>
-          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
-            <table className="w-full text-sm">
-              <tbody>
-                {(runs as Run[]).map((run) => (
-                  <tr
-                    key={run.id}
-                    className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50"
-                  >
-                    <td className="px-4 py-3">
-                      <Link href={`/recherche/${run.id}`} className="block">
-                        {formatDate(run.created_at)}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link href={`/recherche/${run.id}`} className="block">
-                        {(run.zone as { departement?: string })?.departement
-                          ? `Dépt ${(run.zone as { departement?: string }).departement}`
-                          : "—"}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--muted)]">
-                      <Link href={`/recherche/${run.id}`} className="block">
-                        {RUN_STATUS_LABEL[run.status]}
-                        {run.status === "en_cours" ? ` · ${run.progress}%` : ""}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {runs.map((run) => (
+              <RunCard
+                key={run.id}
+                run={run}
+                cibleNom={vmap.get(run.verticale_id ?? "") ?? "—"}
+                counts={
+                  countsByRun.get(run.id) ?? { total: 0, top: 0, horsFiltre: 0 }
+                }
+                detailHref={`/recherche/${run.id}`}
+                actions={<RunActions run={run} />}
+              />
+            ))}
           </div>
         </div>
       )}

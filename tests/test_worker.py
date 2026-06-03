@@ -417,6 +417,46 @@ def test_worker_marks_failure_on_pipeline_error():
     assert db.leads == []
 
 
+def test_worker_test_run_forces_demo_pipeline():
+    """Un run marqué is_test passe en mode démo, même si le pipeline configuré planterait."""
+    vid = str(uuid.uuid4())
+    run = _make_run(verticale_id=vid, volume=4)
+    run["is_test"] = True
+    db = FakeDB(runs=[run], verticales={vid: {"config": {"offre": "IRVE"}}})
+
+    class Boom:
+        def run(self, ctx, emit):
+            raise RuntimeError("le pipeline réel ne doit pas tourner pour un run test")
+
+    worker = Worker(_config(), db=db, pipeline=Boom(), demo_pipeline=DemoPipeline(seed=3))
+
+    assert worker.poll_once() == 1
+    assert db.runs[run["id"]]["status"] == "termine"
+    assert len(db.leads) == 4
+
+
+def test_worker_non_test_run_uses_configured_pipeline():
+    """Sans is_test, c'est bien le pipeline configuré (ici réel mocké) qui tourne."""
+    run = _make_run(volume=3)
+
+    class Sentinel:
+        def __init__(self):
+            self.called = False
+
+        def run(self, ctx, emit):
+            self.called = True
+            from worker.pipeline import RunResult
+
+            return RunResult(leads=[], counts={}, cout_eur=0.0)
+
+    sentinel = Sentinel()
+    db = FakeDB(runs=[run], verticales={})
+    worker = Worker(_config(), db=db, pipeline=sentinel, demo_pipeline=DemoPipeline(seed=1))
+
+    worker.poll_once()
+    assert sentinel.called is True
+
+
 def test_worker_skips_already_claimed_run():
     run = _make_run(volume=2)
     run["status"] = "en_cours"  # déjà pris
