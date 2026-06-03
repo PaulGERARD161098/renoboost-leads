@@ -101,6 +101,7 @@ export interface Lead {
   replied_at: string | null;
   bounced_at: string | null;
   relance_at: string | null;
+  campaign_id: string | null;
   owner: string | null;
   created_at: string;
   updated_at: string;
@@ -166,6 +167,20 @@ export interface LeadEvent {
   payload: Record<string, unknown>;
   actor: string | null;
   at: string;
+}
+
+export type CampaignStatus = "brouillon" | "active" | "pausee" | "terminee";
+
+export interface Campaign {
+  id: string;
+  nom: string;
+  verticale_id: string | null;
+  statut: CampaignStatus;
+  note: string | null;
+  instantly_campaign_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type MailDirection = "out" | "in";
