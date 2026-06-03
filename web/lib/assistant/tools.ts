@@ -67,6 +67,22 @@ export const tools = [
     },
   },
   {
+    name: "plan_du_jour",
+    description:
+      "Worklist priorisée 'next-best-action' : pour chaque lead chaud, l'action recommandée (quoi faire), le pourquoi (signal), le canal (email/téléphone/fiche) et la priorité. À utiliser pour 'par quoi je commence', 'mon plan du jour', l'état des lieux d'un client. Filtrable par verticale/client.",
+    input_schema: {
+      type: "object",
+      properties: {
+        verticale: {
+          type: "string",
+          description:
+            "Nom (ou partie) du client/verticale pour scoper le plan (ex: 'Rossini', 'solaire'). Vide = tous.",
+        },
+        limit: { type: "number", description: "Nombre max d'actions (défaut 10, max 20)." },
+      },
+    },
+  },
+  {
     name: "lister_runs",
     description:
       "Recherches (runs) récentes avec statut, progression, nombre de leads collectés et coût. Pour 'où en est ma recherche'.",
@@ -277,6 +293,85 @@ export async function executeTool(
             effectif: l.effectif,
           })),
         );
+      }
+
+      case "plan_du_jour": {
+        const limit = clampLimit(input.limit, 10, 20);
+        // Résout la verticale/client demandé (nom partiel) en id, le cas échéant.
+        let verticaleId: string | null = null;
+        let verticaleNom: string | null = null;
+        if (typeof input.verticale === "string" && input.verticale.trim()) {
+          const { data: vs } = await supabase
+            .from("verticales")
+            .select("id, nom")
+            .ilike("nom", `%${input.verticale.trim()}%`)
+            .limit(1);
+          const v = (vs as Pick<Verticale, "id" | "nom">[] | null)?.[0];
+          if (v) {
+            verticaleId = v.id;
+            verticaleNom = v.nom;
+          }
+        }
+
+        let q = supabase
+          .from("leads")
+          .select(
+            "id, entreprise, ville, score, statut, contact_email, contact_tel, sent_at, opened_at, replied_at, relance_at, vision_satellite, hors_filtre, call_statut",
+          )
+          .neq("statut", "ecarte")
+          .eq("hors_filtre", false)
+          .limit(400);
+        if (verticaleId) q = q.eq("verticale_id", verticaleId);
+        const { data, error } = await q;
+        if (error) return `Erreur: ${error.message}`;
+        const leads = (data as Partial<Lead>[]) ?? [];
+
+        const today = new Date().toISOString().slice(0, 10);
+        // Action recommandée + priorité (1 = plus urgent) par lead.
+        type Action = {
+          id?: string;
+          entreprise?: string;
+          ville?: string | null;
+          score?: number | null;
+          statut: string;
+          action: string;
+          pourquoi: string;
+          canal: "email" | "telephone" | "fiche";
+          priorite: number;
+        };
+        const plan: Action[] = [];
+        for (const l of leads) {
+          const base = {
+            id: l.id,
+            entreprise: l.entreprise,
+            ville: l.ville,
+            score: l.score ?? null,
+            statut: l.statut ? (LEAD_STATUS_LABEL[l.statut] ?? l.statut) : "—",
+          };
+          if (l.statut === "repondu") {
+            plan.push({ ...base, action: "Traiter la réponse + répondre", pourquoi: "Le prospect a répondu", canal: "email", priorite: 1 });
+          } else if (l.call_statut === "rappel_recu") {
+            plan.push({ ...base, action: "Rappeler — le prospect a rappelé", pourquoi: "Rappel cold-call reçu", canal: "telephone", priorite: 2 });
+          } else if (l.relance_at && l.relance_at.slice(0, 10) <= today) {
+            plan.push({ ...base, action: "Relancer aujourd'hui", pourquoi: "Relance planifiée échue", canal: "email", priorite: 2 });
+          } else if (l.statut === "ouvert") {
+            plan.push({ ...base, action: "Relancer (ouvert sans réponse)", pourquoi: "A ouvert le mail, pas répondu", canal: "email", priorite: 3 });
+          } else if (l.statut === "valide" && l.contact_email) {
+            plan.push({ ...base, action: "Envoyer le mail (prêt)", pourquoi: "Lead validé, email connu", canal: "email", priorite: 4 });
+          } else if ((l.statut === "a_valider" || l.statut === "nouveau") && (l.score ?? 0) >= 75) {
+            plan.push({ ...base, action: "Valider la fiche (top lead)", pourquoi: `Score ${l.score} à traiter en priorité`, canal: "fiche", priorite: 5 });
+          } else if ((l.score ?? 0) >= 75 && !l.vision_satellite) {
+            plan.push({ ...base, action: "Analyser le potentiel solaire", pourquoi: "Top lead sans qualification foncière", canal: "fiche", priorite: 6 });
+          } else if (!l.contact_email && l.contact_tel && l.statut !== "envoye") {
+            plan.push({ ...base, action: "Cold-call : déposer un message vocal", pourquoi: "Pas d'email mais un téléphone", canal: "telephone", priorite: 7 });
+          }
+        }
+        plan.sort((a, b) => a.priorite - b.priorite || (b.score ?? 0) - (a.score ?? 0));
+        return JSON.stringify({
+          verticale: verticaleNom,
+          total_a_traiter: plan.length,
+          actions: plan.slice(0, limit),
+        });
       }
 
       case "detail_lead": {
