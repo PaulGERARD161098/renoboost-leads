@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { BornesAdmin } from "@/components/bornes-admin";
 import { BornesAnalytics } from "@/components/bornes-analytics";
+import { BornesMapLoader } from "@/components/bornes-map-loader";
 import { formatDate } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,14 @@ export default async function BornesPage() {
       <div className="mb-5">
         <BornesAdmin />
       </div>
+
+      {depts.length > 0 && (
+        <div className="mb-5">
+          <BornesMapLoader
+            counts={Object.fromEntries(depts.map((d) => [d.departement, d.n]))}
+          />
+        </div>
+      )}
 
       <BornesAnalytics depts={depts} />
 
