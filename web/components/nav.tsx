@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/suivi", label: "Suivi" },
   { href: "/campagnes", label: "Campagnes" },
   { href: "/veille", label: "Veille" },
+  { href: "/bornes", label: "Bornes VE" },
   { href: "/recherche", label: "Recherches" },
   { href: "/cibles", label: "Cibles" },
   { href: "/tableau-de-bord", label: "Tableau de bord" },

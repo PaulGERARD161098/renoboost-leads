@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestIrve, ingestRossini } from "@/lib/bornes-ingest";
 
@@ -10,13 +11,22 @@ export const maxDuration = 300;
 // Ingestion des bornes de recharge VE. Appelée par le cron Vercel (Bearer
 // CRON_SECRET) ou manuellement avec ?secret=. ?source=irve|rossini|all (défaut all).
 async function handle(req: NextRequest) {
+  // Autorisé si : (a) cron Vercel (Bearer CRON_SECRET / ?secret=), OU
+  // (b) un utilisateur connecté au CRM (déclenchement par bouton dans l'app).
   const auth = req.headers.get("authorization");
   const querySecret = req.nextUrl.searchParams.get("secret");
   const cronSecret = process.env.CRON_SECRET;
   const altSecret = process.env.AGENT_CRON_SECRET;
-  const ok =
-    (cronSecret && (auth === `Bearer ${cronSecret}` || querySecret === cronSecret)) ||
-    (altSecret && querySecret === altSecret);
+  let ok =
+    Boolean(cronSecret && (auth === `Bearer ${cronSecret}` || querySecret === cronSecret)) ||
+    Boolean(altSecret && querySecret === altSecret);
+  if (!ok) {
+    const sb = await createClient();
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+    ok = Boolean(user);
+  }
   if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
