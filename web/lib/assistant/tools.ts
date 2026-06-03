@@ -93,6 +93,12 @@ export const tools = [
     },
   },
   {
+    name: "contexte",
+    description:
+      "Contexte de travail courant : objectif final, client actif, deadlines (jalons datés) et résumé de la dernière session. À lire au démarrage pour rappeler où on en est et ce qu'on vise.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "plan_du_jour",
     description:
       "Worklist priorisée 'next-best-action' : pour chaque lead chaud, l'action recommandée (quoi faire), le pourquoi (signal), le canal (email/téléphone/fiche) et la priorité. À utiliser pour 'par quoi je commence', 'mon plan du jour', l'état des lieux d'un client. Filtrable par verticale/client.",
@@ -351,6 +357,24 @@ export async function executeTool(
         if (stats.total === 0)
           return `Aucune borne enregistrée pour le département ${dept} (données IRVE peut-être pas encore ingérées).`;
         return JSON.stringify(stats);
+      }
+
+      case "contexte": {
+        const { data } = await supabase
+          .from("app_context")
+          .select("objectif_final, client_actif, deadlines, resume_session, updated_at")
+          .eq("id", "main")
+          .maybeSingle();
+        if (!data) return JSON.stringify({ defini: false });
+        return JSON.stringify({
+          defini: Boolean(
+            data.objectif_final || data.client_actif || (data.deadlines as unknown[])?.length,
+          ),
+          objectif_final: data.objectif_final,
+          client_actif: data.client_actif,
+          deadlines: data.deadlines,
+          resume_session: data.resume_session,
+        });
       }
 
       case "plan_du_jour": {

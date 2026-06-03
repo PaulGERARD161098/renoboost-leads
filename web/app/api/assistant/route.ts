@@ -13,8 +13,8 @@ const MAX_TOKENS = 1024;
 // Consigne du « point d'ouverture » proactif : Magellan démarre la session en
 // faisant le point tout seul et en proposant des actions, au lieu d'attendre.
 const BRIEFING_INSTRUCTION = `[DÉMARRAGE DE SESSION] Tu ouvres la session, sois actif et bref.
-1. Salue en une ligne.
-2. Demande POUR QUEL CLIENT / VERTICALE on travaille aujourd'hui. Utilise lister_cibles pour connaître les verticales existantes et propose-les. Formule comme une vraie proposition (ex: « On reprend pour Rossini Energy ? Si oui je te fais l'état des lieux complet. »).
+1. Lis le contexte (outil contexte). S'il y a un objectif final / client actif / deadlines, rappelle-les en UNE phrase (ex: « On vise 30 RDV pour Rossini, prochaine deadline le 15. »). Sinon, saute cette ligne.
+2. Demande POUR QUEL CLIENT / VERTICALE on travaille aujourd'hui (propose en premier le client actif du contexte s'il existe). Utilise lister_cibles pour les verticales. Formule comme une vraie proposition (ex: « On reprend pour Rossini Energy ? Si oui je te fais l'état des lieux complet. »).
 3. NE déroule PAS encore l'état des lieux ni le plan : attends le choix du client.
 Style direct, chaleureux, 2-3 lignes max.
 Termine IMPÉRATIVEMENT par une ligne au format exact :
