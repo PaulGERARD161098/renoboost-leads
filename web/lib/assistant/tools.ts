@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LEAD_STATUS_LABEL, RUN_STATUS_LABEL } from "../ui";
 import { analyseSatellite } from "../satellite";
+import { bornesParDepartement, bornesProximite } from "../bornes";
 import { runVeille } from "../veille";
 import type {
   AgentConfig,
@@ -64,6 +65,31 @@ export const tools = [
         entreprise: { type: "string", description: "Nom (ou partie) de l'entreprise." },
       },
       required: ["entreprise"],
+    },
+  },
+  {
+    name: "bornes_proximite",
+    description:
+      "Bornes de recharge VE autour d'un lead (recherché par nom d'entreprise) : déjà équipé sur site (<150 m), voisinage (<500 m), nombre dans un rayon (défaut 10 km), dont posées par Rossini Energy, opérateurs présents. Pour 'ce prospect est-il déjà équipé', 'des bornes autour ?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        entreprise: { type: "string", description: "Nom (ou partie) de l'entreprise/lead." },
+        rayon_km: { type: "number", description: "Rayon en km (défaut 10, max 50)." },
+      },
+      required: ["entreprise"],
+    },
+  },
+  {
+    name: "bornes_par_departement",
+    description:
+      "Statistiques des bornes de recharge VE d'un département : total, répartition par source (IRVE/Rossini), top opérateurs. Pour 'combien de bornes dans le 59', analyses par département.",
+    input_schema: {
+      type: "object",
+      properties: {
+        departement: { type: "string", description: "Code département (ex: '59')." },
+      },
+      required: ["departement"],
     },
   },
   {
@@ -293,6 +319,38 @@ export async function executeTool(
             effectif: l.effectif,
           })),
         );
+      }
+
+      case "bornes_proximite": {
+        const nom = typeof input.entreprise === "string" ? input.entreprise.trim() : "";
+        if (!nom) return "Précise un nom d'entreprise.";
+        const { data, error } = await supabase
+          .from("leads")
+          .select("entreprise, ville, latitude, longitude")
+          .ilike("entreprise", `%${nom}%`)
+          .limit(1)
+          .maybeSingle();
+        if (error) return `Erreur: ${error.message}`;
+        if (!data) return "Lead introuvable.";
+        const lat = data.latitude as number | null;
+        const lng = data.longitude as number | null;
+        if (lat == null || lng == null)
+          return JSON.stringify({
+            entreprise: data.entreprise,
+            note: "Pas de coordonnées sur ce lead — lance d'abord l'analyse satellite (qui géocode l'adresse), puis réessaie.",
+          });
+        const rayon = clampLimit(input.rayon_km, 10, 50);
+        const prox = await bornesProximite(supabase, lat, lng, rayon);
+        return JSON.stringify({ entreprise: data.entreprise, ville: data.ville, ...prox });
+      }
+
+      case "bornes_par_departement": {
+        const dept = typeof input.departement === "string" ? input.departement.trim() : "";
+        if (!dept) return "Précise un code département (ex: 59).";
+        const stats = await bornesParDepartement(supabase, dept);
+        if (stats.total === 0)
+          return `Aucune borne enregistrée pour le département ${dept} (données IRVE peut-être pas encore ingérées).`;
+        return JSON.stringify(stats);
       }
 
       case "plan_du_jour": {
