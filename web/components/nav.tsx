@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/suivi", label: "Suivi", icon: "📊" },
   { href: "/campagnes", label: "Campagnes", icon: "✉️" },
   { href: "/veille", label: "Veille", icon: "🛰️" },
+  { href: "/bornes", label: "Bornes VE", icon: "🔌" },
   { href: "/recherche", label: "Recherches", icon: "🔎" },
   { href: "/cibles", label: "Cibles", icon: "🎯" },
   { href: "/tableau-de-bord", label: "Tableau de bord", icon: "📈" },
