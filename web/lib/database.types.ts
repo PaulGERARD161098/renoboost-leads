@@ -21,7 +21,9 @@ export type LeadEventType =
   | "ecarte"
   | "note"
   | "rebond"
-  | "oubli_rgpd";
+  | "oubli_rgpd"
+  | "message_vocal_depose"
+  | "rappel_recu";
 
 export interface Profile {
   id: string;
@@ -102,9 +104,47 @@ export interface Lead {
   bounced_at: string | null;
   relance_at: string | null;
   campaign_id: string | null;
+  call_statut: CallStatut | null;
   owner: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type CallStatut =
+  | "a_appeler"
+  | "message_depose"
+  | "rappel_recu"
+  | "injoignable";
+export type VoicemailStatus =
+  | "brouillon"
+  | "planifie"
+  | "depose"
+  | "rappel_recu"
+  | "echec";
+
+export interface PhoneNumber {
+  id: string;
+  numero: string;
+  label: string | null;
+  provider: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface Voicemail {
+  id: string;
+  lead_id: string;
+  campaign_id: string | null;
+  from_number: string | null;
+  to_number: string | null;
+  script: string | null;
+  audio_url: string | null;
+  statut: VoicemailStatus;
+  twilio_sid: string | null;
+  deposed_at: string | null;
+  callback_at: string | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface ZoneCible {
