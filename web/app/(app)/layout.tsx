@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { Nav } from "@/components/nav";
 import { AssistantWidget } from "@/components/assistant-widget";
+import { WelcomeModal } from "@/components/welcome-modal";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionBriefing } from "@/lib/briefing";
 
 export default async function AppLayout({
   children,
@@ -15,6 +17,12 @@ export default async function AppLayout({
 
   if (!user) redirect("/login");
 
+  // Reprise au login : briefing d'accueil (1×/jour, charte agent-first).
+  const briefing = await getSessionBriefing(supabase, {
+    id: user.id,
+    email: user.email ?? null,
+  });
+
   return (
     <div className="min-h-screen">
       <Nav email={user.email ?? null} />
@@ -23,6 +31,7 @@ export default async function AppLayout({
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
       <AssistantWidget />
+      {briefing.shouldShow && <WelcomeModal briefing={briefing} />}
     </div>
   );
 }
