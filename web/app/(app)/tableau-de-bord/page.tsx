@@ -111,6 +111,7 @@ export default async function TableauDeBordPage() {
     deadlines: [],
     resume_session: null,
     resume_genere_le: null,
+    calendly_url: null,
     updated_by: null,
     updated_at: new Date().toISOString(),
   };

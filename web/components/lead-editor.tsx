@@ -17,7 +17,33 @@ export function LeadEditor({ lead }: { lead: Lead }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const [gen, setGen] = useState(false);
+
   const dirty = sujet !== (lead.mail_sujet ?? "") || corps !== (lead.mail_corps ?? "");
+
+  async function genererBrouillon(mode: "approche" | "relance") {
+    setMsg(null);
+    setGen(true);
+    try {
+      const res = await fetch("/api/lead/outreach-draft", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, mode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(`❌ ${data.error ?? "Génération impossible."}`);
+      } else {
+        if (data.sujet) setSujet(data.sujet);
+        if (data.corps) setCorps(data.corps);
+        setMsg("✨ Brouillon généré — relis et enregistre ou envoie.");
+      }
+    } catch {
+      setMsg("❌ Erreur réseau.");
+    } finally {
+      setGen(false);
+    }
+  }
 
   function run(fn: () => Promise<{ error?: string; ok?: boolean; simulation?: boolean }>, ok: string) {
     setMsg(null);
@@ -34,9 +60,29 @@ export function LeadEditor({ lead }: { lead: Lead }) {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[var(--border)] bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-          Email proposé
-        </h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Email proposé
+          </h2>
+          <div className="flex gap-1.5">
+            <button
+              disabled={gen || pending}
+              onClick={() => genererBrouillon("approche")}
+              title="Magellan rédige un premier email d'approche personnalisé"
+              className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-40"
+            >
+              {gen ? "…" : "✨ Brouillon d'approche"}
+            </button>
+            <button
+              disabled={gen || pending}
+              onClick={() => genererBrouillon("relance")}
+              title="Magellan rédige une relance courte"
+              className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-40"
+            >
+              {gen ? "…" : "✨ Relance"}
+            </button>
+          </div>
+        </div>
         <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
           Objet
         </label>

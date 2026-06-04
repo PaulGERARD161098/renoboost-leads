@@ -23,6 +23,7 @@ function buildPrompt(
   verticale: string | null,
   contact: string | null,
   thread: LeadMessage[],
+  calendlyUrl: string | null,
 ): string {
   const fil = thread
     .map((m) => {
@@ -31,6 +32,10 @@ function buildPrompt(
       return `${qui}: ${sujet}${m.corps ?? "(vide)"}`;
     })
     .join("\n\n");
+
+  const consigneRdv = calendlyUrl
+    ? ` Si la catégorie est "interesse", propose explicitement un créneau en invitant le prospect à réserver directement via ce lien de réservation, inséré tel quel dans le brouillon : ${calendlyUrl}`
+    : "";
 
   return `Tu es l'assistant commercial de RénoBoost${
     verticale ? ` (offre : ${verticale})` : ""
@@ -53,7 +58,7 @@ Tâche :
 2. RÉDIGE un brouillon de réponse en français, professionnel, chaleureux et CONCIS
    (4-8 lignes), adapté à la catégorie : oriente vers la prochaine étape concrète si
    intérêt (proposer un échange court), réponds à la question si info, reste courtois
-   et bref si refus. Signe « L'équipe RénoBoost ». N'invente aucun chiffre ni engagement.
+   et bref si refus. Signe « L'équipe RénoBoost ». N'invente aucun chiffre ni engagement.${consigneRdv}
 
 Réponds UNIQUEMENT par un objet JSON valide, sans texte autour :
 {"categorie":"<une des clés ci-dessus>","confiance":<0-100>,"sujet":"<objet de la réponse>","brouillon":"<le texte de la réponse>"}`;
@@ -135,6 +140,14 @@ export async function POST(req: NextRequest) {
     ? verticaleRaw[0]?.nom ?? null
     : verticaleRaw?.nom ?? null;
 
+  // Lien de réservation Calendly (oriente les « intéressés » vers la prise de RDV).
+  const { data: ctx } = await supabase
+    .from("app_context")
+    .select("calendly_url")
+    .eq("id", "main")
+    .maybeSingle();
+  const calendlyUrl = (ctx as { calendly_url: string | null } | null)?.calendly_url ?? null;
+
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -154,6 +167,7 @@ export async function POST(req: NextRequest) {
               verticale,
               (lead as { contact_nom: string | null }).contact_nom,
               thread,
+              calendlyUrl,
             ),
           },
         ],
