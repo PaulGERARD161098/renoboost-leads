@@ -30,6 +30,7 @@ export interface Profile {
   email: string | null;
   nom: string | null;
   role: UserRole;
+  last_seen_at: string | null;
   created_at: string;
 }
 
