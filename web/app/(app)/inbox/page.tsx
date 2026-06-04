@@ -6,6 +6,7 @@ import { LeadsTable } from "@/components/leads-table";
 import { RunGroup } from "@/components/run-group";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ActionsBand } from "@/components/actions-band";
+import { rankBandActions } from "@/lib/suggestions";
 import type { RunCounts } from "@/components/run-card";
 
 export const dynamic = "force-dynamic";
@@ -130,12 +131,13 @@ export default async function InboxPage({
       hint: "Intentions détectées à convertir en leads.",
     },
   ];
+  const rankedActions = await rankBandActions(supabase, "inbox", inboxActions);
 
   return (
     <div>
       <AutoRefresh enabled={!!activeRun} />
 
-      <ActionsBand source="inbox" actions={inboxActions} />
+      <ActionsBand source="inbox" actions={rankedActions} />
 
       <div className="mb-5 flex items-end justify-between">
         <div>

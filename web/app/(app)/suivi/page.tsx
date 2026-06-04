@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadStatus } from "@/lib/database.types";
 import { KanbanCard } from "@/components/kanban-card";
 import { ActionsBand } from "@/components/actions-band";
+import { rankBandActions } from "@/lib/suggestions";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,7 @@ export default async function SuiviPage() {
       hint: "Leads validés, prêts pour l'envoi.",
     },
   ];
+  const rankedActions = await rankBandActions(supabase, "suivi", suiviActions);
 
   return (
     <div>
@@ -77,7 +79,7 @@ export default async function SuiviPage() {
         Pipeline d&apos;envoi et de réponses.
       </p>
 
-      <ActionsBand source="suivi" actions={suiviActions} />
+      <ActionsBand source="suivi" actions={rankedActions} />
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Envoyés" value={sent} />

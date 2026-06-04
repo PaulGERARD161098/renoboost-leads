@@ -37,6 +37,10 @@ export async function SuggestionValue() {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
         📈 Valeur des suggestions (30 derniers jours)
       </h2>
+      <p className="mb-2 text-xs text-[var(--muted)]">
+        Boucle fermée : les actions les plus suivies remontent en tête des bandes
+        « Où on en est » (★ = la plus suivie de l&apos;onglet).
+      </p>
       <div className="rounded-xl border border-[var(--border)] bg-white p-5">
         {rows.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
