@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Campaign, CampaignStatus, Lead, Verticale } from "@/lib/database.types";
 import { CampaignActions, CreateCampaignForm } from "@/components/campaigns-ui";
+import { ActionsBand } from "@/components/actions-band";
 
 export const dynamic = "force-dynamic";
 
@@ -85,12 +86,37 @@ export default async function CampagnesPage({
 
   const statuts: CampaignStatus[] = ["brouillon", "active", "pausee", "terminee"];
 
+  // Contexte → Actions (pattern agent-first) : prochaines actions côté campagnes.
+  const leadsCampagne = (leads as Pick<Lead, "statut">[] | null) ?? [];
+  const campagnesActions = [
+    {
+      label: "Réponses à traiter",
+      href: "/inbox?statut=repondu",
+      n: leadsCampagne.filter((l) => l.statut === "repondu").length,
+      hint: "Réponses reçues sur les campagnes — enchaîne le suivi.",
+    },
+    {
+      label: "Prêts à envoyer",
+      href: "/inbox?statut=valide",
+      n: leadsCampagne.filter((l) => l.statut === "valide").length,
+      hint: "Leads validés, prêts pour l'envoi.",
+    },
+    {
+      label: "Campagnes en brouillon",
+      href: "/campagnes?statut=brouillon",
+      n: ((campaigns as Campaign[] | null) ?? []).filter((c) => c.statut === "brouillon").length,
+      hint: "Campagnes à finaliser et activer.",
+    },
+  ];
+
   return (
     <div>
       <h1 className="mb-1 text-2xl font-bold">Campagnes</h1>
       <p className="mb-5 text-sm text-[var(--muted)]">
         Pilotage global des campagnes d’emailing : lancement, pause, entonnoir et filtrage.
       </p>
+
+      <ActionsBand source="campagnes" actions={campagnesActions} />
 
       <div className="mb-5">
         <CreateCampaignForm verticales={vListe} />
