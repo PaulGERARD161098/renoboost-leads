@@ -123,11 +123,13 @@ export function AgentConfigForm({
       <div className="rounded-xl border border-[var(--border)] bg-white p-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="font-semibold">Relances automatiques</div>
+            <div className="font-semibold">Relances automatiques (multi-canal)</div>
             <div className="text-sm text-[var(--muted)]">
               L&apos;agent repère les envois restés sans réponse et{" "}
-              <strong>planifie la relance</strong> (colonne « À relancer ») — il
-              n&apos;envoie jamais : tu valides et tu envoies.
+              <strong>planifie la relance</strong> (colonne « À relancer »). Une
+              fois le mail épuisé, il <strong>escalade vers le téléphone</strong>{" "}
+              (« À appeler ») — il n&apos;envoie ni n&apos;appelle jamais : tu
+              valides, tu envoies, tu appelles.
             </div>
           </div>
           <button
