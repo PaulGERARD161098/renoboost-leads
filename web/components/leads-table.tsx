@@ -30,6 +30,7 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+  const [drafting, setDrafting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const rows = useMemo(() => {
@@ -97,6 +98,44 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
     });
   }
 
+  // Pré-rédaction EN LOT des brouillons d'approche (door d). Consomme du budget
+  // Anthropic (1 appel/lead) → déclenché manuellement, plafonné à 12, sans
+  // changer le statut : on remplit le brouillon, l'humain relit puis envoie.
+  const MAX_DRAFT = 12;
+  async function bulkDraft() {
+    const ids = [...selected];
+    if (!ids.length) return;
+    if (ids.length > MAX_DRAFT) {
+      setMsg(`❌ Max ${MAX_DRAFT} leads à la fois (budget).`);
+      return;
+    }
+    setMsg(null);
+    setDrafting(true);
+    try {
+      const res = await fetch("/api/lead/outreach-draft-batch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ leadIds: ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(`❌ ${data.error ?? "Échec de la pré-rédaction."}`);
+      } else {
+        setMsg(
+          `✅ ${data.done} brouillon(s) pré-rédigé(s)${
+            data.failed ? `, ${data.failed} échec(s)` : ""
+          } — à relire avant envoi.`,
+        );
+        setSelected(new Set());
+        router.refresh();
+      }
+    } catch {
+      setMsg("❌ Erreur réseau.");
+    } finally {
+      setDrafting(false);
+    }
+  }
+
   const arrow = (key: SortKey) =>
     sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
@@ -157,6 +196,18 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
             className="rounded-md border border-[var(--border)] px-3 py-1 font-medium hover:bg-white disabled:opacity-50"
           >
             Écarter
+          </button>
+          <button
+            disabled={drafting || pending || selected.size > MAX_DRAFT}
+            onClick={bulkDraft}
+            title={
+              selected.size > MAX_DRAFT
+                ? `Max ${MAX_DRAFT} à la fois (budget)`
+                : "Pré-rédige un email d'approche pour chaque lead sélectionné (à relire avant envoi)"
+            }
+            className="rounded-md border border-[var(--brand)] px-3 py-1 font-medium text-[var(--brand)] hover:bg-white disabled:opacity-50"
+          >
+            {drafting ? "Rédaction…" : "✍️ Pré-rédiger"}
           </button>
           <button
             onClick={() => setSelected(new Set())}
