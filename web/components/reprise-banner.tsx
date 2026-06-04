@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AppContext, Deadline } from "@/lib/database.types";
-import { updateAppContext } from "@/lib/actions/context";
+import { genererResumeSession, updateAppContext } from "@/lib/actions/context";
 
 type Action = { label: string; href: string; n: number };
 
@@ -23,6 +23,14 @@ export function RepriseBanner({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
+  const [regen, startRegen] = useTransition();
+
+  function regenererResume() {
+    startRegen(async () => {
+      await genererResumeSession();
+      router.refresh();
+    });
+  }
 
   const [objectif, setObjectif] = useState(context.objectif_final ?? "");
   const [client, setClient] = useState(context.client_actif ?? "");
@@ -49,12 +57,22 @@ export function RepriseBanner({
     <div className="mb-6 rounded-2xl border border-[var(--brand)]/30 bg-gradient-to-br from-[var(--brand)]/5 to-transparent p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-base font-bold">👋 Reprise</h2>
-        <button
-          onClick={() => setEditing((v) => !v)}
-          className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-medium hover:bg-slate-50"
-        >
-          {editing ? "Fermer" : "Éditer"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={regenererResume}
+            disabled={regen}
+            title="Générer automatiquement le récap depuis l'activité récente"
+            className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-40"
+          >
+            {regen ? "Génération…" : "✨ Générer le récap"}
+          </button>
+          <button
+            onClick={() => setEditing((v) => !v)}
+            className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1 text-xs font-medium hover:bg-slate-50"
+          >
+            {editing ? "Fermer" : "Éditer"}
+          </button>
+        </div>
       </div>
 
       {!editing ? (

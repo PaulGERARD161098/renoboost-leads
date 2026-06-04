@@ -110,6 +110,7 @@ export default async function TableauDeBordPage() {
     client_actif: null,
     deadlines: [],
     resume_session: null,
+    resume_genere_le: null,
     updated_by: null,
     updated_at: new Date().toISOString(),
   };

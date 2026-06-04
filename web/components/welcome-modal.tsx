@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Briefing } from "@/lib/briefing";
 import { markSessionSeen } from "@/lib/actions/session";
+import { genererResumeSession } from "@/lib/actions/context";
 
 // Modale d'accueil « reprise au login » (charte agent-first) : salutation
 // nominative + date, ce qui est nouveau depuis la dernière session, et les
@@ -11,11 +12,21 @@ import { markSessionSeen } from "@/lib/actions/session";
 export function WelcomeModal({ briefing }: { briefing: Briefing }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
+  const [resume, setResume] = useState(briefing.resume);
+  const [resumeLoading, setResumeLoading] = useState(briefing.resumeStale);
 
   // Affichée = session vue : on horodate pour ne pas la rejouer aujourd'hui.
+  // Et si le récap est périmé, on le (re)génère automatiquement au login.
   useEffect(() => {
     void markSessionSeen();
-  }, []);
+    if (briefing.resumeStale) {
+      genererResumeSession()
+        .then((res) => {
+          if (res && "resume" in res && res.resume) setResume(res.resume);
+        })
+        .finally(() => setResumeLoading(false));
+    }
+  }, [briefing.resumeStale]);
 
   if (!open) return null;
 
@@ -28,7 +39,7 @@ export function WelcomeModal({ briefing }: { briefing: Briefing }) {
     router.push(href);
   }
 
-  const { prenom, dateLabel, objectif, resume, nouveautes, priorites } = briefing;
+  const { prenom, dateLabel, objectif, nouveautes, priorites } = briefing;
 
   return (
     <div
@@ -66,10 +77,16 @@ export function WelcomeModal({ briefing }: { briefing: Briefing }) {
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
               📣 Quoi de neuf depuis la dernière fois
             </h3>
-            {resume && (
-              <p className="mb-2 rounded-lg bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-700">
-                📝 {resume}
+            {resumeLoading ? (
+              <p className="mb-2 rounded-lg bg-slate-50 px-3 py-2 text-sm italic text-[var(--muted)]">
+                ✨ Magellan résume la dernière session…
               </p>
+            ) : (
+              resume && (
+                <p className="mb-2 rounded-lg bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-700">
+                  📝 {resume}
+                </p>
+              )
             )}
             {nouveautes.length ? (
               <ul className="space-y-1.5">
