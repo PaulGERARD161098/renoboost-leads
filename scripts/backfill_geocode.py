@@ -51,7 +51,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill géocodage des leads.")
     parser.add_argument("--dry-run", action="store_true", help="N'écrit rien.")
     parser.add_argument("--limit", type=int, default=0, help="Limite (0 = tous).")
+    parser.add_argument(
+        "--allow-city",
+        action="store_true",
+        help="Écrit aussi les résultats de précision commune/lieu-dit "
+        "(centroïde). Par défaut, on ne garde que la précision rue/numéro, "
+        "car un centroïde de ville fausse l'analyse satellite (toiture).",
+    )
     args = parser.parse_args()
+
+    # Précisions BAN acceptées par défaut (niveau adresse, pas centroïde ville).
+    precis_ok = {"housenumber", "street"}
 
     base = _env("SUPABASE_URL").rstrip("/")
     key = _env("SUPABASE_SERVICE_ROLE_KEY")
@@ -98,7 +108,14 @@ def main() -> None:
             err += 1
             continue
 
-        print(f"  ✓ {nom} : {r.latitude:.5f}, {r.longitude:.5f} (score {r.score:.2f})")
+        # Garde-fou : un centroïde de commune n'est pas une adresse exploitable
+        # (toiture). On l'ignore sauf --allow-city.
+        if not args.allow_city and r.type not in precis_ok:
+            print(f"  · {nom} : précision « {r.type} » (centroïde), ignoré.")
+            skip += 1
+            continue
+
+        print(f"  ✓ {nom} : {r.latitude:.5f}, {r.longitude:.5f} (score {r.score:.2f}, {r.type})")
         if not args.dry_run:
             up = requests.patch(
                 rest,

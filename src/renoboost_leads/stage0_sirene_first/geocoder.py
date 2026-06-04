@@ -63,6 +63,7 @@ class ResultatGeocodage:
     longitude: float
     label: str  # libellé normalisé renvoyé par la BAN
     score: float
+    type: str | None = None  # housenumber | street | locality | municipality
 
 
 # ════════════════════════════════════════════════════════════════
@@ -169,5 +170,9 @@ class BANGeocoder:
             adresse, label, latitude, longitude, score,
         )
         return ResultatGeocodage(
-            latitude=latitude, longitude=longitude, label=label, score=score
+            latitude=latitude,
+            longitude=longitude,
+            label=label,
+            score=score,
+            type=props.get("type"),
         )
