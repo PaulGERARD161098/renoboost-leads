@@ -5,6 +5,7 @@ import { LEAD_STATUS_LABEL, RUN_STATUS_LABEL, zoneLabel } from "@/lib/ui";
 import { LeadsTable } from "@/components/leads-table";
 import { RunGroup } from "@/components/run-group";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { InboxActions } from "@/components/inbox-actions";
 import type { RunCounts } from "@/components/run-card";
 
 export const dynamic = "force-dynamic";
@@ -73,9 +74,57 @@ export default async function InboxPage({
     (r) => r.status === "en_cours" || r.status === "demande",
   );
 
+  // Contexte → Actions (pattern agent-first) : l'onglet propose les prochaines
+  // actions au lieu de seulement lister.
+  const { data: statutData } = await supabase
+    .from("leads")
+    .select("statut, relance_at")
+    .limit(5000);
+  const allLeads =
+    (statutData as { statut: string; relance_at: string | null }[] | null) ?? [];
+  const { count: veilleNouveaux } = await supabase
+    .from("veille_signaux")
+    .select("id", { count: "exact", head: true })
+    .eq("statut", "nouveau");
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+  const inboxActions = [
+    {
+      label: "Réponses à traiter",
+      href: "/inbox?statut=repondu",
+      n: allLeads.filter((l) => l.statut === "repondu").length,
+      hint: "Un prospect a répondu — enchaîne le suivi commercial.",
+    },
+    {
+      label: "Leads à valider",
+      href: "/inbox?vue=plat",
+      n: allLeads.filter((l) => ["nouveau", "a_valider"].includes(l.statut)).length,
+      hint: "À valider avant envoi.",
+    },
+    {
+      label: "Relances dues",
+      href: "/suivi",
+      n: allLeads.filter(
+        (l) =>
+          l.relance_at &&
+          new Date(l.relance_at) <= endOfDay &&
+          !["ecarte", "repondu"].includes(l.statut),
+      ).length,
+      hint: "Relances qui tombent aujourd'hui ou en retard.",
+    },
+    {
+      label: "Signaux de veille",
+      href: "/bornes",
+      n: veilleNouveaux ?? 0,
+      hint: "Intentions détectées à convertir en leads.",
+    },
+  ];
+
   return (
     <div>
       <AutoRefresh enabled={!!activeRun} />
+
+      <InboxActions actions={inboxActions} />
 
       <div className="mb-5 flex items-end justify-between">
         <div>

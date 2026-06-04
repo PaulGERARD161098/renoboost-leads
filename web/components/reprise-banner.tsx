@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AppContext, Deadline } from "@/lib/database.types";
 import { genererResumeSession, updateAppContext } from "@/lib/actions/context";
+import { logSuggestionClick } from "@/lib/actions/tracking";
 
 type Action = { label: string; href: string; n: number };
 
@@ -141,6 +142,7 @@ export function RepriseBanner({
                   <Link
                     key={a.label}
                     href={a.href}
+                    onClick={() => void logSuggestionClick("reprise_banner", a.label, a.href)}
                     className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm hover:border-[var(--brand)]"
                   >
                     <span>{a.label}</span>
