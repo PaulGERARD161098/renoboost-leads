@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Campaign, CampaignStatus, Lead, Verticale } from "@/lib/database.types";
 import { CampaignActions, CreateCampaignForm } from "@/components/campaigns-ui";
 import { ActionsBand } from "@/components/actions-band";
+import { rankBandActions } from "@/lib/suggestions";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +109,7 @@ export default async function CampagnesPage({
       hint: "Campagnes à finaliser et activer.",
     },
   ];
+  const rankedActions = await rankBandActions(supabase, "campagnes", campagnesActions);
 
   return (
     <div>
@@ -116,7 +118,7 @@ export default async function CampagnesPage({
         Pilotage global des campagnes d’emailing : lancement, pause, entonnoir et filtrage.
       </p>
 
-      <ActionsBand source="campagnes" actions={campagnesActions} />
+      <ActionsBand source="campagnes" actions={rankedActions} />
 
       <div className="mb-5">
         <CreateCampaignForm verticales={vListe} />

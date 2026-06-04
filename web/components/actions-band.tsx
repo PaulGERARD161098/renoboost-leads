@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { logSuggestionClick } from "@/lib/actions/tracking";
 
-export type BandAction = { label: string; href: string; n: number; hint: string };
+export type BandAction = {
+  label: string;
+  href: string;
+  n: number;
+  hint: string;
+  // Marqué par la boucle d'apprentissage : action la plus suivie sur cet onglet.
+  learned?: boolean;
+};
 
 // Bande « Contexte → Actions » réutilisable sur chaque onglet (charte agent-first) :
 // l'onglet PROPOSE les prochaines actions au lieu de seulement afficher des
@@ -38,6 +45,11 @@ export function ActionsBand({
               onClick={() => void logSuggestionClick(source, a.label, a.href)}
               className="group flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm hover:border-[var(--brand)] hover:shadow-sm"
             >
+              {a.learned && (
+                <span title="Action la plus suivie ici" className="text-amber-500">
+                  ★
+                </span>
+              )}
               <span className="font-medium group-hover:text-[var(--brand)]">{a.label}</span>
               <span className="rounded-full bg-[var(--brand)] px-2 py-0.5 text-xs font-semibold text-white">
                 {a.n}
