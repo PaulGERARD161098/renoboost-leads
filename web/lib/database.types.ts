@@ -274,3 +274,24 @@ export interface AppContext {
   updated_by: string | null;
   updated_at: string;
 }
+
+export type ReplyCategorie =
+  | "interesse"
+  | "info"
+  | "plus_tard"
+  | "mauvais_interlocuteur"
+  | "pas_interesse"
+  | "absence"
+  | "autre";
+
+export interface LeadReplySuggestion {
+  id: string;
+  lead_id: string;
+  in_message_id: string | null;
+  categorie: ReplyCategorie;
+  confiance: number | null;
+  sujet: string | null;
+  brouillon: string;
+  used: boolean;
+  created_at: string;
+}

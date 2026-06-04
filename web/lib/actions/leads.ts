@@ -37,6 +37,33 @@ export async function updateLeadEmail(
   return { ok: true };
 }
 
+/**
+ * Applique un brouillon de réponse suggéré par Magellan : l'écrit dans le
+ * brouillon sortant du lead (mail_sujet/mail_corps) SANS toucher au statut
+ * (le lead reste « répondu »), et marque la suggestion comme suivie (mesure
+ * de la valeur). Jamais d'envoi — propose → valide.
+ */
+export async function appliquerBrouillonReponse(
+  leadId: string,
+  suggestionId: string,
+  sujet: string,
+  corps: string,
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ mail_sujet: sujet || null, mail_corps: corps })
+    .eq("id", leadId);
+  if (error) return { error: error.message };
+  await supabase
+    .from("lead_reply_suggestions")
+    .update({ used: true })
+    .eq("id", suggestionId);
+  await logEvent(leadId, "note", { action: "brouillon_reponse_applique" });
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
 export async function setLeadStatus(leadId: string, statut: LeadStatus) {
   const supabase = await createClient();
   const { error } = await supabase
