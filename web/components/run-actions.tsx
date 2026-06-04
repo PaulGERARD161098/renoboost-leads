@@ -63,16 +63,27 @@ export function RunActions({ run }: { run: Run }) {
   }
 
   return (
-    <div className="relative" onClick={stop}>
+    <div className="flex items-center gap-0.5" onClick={stop}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={supprimer}
         disabled={pending}
-        aria-label="Actions de la recherche"
-        className="rounded-md px-2 py-0.5 text-[var(--muted)] hover:bg-slate-100 disabled:opacity-50"
+        aria-label="Supprimer la recherche"
+        title="Supprimer la recherche et ses prospects"
+        className="rounded-md px-2 py-0.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
       >
-        ⋯
+        🗑
       </button>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          disabled={pending}
+          aria-label="Actions de la recherche"
+          className="rounded-md px-2 py-0.5 text-[var(--muted)] hover:bg-slate-100 disabled:opacity-50"
+        >
+          ⋯
+        </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
@@ -111,13 +122,10 @@ export function RunActions({ run }: { run: Run }) {
                 </button>
               ))}
             </div>
-            <div className="my-1 border-t border-[var(--border)]" />
-            <Item onClick={supprimer} tone="text-red-600 hover:bg-red-50">
-              🗑 Supprimer
-            </Item>
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
