@@ -17,6 +17,7 @@ export type Briefing = {
   dateLabel: string;
   objectif: string | null;
   resume: string | null;
+  resumeStale: boolean;
   nouveautes: Nouveaute[];
   priorites: Priorite[];
 };
@@ -67,6 +68,7 @@ export async function getSessionBriefing(
       dateLabel,
       objectif: null,
       resume: null,
+      resumeStale: false,
       nouveautes: [],
       priorites: [],
     };
@@ -81,7 +83,7 @@ export async function getSessionBriefing(
     await Promise.all([
       supabase
         .from("app_context")
-        .select("objectif_final, resume_session")
+        .select("objectif_final, resume_session, resume_genere_le")
         .eq("id", "main")
         .maybeSingle(),
       supabase
@@ -193,12 +195,17 @@ export async function getSessionBriefing(
     .filter((p) => p.n > 0)
     .slice(0, 5);
 
+  // Récap périmé = pas (re)généré aujourd'hui → la modale le régénère au login.
+  const resumeGenereLe = ctx?.resume_genere_le ?? null;
+  const resumeStale = !resumeGenereLe || dayKey(new Date(resumeGenereLe)) !== dayKey(now);
+
   return {
     shouldShow: true,
     prenom,
     dateLabel,
     objectif: ctx?.objectif_final ?? null,
     resume: ctx?.resume_session ?? null,
+    resumeStale,
     nouveautes,
     priorites,
   };

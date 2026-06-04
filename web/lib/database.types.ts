@@ -271,6 +271,7 @@ export interface AppContext {
   client_actif: string | null;
   deadlines: Deadline[];
   resume_session: string | null;
+  resume_genere_le: string | null;
   updated_by: string | null;
   updated_at: string;
 }
