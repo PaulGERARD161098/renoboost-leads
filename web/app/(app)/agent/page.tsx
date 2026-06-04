@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 const JOURNAL_LABEL: Record<string, string> = {
   run_lance: "🚀 Recherche lancée",
   relance_auto: "🔁 Relances planifiées",
+  escalade_appel: "📞 Escalade téléphone",
   skip_budget: "⛔ Budget atteint",
   skip_cadence: "⏳ Cadence",
   skip_max: "⛔ Max atteint",

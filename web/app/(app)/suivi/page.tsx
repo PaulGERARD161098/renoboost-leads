@@ -57,6 +57,12 @@ export default async function SuiviPage() {
       hint: "Relances qui tombent aujourd'hui ou en retard.",
     },
     {
+      label: "Appels à passer",
+      href: "/inbox?call=a_appeler",
+      n: leads.filter((l) => l.call_statut === "a_appeler").length,
+      hint: "Mail épuisé — l'agent a basculé ces leads sur le canal téléphone.",
+    },
+    {
       label: "Prêts à envoyer",
       href: "/inbox?statut=valide",
       n: byStatus("valide").length,

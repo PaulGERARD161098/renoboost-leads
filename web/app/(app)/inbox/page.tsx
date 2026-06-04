@@ -20,18 +20,19 @@ export default async function InboxPage({
     q?: string;
     vue?: string;
     archives?: string;
+    call?: string;
   }>;
 }) {
-  const { statut, q, vue, archives } = await searchParams;
+  const { statut, q, vue, archives, call } = await searchParams;
   const search = q?.trim();
-  // Les filtres niveau-lead (recherche texte, statut) forcent la vue à plat.
-  const flat = vue === "plat" || !!search || !!statut;
+  // Les filtres niveau-lead (recherche texte, statut, canal) forcent la vue à plat.
+  const flat = vue === "plat" || !!search || !!statut || !!call;
   const showArchived = archives === "1";
   const supabase = await createClient();
 
   if (flat) {
     return (
-      <FlatView supabase={supabase} statut={statut} search={search} />
+      <FlatView supabase={supabase} statut={statut} search={search} call={call} />
     );
   }
 
@@ -78,10 +79,14 @@ export default async function InboxPage({
   // actions au lieu de seulement lister.
   const { data: statutData } = await supabase
     .from("leads")
-    .select("statut, relance_at")
+    .select("statut, relance_at, call_statut")
     .limit(5000);
   const allLeads =
-    (statutData as { statut: string; relance_at: string | null }[] | null) ?? [];
+    (statutData as {
+      statut: string;
+      relance_at: string | null;
+      call_statut: string | null;
+    }[] | null) ?? [];
   const { count: veilleNouveaux } = await supabase
     .from("veille_signaux")
     .select("id", { count: "exact", head: true })
@@ -111,6 +116,12 @@ export default async function InboxPage({
           !["ecarte", "repondu"].includes(l.statut),
       ).length,
       hint: "Relances qui tombent aujourd'hui ou en retard.",
+    },
+    {
+      label: "Appels à passer",
+      href: "/inbox?call=a_appeler",
+      n: allLeads.filter((l) => l.call_statut === "a_appeler").length,
+      hint: "Mail épuisé — l'agent a basculé ces leads sur le canal téléphone.",
     },
     {
       label: "Signaux de veille",
@@ -213,10 +224,12 @@ async function FlatView({
   supabase,
   statut,
   search,
+  call,
 }: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   statut?: string;
   search?: string;
+  call?: string;
 }) {
   let query = supabase
     .from("leads")
@@ -226,6 +239,8 @@ async function FlatView({
 
   if (search) {
     query = query.ilike("entreprise", `%${search}%`);
+  } else if (call) {
+    query = query.eq("call_statut", call);
   } else if (statut && statut in LEAD_STATUS_LABEL) {
     query = query.eq("statut", statut);
   } else {
@@ -247,6 +262,8 @@ async function FlatView({
                   effacer
                 </Link>
               </>
+            ) : call === "a_appeler" ? (
+              "📞 Appels à passer — mail épuisé, escaladés par l'agent (triés par score)"
             ) : statut ? (
               `Filtre : ${LEAD_STATUS_LABEL[statut as LeadStatus]}`
             ) : (
@@ -263,7 +280,11 @@ async function FlatView({
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <FilterChip label="À traiter" href="/inbox?vue=plat" active={!statut} />
+        <FilterChip
+          label="À traiter"
+          href="/inbox?vue=plat"
+          active={!statut && !call}
+        />
         {(Object.keys(LEAD_STATUS_LABEL) as LeadStatus[]).map((s) => (
           <FilterChip
             key={s}
@@ -272,6 +293,11 @@ async function FlatView({
             active={statut === s}
           />
         ))}
+        <FilterChip
+          label="📞 À appeler"
+          href="/inbox?call=a_appeler"
+          active={call === "a_appeler"}
+        />
       </div>
 
       {error && (
