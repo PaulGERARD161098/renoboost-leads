@@ -5,6 +5,7 @@ import type {
   Verticale,
 } from "@/lib/database.types";
 import { AgentConfigForm } from "@/components/agent-config-form";
+import { SuggestionValue } from "@/components/suggestion-value";
 import { formatDate } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -119,6 +120,8 @@ export default async function AgentPage() {
           </div>
         </>
       )}
+
+      <SuggestionValue />
     </div>
   );
 }
