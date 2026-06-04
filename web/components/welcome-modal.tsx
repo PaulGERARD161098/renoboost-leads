@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Briefing } from "@/lib/briefing";
 import { markSessionSeen } from "@/lib/actions/session";
 import { genererResumeSession } from "@/lib/actions/context";
+import { logSuggestionClick } from "@/lib/actions/tracking";
 
 // Modale d'accueil « reprise au login » (charte agent-first) : salutation
 // nominative + date, ce qui est nouveau depuis la dernière session, et les
@@ -34,7 +35,8 @@ export function WelcomeModal({ briefing }: { briefing: Briefing }) {
     setOpen(false);
   }
 
-  function go(href: string) {
+  function go(href: string, action: string) {
+    void logSuggestionClick("welcome_modal", action, href);
     setOpen(false);
     router.push(href);
   }
@@ -93,7 +95,7 @@ export function WelcomeModal({ briefing }: { briefing: Briefing }) {
                 {nouveautes.map((n, i) => (
                   <li key={i}>
                     <button
-                      onClick={() => go(n.href)}
+                      onClick={() => go(n.href, n.text)}
                       className="flex w-full items-center gap-2 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-left text-sm hover:border-[var(--brand)] hover:bg-slate-50"
                     >
                       <span className="shrink-0">{n.icon}</span>
@@ -120,7 +122,7 @@ export function WelcomeModal({ briefing }: { briefing: Briefing }) {
                 {priorites.map((p) => (
                   <button
                     key={p.label}
-                    onClick={() => go(p.href)}
+                    onClick={() => go(p.href, p.label)}
                     className="group flex flex-col rounded-xl border border-[var(--border)] bg-white p-3 text-left hover:border-[var(--brand)] hover:shadow-sm"
                   >
                     <div className="flex items-center justify-between gap-2">
