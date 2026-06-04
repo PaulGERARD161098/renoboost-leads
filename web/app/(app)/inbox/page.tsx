@@ -5,7 +5,7 @@ import { LEAD_STATUS_LABEL, RUN_STATUS_LABEL, zoneLabel } from "@/lib/ui";
 import { LeadsTable } from "@/components/leads-table";
 import { RunGroup } from "@/components/run-group";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { InboxActions } from "@/components/inbox-actions";
+import { ActionsBand } from "@/components/actions-band";
 import type { RunCounts } from "@/components/run-card";
 
 export const dynamic = "force-dynamic";
@@ -124,7 +124,7 @@ export default async function InboxPage({
     <div>
       <AutoRefresh enabled={!!activeRun} />
 
-      <InboxActions actions={inboxActions} />
+      <ActionsBand source="inbox" actions={inboxActions} />
 
       <div className="mb-5 flex items-end justify-between">
         <div>

@@ -3,18 +3,30 @@
 import Link from "next/link";
 import { logSuggestionClick } from "@/lib/actions/tracking";
 
-export type InboxAction = { label: string; href: string; n: number; hint: string };
+export type BandAction = { label: string; href: string; n: number; hint: string };
 
-// Bande « Contexte → Actions » de l'onglet Prospects : l'onglet PROPOSE les
-// prochaines actions (charte agent-first) au lieu de seulement lister. Les clics
-// sont tracés (mesure de la valeur). Suit le pattern : Contexte → Actions → Données.
-export function InboxActions({ actions }: { actions: InboxAction[] }) {
+// Bande « Contexte → Actions » réutilisable sur chaque onglet (charte agent-first) :
+// l'onglet PROPOSE les prochaines actions au lieu de seulement afficher des
+// données. Les clics sont tracés par `source` (mesure de la valeur).
+export function ActionsBand({
+  source,
+  actions,
+  title = "🧭 Où on en est — prochaines actions",
+  emptyHref = "/recherche",
+  emptyLabel = "lancer une recherche",
+}: {
+  source: string;
+  actions: BandAction[];
+  title?: string;
+  emptyHref?: string;
+  emptyLabel?: string;
+}) {
   const utiles = actions.filter((a) => a.n > 0);
 
   return (
     <div className="mb-5 rounded-2xl border border-[var(--brand)]/30 bg-gradient-to-br from-[var(--brand)]/5 to-transparent p-4">
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-        🧭 Où on en est — prochaines actions
+        {title}
       </div>
       {utiles.length ? (
         <div className="flex flex-wrap gap-2">
@@ -23,7 +35,7 @@ export function InboxActions({ actions }: { actions: InboxAction[] }) {
               key={a.label}
               href={a.href}
               title={a.hint}
-              onClick={() => void logSuggestionClick("inbox", a.label, a.href)}
+              onClick={() => void logSuggestionClick(source, a.label, a.href)}
               className="group flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm hover:border-[var(--brand)] hover:shadow-sm"
             >
               <span className="font-medium group-hover:text-[var(--brand)]">{a.label}</span>
@@ -35,9 +47,9 @@ export function InboxActions({ actions }: { actions: InboxAction[] }) {
         </div>
       ) : (
         <p className="text-sm text-[var(--muted)]">
-          Pipeline à jour — bon moment pour{" "}
-          <Link href="/recherche" className="text-[var(--brand)] underline">
-            lancer une recherche
+          Rien d&apos;urgent —{" "}
+          <Link href={emptyHref} className="text-[var(--brand)] underline">
+            {emptyLabel}
           </Link>
           .
         </p>

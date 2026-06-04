@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadStatus } from "@/lib/database.types";
 import { KanbanCard } from "@/components/kanban-card";
+import { ActionsBand } from "@/components/actions-band";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +34,44 @@ export default async function SuiviPage() {
   const bounced = leads.filter((l) => l.bounced_at).length;
   const aRelancer = byStatus("a_relancer").length;
 
+  // Contexte → Actions (pattern agent-first) : prochaines actions du pipeline.
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+  const relancesDues = leads.filter(
+    (l) =>
+      l.relance_at &&
+      new Date(l.relance_at) <= endOfDay &&
+      !["ecarte", "repondu"].includes(l.statut),
+  ).length;
+  const suiviActions = [
+    {
+      label: "Réponses à traiter",
+      href: "/inbox?statut=repondu",
+      n: replied,
+      hint: "Un prospect a répondu — enchaîne le suivi commercial.",
+    },
+    {
+      label: "Relances dues",
+      href: "/inbox?statut=a_relancer",
+      n: relancesDues,
+      hint: "Relances qui tombent aujourd'hui ou en retard.",
+    },
+    {
+      label: "Prêts à envoyer",
+      href: "/inbox?statut=valide",
+      n: byStatus("valide").length,
+      hint: "Leads validés, prêts pour l'envoi.",
+    },
+  ];
+
   return (
     <div>
       <h1 className="mb-1 text-2xl font-bold">Suivi</h1>
       <p className="mb-5 text-sm text-[var(--muted)]">
         Pipeline d&apos;envoi et de réponses.
       </p>
+
+      <ActionsBand source="suivi" actions={suiviActions} />
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Envoyés" value={sent} />
