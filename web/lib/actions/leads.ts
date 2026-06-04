@@ -150,7 +150,8 @@ export async function sendLead(leadId: string) {
 
   const { error } = await supabase
     .from("leads")
-    .update({ statut: "envoye", sent_at: new Date().toISOString() })
+    // relance_at remis à zéro : l'envoi réamorce l'horloge de relance auto.
+    .update({ statut: "envoye", sent_at: new Date().toISOString(), relance_at: null })
     .eq("id", leadId);
   if (error) return { error: error.message };
   await logEvent(leadId, "envoye", { simulation });

@@ -15,6 +15,9 @@ export async function updateAgentConfig(input: {
   max_runs_jour: number;
   cadence_min: number;
   satellite_auto: boolean;
+  relance_auto: boolean;
+  relance_delai_jours: number;
+  relance_max: number;
 }) {
   const supabase = await createClient();
   const {
@@ -34,6 +37,9 @@ export async function updateAgentConfig(input: {
       max_runs_jour: input.max_runs_jour,
       cadence_min: input.cadence_min,
       satellite_auto: input.satellite_auto,
+      relance_auto: input.relance_auto,
+      relance_delai_jours: input.relance_delai_jours,
+      relance_max: input.relance_max,
       updated_by: user?.id ?? null,
       updated_at: new Date().toISOString(),
     })

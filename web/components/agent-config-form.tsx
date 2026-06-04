@@ -27,6 +27,11 @@ export function AgentConfigForm({
   );
   const [maxRuns, setMaxRuns] = useState(String(config.max_runs_jour));
   const [cadence, setCadence] = useState(String(config.cadence_min));
+  const [relanceAuto, setRelanceAuto] = useState(config.relance_auto);
+  const [relanceDelai, setRelanceDelai] = useState(
+    String(config.relance_delai_jours),
+  );
+  const [relanceMax, setRelanceMax] = useState(String(config.relance_max));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -52,6 +57,9 @@ export function AgentConfigForm({
       max_runs_jour: Number(maxRuns) || 0,
       cadence_min: Number(cadence) || 0,
       satellite_auto: satelliteAuto,
+      relance_auto: relanceAuto,
+      relance_delai_jours: Number(relanceDelai) || 0,
+      relance_max: Number(relanceMax) || 0,
     });
     setSaving(false);
     if (res.error) setMsg(`Erreur : ${res.error}`);
@@ -109,6 +117,47 @@ export function AgentConfigForm({
             }`}
           />
         </button>
+      </div>
+
+      {/* Relances automatiques (sous garde-fous, sans envoi) */}
+      <div className="rounded-xl border border-[var(--border)] bg-white p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-semibold">Relances automatiques</div>
+            <div className="text-sm text-[var(--muted)]">
+              L&apos;agent repère les envois restés sans réponse et{" "}
+              <strong>planifie la relance</strong> (colonne « À relancer ») — il
+              n&apos;envoie jamais : tu valides et tu envoies.
+            </div>
+          </div>
+          <button
+            onClick={() => setRelanceAuto((a) => !a)}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+              relanceAuto ? "bg-[var(--brand)]" : "bg-slate-300"
+            }`}
+            aria-pressed={relanceAuto}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+                relanceAuto ? "left-[1.375rem]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
+        {relanceAuto && (
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <Field
+              label="Délai sans réponse avant relance (jours)"
+              value={relanceDelai}
+              onChange={setRelanceDelai}
+            />
+            <Field
+              label="Relances max. par lead"
+              value={relanceMax}
+              onChange={setRelanceMax}
+            />
+          </div>
+        )}
       </div>
 
       {/* Périmètre */}

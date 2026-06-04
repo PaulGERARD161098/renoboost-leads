@@ -4,6 +4,7 @@ import { analyseSatellite } from "@/lib/satellite";
 import type { AgentConfig, Run, Verticale } from "@/lib/database.types";
 
 const SATELLITE_PAR_TICK = 5;
+const RELANCES_PAR_TICK = 10;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,55 @@ async function handle(req: NextRequest) {
       await admin.from("agent_journal").insert({
         type: "info",
         message: `Analyse satellite auto : ${satelliteAnalyses} lead(s).`,
+      });
+    }
+  }
+
+  // Passe relance (Palier 3.1) : planifie les relances dues sans rien envoyer.
+  // Garde-fou cardinal — « jamais d'action sortante sans validation » : l'agent
+  // ne fait que poser statut=a_relancer + relance_at pour remplir la worklist ;
+  // l'humain valide et envoie. Indépendant du budget des runs (coût nul).
+  if (cfg.relance_auto) {
+    const seuilISO = new Date(
+      Date.now() - cfg.relance_delai_jours * 86_400_000,
+    ).toISOString();
+    const { data: candidats } = await admin
+      .from("leads")
+      .select("id")
+      .in("statut", ["envoye", "ouvert"])
+      .is("relance_at", null)
+      .is("bounced_at", null)
+      .not("sent_at", "is", null)
+      .lt("sent_at", seuilISO)
+      .order("score", { ascending: false, nullsFirst: false })
+      .limit(RELANCES_PAR_TICK);
+
+    let relancesPlanifiees = 0;
+    for (const l of (candidats as { id: string }[]) ?? []) {
+      // Garde-fou anti-harcèlement : on compte les relances déjà tracées.
+      const { count } = await admin
+        .from("lead_events")
+        .select("id", { count: "exact", head: true })
+        .eq("lead_id", l.id)
+        .eq("type", "relance");
+      if ((count ?? 0) >= cfg.relance_max) continue;
+
+      const { error: upErr } = await admin
+        .from("leads")
+        .update({ statut: "a_relancer", relance_at: new Date().toISOString() })
+        .eq("id", l.id);
+      if (upErr) continue;
+      await admin.from("lead_events").insert({
+        lead_id: l.id,
+        type: "relance",
+        payload: { auto: true },
+      });
+      relancesPlanifiees++;
+    }
+    if (relancesPlanifiees > 0) {
+      await admin.from("agent_journal").insert({
+        type: "relance_auto",
+        message: `Relances planifiées automatiquement : ${relancesPlanifiees} lead(s) sans réponse depuis ${cfg.relance_delai_jours} j. (à valider et envoyer)`,
       });
     }
   }

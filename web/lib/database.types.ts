@@ -209,6 +209,9 @@ export interface AgentConfig {
   max_runs_jour: number;
   cadence_min: number;
   satellite_auto: boolean;
+  relance_auto: boolean;
+  relance_delai_jours: number;
+  relance_max: number;
   updated_by: string | null;
   updated_at: string;
   created_at: string;
