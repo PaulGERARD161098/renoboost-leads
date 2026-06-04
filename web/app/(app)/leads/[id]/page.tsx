@@ -8,6 +8,7 @@ import { LeadNotes } from "@/components/lead-notes";
 import { LeadRelance } from "@/components/lead-relance";
 import { SatellitePanel } from "@/components/satellite-panel";
 import { MailThread } from "@/components/mail-thread";
+import { ReplyAssistant } from "@/components/reply-assistant";
 import { ColdCallPanel } from "@/components/cold-call-panel";
 import { BornesLinks } from "@/components/bornes-links";
 import { bornesProximite } from "@/lib/bornes";
@@ -195,6 +196,10 @@ export default async function LeadPage({
           />
 
           <MailThread messages={(messages as LeadMessage[] | null) ?? []} />
+
+          {((messages as LeadMessage[] | null) ?? []).some(
+            (m) => m.direction === "in",
+          ) && <ReplyAssistant leadId={l.id} />}
 
           <ColdCallPanel
             leadId={l.id}
