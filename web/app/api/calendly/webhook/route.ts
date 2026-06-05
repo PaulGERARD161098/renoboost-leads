@@ -85,6 +85,14 @@ export async function POST(req: NextRequest) {
       : null;
   if (!email) return NextResponse.json({ error: "no invitee email" }, { status: 400 });
 
+  // Date/heure du créneau réservé, si présente dans le payload Calendly
+  // (invitee.created → payload.scheduled_event.start_time).
+  const scheduled = (payload.scheduled_event ?? {}) as Record<string, unknown>;
+  const rdvAt =
+    typeof scheduled.start_time === "string" && scheduled.start_time.trim()
+      ? scheduled.start_time
+      : null;
+
   // Retrouve le lead par email de contact ; on ne touche pas un lead déjà écarté.
   const { data: found, error: findErr } = await admin
     .from("leads")
@@ -106,6 +114,16 @@ export async function POST(req: NextRequest) {
   if (updErr) {
     console.error("Webhook Calendly : update", updErr.message);
     return NextResponse.json({ error: "update failed" }, { status: 500 });
+  }
+
+  // Best-effort : enregistre la date du RDV si on l'a et si la colonne existe
+  // (migration 0030). Une erreur ici ne doit jamais faire échouer la capture.
+  if (rdvAt) {
+    const { error: rdvErr } = await admin
+      .from("leads")
+      .update({ rdv_at: rdvAt })
+      .eq("id", found.id);
+    if (rdvErr) console.warn("Webhook Calendly : rdv_at non enregistré", rdvErr.message);
   }
 
   await admin.from("lead_events").insert({

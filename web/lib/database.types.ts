@@ -105,6 +105,7 @@ export interface Lead {
   replied_at: string | null;
   bounced_at: string | null;
   relance_at: string | null;
+  rdv_at: string | null;
   campaign_id: string | null;
   call_statut: CallStatut | null;
   owner: string | null;
