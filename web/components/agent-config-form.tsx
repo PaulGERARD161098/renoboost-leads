@@ -32,6 +32,9 @@ export function AgentConfigForm({
     String(config.relance_delai_jours),
   );
   const [relanceMax, setRelanceMax] = useState(String(config.relance_max));
+  const [reponseStatutAuto, setReponseStatutAuto] = useState(
+    config.reponse_statut_auto,
+  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -60,6 +63,7 @@ export function AgentConfigForm({
       relance_auto: relanceAuto,
       relance_delai_jours: Number(relanceDelai) || 0,
       relance_max: Number(relanceMax) || 0,
+      reponse_statut_auto: reponseStatutAuto,
     });
     setSaving(false);
     if (res.error) setMsg(`Erreur : ${res.error}`);
@@ -160,6 +164,32 @@ export function AgentConfigForm({
             />
           </div>
         )}
+      </div>
+
+      {/* Transitions de statut sur réponse (conservateur) */}
+      <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-white p-4">
+        <div>
+          <div className="font-semibold">Statut auto sur réponse</div>
+          <div className="text-sm text-[var(--muted)]">
+            Quand Magellan classe une réponse, applique les transitions{" "}
+            <strong>sûres</strong> tout seul (« plus tard » → relance planifiée à
+            +3 sem.). Les écartements (refus, absence, mauvais interlocuteur)
+            restent <strong>proposés en 1 clic</strong>, jamais automatiques.
+          </div>
+        </div>
+        <button
+          onClick={() => setReponseStatutAuto((a) => !a)}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+            reponseStatutAuto ? "bg-[var(--brand)]" : "bg-slate-300"
+          }`}
+          aria-pressed={reponseStatutAuto}
+        >
+          <span
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+              reponseStatutAuto ? "left-[1.375rem]" : "left-0.5"
+            }`}
+          />
+        </button>
       </div>
 
       {/* Périmètre */}

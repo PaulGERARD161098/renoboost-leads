@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { LeadMessage, ReplyCategorie } from "@/lib/database.types";
+import { transitionForCategorie } from "@/lib/reply-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
 
   const { data: lead } = await supabase
     .from("leads")
-    .select("entreprise, contact_nom, verticale:verticales(nom)")
+    .select("entreprise, contact_nom, statut, verticale:verticales(nom)")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) {
@@ -210,7 +211,42 @@ export async function POST(req: NextRequest) {
       .single();
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
-    return NextResponse.json({ suggestion: inserted, cached: false });
+    // Incrément C — application AUTO des transitions sûres (conservateur).
+    // Seules les transitions marquées `auto` (« plus tard » → relance planifiée)
+    // sont appliquées sans validation, et uniquement si l'option est activée et
+    // le lead encore en cours de traitement (jamais sur rdv_pris/ecarte).
+    let statutAuto: string | null = null;
+    const tr = transitionForCategorie(categorie);
+    const statutCourant = (lead as { statut: string }).statut;
+    const enCours = ["envoye", "ouvert", "repondu", "a_relancer"].includes(statutCourant);
+    if (tr?.auto && enCours) {
+      const { data: cfg } = await supabase
+        .from("agent_config")
+        .select("reponse_statut_auto")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if ((cfg as { reponse_statut_auto?: boolean } | null)?.reponse_statut_auto) {
+        const patch: { statut: string; relance_at?: string } = { statut: tr.statut };
+        if (tr.relanceDansJours != null) {
+          patch.relance_at = new Date(
+            Date.now() + tr.relanceDansJours * 86_400_000,
+          ).toISOString();
+        }
+        const { error: upErr } = await supabase.from("leads").update(patch).eq("id", leadId);
+        if (!upErr) {
+          statutAuto = tr.statut;
+          await supabase.from("lead_events").insert({
+            lead_id: leadId,
+            type: "note",
+            payload: { action: "statut_auto", categorie, statut: tr.statut, auto: true },
+            actor: user.id,
+          });
+        }
+      }
+    }
+
+    return NextResponse.json({ suggestion: inserted, cached: false, statutAuto });
   } catch (e) {
     console.error("reply-draft error", e);
     return NextResponse.json({ error: "Erreur interne." }, { status: 500 });

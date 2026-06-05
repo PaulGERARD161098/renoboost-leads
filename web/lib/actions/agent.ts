@@ -18,6 +18,7 @@ export async function updateAgentConfig(input: {
   relance_auto: boolean;
   relance_delai_jours: number;
   relance_max: number;
+  reponse_statut_auto: boolean;
 }) {
   const supabase = await createClient();
   const {
@@ -40,6 +41,7 @@ export async function updateAgentConfig(input: {
       relance_auto: input.relance_auto,
       relance_delai_jours: input.relance_delai_jours,
       relance_max: input.relance_max,
+      reponse_statut_auto: input.reponse_statut_auto,
       updated_by: user?.id ?? null,
       updated_at: new Date().toISOString(),
     })
