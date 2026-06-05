@@ -83,6 +83,20 @@ export function AssistantWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Pont avec la commande vocale de l'accueil (event `magellan:ask`) : on ouvre le
+  // panneau et, si une demande est fournie, on l'envoie directement. Un ref garde
+  // `send` à jour sans recréer l'écouteur.
+  const sendRef = useRef<(t: string) => void>(() => {});
+  useEffect(() => {
+    function onAsk(e: Event) {
+      const question = (e as CustomEvent<string>).detail?.trim();
+      setOpen(true);
+      if (question) sendRef.current(question);
+    }
+    window.addEventListener("magellan:ask", onAsk as EventListener);
+    return () => window.removeEventListener("magellan:ask", onAsk as EventListener);
+  }, []);
+
   // Dictée vocale (API navigateur Web Speech) : on parle, ça remplit le champ.
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -162,6 +176,8 @@ export function AssistantWidget() {
       setLoading(false);
     }
   }
+  // Toujours pointer vers la dernière version de `send` pour le pont `magellan:ask`.
+  sendRef.current = send;
 
   return (
     <>

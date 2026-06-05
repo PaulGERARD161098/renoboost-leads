@@ -5,10 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 const LINKS = [
+  { href: "/accueil", label: "Accueil", icon: "🧭" },
   { href: "/inbox", label: "Prospects", icon: "👥" },
   { href: "/suivi", label: "Suivi", icon: "📊" },
   { href: "/campagnes", label: "Campagnes", icon: "✉️" },
   { href: "/bornes", label: "Bornes VE", icon: "🔌" },
+  { href: "/solaire", label: "Solaire", icon: "☀️" },
   { href: "/recherche", label: "Recherches", icon: "🔎" },
   { href: "/cibles", label: "Cibles", icon: "🎯" },
   { href: "/tableau-de-bord", label: "Tableau de bord", icon: "📈" },
@@ -33,7 +35,7 @@ export function Nav({ email }: { email: string | null }) {
     <aside className="group fixed left-0 top-0 z-30 flex h-screen w-16 flex-col border-r border-[var(--border)] bg-white transition-[width] duration-200 ease-out hover:w-60 hover:shadow-xl">
       {/* Logo */}
       <Link
-        href="/inbox"
+        href="/accueil"
         className="flex h-14 shrink-0 items-center gap-2 overflow-hidden px-4 text-[var(--brand)]"
       >
         <span className="text-xl">🧭</span>
