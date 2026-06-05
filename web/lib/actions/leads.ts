@@ -102,6 +102,25 @@ export async function addLeadNote(leadId: string, texte: string) {
   return { ok: true };
 }
 
+/**
+ * Marque un RDV pris (incrément B) : statut rdv_pris + sortie des files de
+ * relance (relance_at) et d'appel (call_statut). Tracé. Appelé manuellement
+ * (fiche) ou par le webhook Calendly.
+ */
+export async function marquerRdvPris(leadId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ statut: "rdv_pris", relance_at: null, call_statut: null })
+    .eq("id", leadId);
+  if (error) return { error: error.message };
+  await logEvent(leadId, "note", { action: "rdv_pris" });
+  revalidatePath("/suivi");
+  revalidatePath("/inbox");
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
 /** Marque un lead « à relancer » et trace l'événement de relance. */
 export async function relancerLead(leadId: string) {
   const supabase = await createClient();

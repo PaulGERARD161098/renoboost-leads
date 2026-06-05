@@ -11,6 +11,7 @@ export type LeadStatus =
   | "ouvert"
   | "repondu"
   | "a_relancer"
+  | "rdv_pris"
   | "ecarte";
 export type LeadEventType =
   | "cree"
