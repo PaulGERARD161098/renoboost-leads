@@ -35,6 +35,10 @@ export function AgentConfigForm({
   const [reponseStatutAuto, setReponseStatutAuto] = useState(
     config.reponse_statut_auto,
   );
+  const [veilleAutoLead, setVeilleAutoLead] = useState(config.veille_auto_lead);
+  const [veilleAutoSeuil, setVeilleAutoSeuil] = useState(
+    String(config.veille_auto_seuil),
+  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -64,6 +68,8 @@ export function AgentConfigForm({
       relance_delai_jours: Number(relanceDelai) || 0,
       relance_max: Number(relanceMax) || 0,
       reponse_statut_auto: reponseStatutAuto,
+      veille_auto_lead: veilleAutoLead,
+      veille_auto_seuil: Number(veilleAutoSeuil) || 0,
     });
     setSaving(false);
     if (res.error) setMsg(`Erreur : ${res.error}`);
@@ -190,6 +196,43 @@ export function AgentConfigForm({
             }`}
           />
         </button>
+      </div>
+
+      {/* Speed-to-lead : veille chaude → lead + pré-rédaction */}
+      <div className="rounded-xl border border-[var(--border)] bg-white p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-semibold">Veille chaude → lead automatique</div>
+            <div className="text-sm text-[var(--muted)]">
+              Les signaux de veille dont l&apos;intention dépasse le seuil sont{" "}
+              <strong>convertis en leads « à valider »</strong> et leur approche
+              est <strong>pré-rédigée</strong> — tu valides et envoies. Aucun
+              envoi automatique.
+            </div>
+          </div>
+          <button
+            onClick={() => setVeilleAutoLead((a) => !a)}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+              veilleAutoLead ? "bg-[var(--brand)]" : "bg-slate-300"
+            }`}
+            aria-pressed={veilleAutoLead}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+                veilleAutoLead ? "left-[1.375rem]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
+        {veilleAutoLead && (
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <Field
+              label="Score d'intention minimum (0-100)"
+              value={veilleAutoSeuil}
+              onChange={setVeilleAutoSeuil}
+            />
+          </div>
+        )}
       </div>
 
       {/* Périmètre */}
