@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Lead, LeadStatus } from "@/lib/database.types";
 import { scoreColor } from "@/lib/ui";
-import { relancerLead, sendLead, setLeadStatus } from "@/lib/actions/leads";
+import {
+  marquerRdvPris,
+  relancerLead,
+  sendLead,
+  setLeadStatus,
+} from "@/lib/actions/leads";
 
 type Action = { label: string; run: () => Promise<{ error?: string }>; primary?: boolean };
 
@@ -30,15 +35,17 @@ export function KanbanCard({ lead }: { lead: Lead }) {
     run: () => setLeadStatus(lead.id, "repondu"),
   };
   const envoyer: Action = { label: "Envoyer", run: () => sendLead(lead.id), primary: true };
+  const rdv: Action = { label: "📅 RDV", run: () => marquerRdvPris(lead.id) };
 
   const ACTIONS: Record<LeadStatus, Action[]> = {
     nouveau: [],
     a_valider: [],
     valide: [envoyer, ecarter],
-    envoye: [repondu, relancer],
-    ouvert: [repondu, relancer],
-    repondu: [ecarter],
-    a_relancer: [envoyer, ecarter],
+    envoye: [repondu, relancer, rdv],
+    ouvert: [repondu, relancer, rdv],
+    repondu: [rdv, ecarter],
+    a_relancer: [envoyer, rdv, ecarter],
+    rdv_pris: [],
     ecarte: [],
   };
 

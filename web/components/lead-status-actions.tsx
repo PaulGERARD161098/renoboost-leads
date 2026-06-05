@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Lead, LeadStatus } from "@/lib/database.types";
-import { relancerLead, setLeadStatus } from "@/lib/actions/leads";
+import { marquerRdvPris, relancerLead, setLeadStatus } from "@/lib/actions/leads";
 
 export function LeadStatusActions({ lead }: { lead: Lead }) {
   const router = useRouter();
@@ -24,6 +24,8 @@ export function LeadStatusActions({ lead }: { lead: Lead }) {
     actions.push({ label: "Relancer", run: () => relancerLead(lead.id) });
   if ((["envoye", "ouvert"] as LeadStatus[]).includes(s))
     actions.push({ label: "Marquer répondu", run: () => setLeadStatus(lead.id, "repondu") });
+  if ((["envoye", "ouvert", "repondu", "a_relancer"] as LeadStatus[]).includes(s))
+    actions.push({ label: "📅 RDV pris", run: () => marquerRdvPris(lead.id) });
 
   if (actions.length === 0) return null;
 

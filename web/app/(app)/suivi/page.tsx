@@ -12,6 +12,7 @@ const COLUMNS: { statut: LeadStatus; label: string }[] = [
   { statut: "ouvert", label: "Ouverts" },
   { statut: "repondu", label: "Répondus" },
   { statut: "a_relancer", label: "À relancer" },
+  { statut: "rdv_pris", label: "RDV pris" },
 ];
 
 export default async function SuiviPage() {
@@ -34,6 +35,11 @@ export default async function SuiviPage() {
   const replied = byStatus("repondu").length;
   const bounced = leads.filter((l) => l.bounced_at).length;
   const aRelancer = byStatus("a_relancer").length;
+  const rdvPris = byStatus("rdv_pris").length;
+  // Base « contactés » = tout ce qui a quitté le stade « validé » (RDV inclus).
+  const contactes = leads.filter((l) =>
+    ["envoye", "ouvert", "repondu", "a_relancer", "rdv_pris"].includes(l.statut),
+  ).length;
 
   // Contexte → Actions (pattern agent-first) : prochaines actions du pipeline.
   const endOfDay = new Date();
@@ -81,7 +87,7 @@ export default async function SuiviPage() {
 
       <ActionsBand source="suivi" actions={rankedActions} />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
         <Stat label="Envoyés" value={sent} />
         <Stat
           label="Taux d'ouverture"
@@ -92,13 +98,18 @@ export default async function SuiviPage() {
           value={sent ? `${Math.round((replied / sent) * 100)}%` : "—"}
         />
         <Stat label="À relancer" value={aRelancer} />
+        <Stat label="RDV pris" value={rdvPris} />
+        <Stat
+          label="Taux de conversion"
+          value={contactes ? `${Math.round((rdvPris / contactes) * 100)}%` : "—"}
+        />
         <Stat
           label="Rebonds"
           value={sent ? `${bounced} (${Math.round((bounced / sent) * 100)}%)` : bounced}
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         {COLUMNS.map((col) => {
           const items = byStatus(col.statut);
           return (

@@ -8,6 +8,7 @@ export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
   ouvert: "Ouvert",
   repondu: "Répondu",
   a_relancer: "À relancer",
+  rdv_pris: "RDV pris",
   ecarte: "Écarté",
 };
 
@@ -19,6 +20,7 @@ export const LEAD_STATUS_COLOR: Record<LeadStatus, string> = {
   ouvert: "bg-violet-100 text-violet-800",
   repondu: "bg-emerald-100 text-emerald-800",
   a_relancer: "bg-orange-100 text-orange-800",
+  rdv_pris: "bg-teal-100 text-teal-800",
   ecarte: "bg-slate-200 text-slate-500",
 };
 
@@ -90,6 +92,8 @@ export function nextAction(lead: {
   contact_email: string | null;
 }): string {
   switch (lead.statut) {
+    case "rdv_pris":
+      return "RDV pris 🎉 — prépare le rendez-vous (besoins, devis, proposition).";
     case "repondu":
       return "A répondu — enchaîne le suivi commercial (RDV, devis).";
     case "ouvert":
