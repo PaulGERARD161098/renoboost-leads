@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { AppContext, Lead, Run } from "@/lib/database.types";
 import { RepriseBanner } from "@/components/reprise-banner";
-import { formatDate, scoreColor, scoreGlobal } from "@/lib/ui";
+import { formatDate, satelliteScore100, scoreColor, scoreGlobal } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +19,7 @@ export default async function TableauDeBordPage() {
     .limit(5000);
   const leads = (leadsData as Partial<Lead>[]) ?? [];
 
-  const solScore = (l: Partial<Lead>) =>
-    (l.vision_satellite as { score?: number } | null)?.score ?? null;
+  const solScore = (l: Partial<Lead>) => satelliteScore100(l.vision_satellite);
   const topSolaire = leads
     .filter((l) => typeof solScore(l) === "number")
     .sort((a, b) => (solScore(b) ?? 0) - (solScore(a) ?? 0))

@@ -1,4 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  assembler,
+  compterBornes,
+  scorerBornes,
+  scorerOmbrieres,
+  scorerSolaire,
+  surfaceBatieM2,
+  surfaceExploitableDepuis,
+} from "@/lib/potentiel";
 
 // Analyse "potentiel solaire" d'un lead via vue aérienne IGN + Claude Vision.
 // Partagé entre la route /api/lead/satellite et l'outil Magellan.
@@ -31,10 +40,10 @@ export function ignUrl(lat: number, lon: number): string {
   return `https://data.geopf.fr/wms-r/wms?${params.toString()}`;
 }
 
-const PROMPT = `Tu analyses une vue aérienne IGN (orthophoto) centrée sur le site d'une entreprise, pour évaluer son potentiel solaire (panneaux en toiture et ombrières de parking).
+const PROMPT = `Tu analyses une vue aérienne IGN (orthophoto) centrée sur le site d'une entreprise, pour Rossini Energy (solaire en toiture, ombrières de parking, bornes de recharge). Décris UNIQUEMENT ce que tu OBSERVES (n'invente rien, ne calcule pas de score).
 Réponds UNIQUEMENT par un objet JSON valide, sans texte autour, au format :
-{"score":<0-100>,"verdict":"<phrase courte>","toiture":{"presente":<bool>,"type":"plate|inclinee|inconnue","surface_estimee_m2":<number|null>},"parking":{"present":<bool>,"surface_estimee_m2":<number|null>,"ombrieres_possibles":<bool>},"commentaire":"<2-3 phrases>"}
-Le score reflète l'intérêt global (grandes surfaces planes = élevé). Sois prudent si l'image est ambiguë.`;
+{"toiture":{"presente":<bool>,"type":"plate|inclinee|inclinee_nord|encombree|inconnue","surface_estimee_m2":<number|null>,"ratio_exploitable":<number 0-1|null>},"parking":{"present":<bool>,"surface_estimee_m2":<number|null>,"nb_places_estime":<integer|null>,"partage":<bool|null>},"bornes_visibles":<integer>}
+ratio_exploitable = part de toiture réellement équipable (hors édicules, lanterneaux, ombres). partage = parking partagé entre plusieurs enseignes. bornes_visibles = nombre de bornes de recharge VE visibles. Mets null si tu n'es pas sûr d'une valeur chiffrée.`;
 
 function parseJson(text: string): Record<string, unknown> | null {
   try {
@@ -182,7 +191,38 @@ export async function analyseSatellite(
         retry: true,
       };
 
-    const result = { ...parsed, image_url: imageUrl, analyse_le: new Date().toISOString() };
+    // Observations Vision → 3 potentiels /10 (format v2, comme le worker).
+    const toit = (parsed.toiture ?? {}) as {
+      presente?: boolean;
+      type?: string;
+      surface_estimee_m2?: number | null;
+      ratio_exploitable?: number | null;
+    };
+    const park = (parsed.parking ?? {}) as {
+      present?: boolean;
+      surface_estimee_m2?: number | null;
+      nb_places_estime?: number | null;
+      partage?: boolean | null;
+    };
+    const bornesVues = typeof parsed.bornes_visibles === "number" ? parsed.bornes_visibles : 0;
+
+    const surfaceToiture = (await surfaceBatieM2(lat, lon)) ?? toit.surface_estimee_m2 ?? null;
+    const exploitable = toit.presente
+      ? surfaceExploitableDepuis(surfaceToiture, toit.type ?? null, toit.ratio_exploitable ?? null)
+      : null;
+    const solaire = scorerSolaire(exploitable, surfaceToiture, toit.type ?? null);
+    const ombrieres = scorerOmbrieres(
+      Boolean(park.present),
+      park.nb_places_estime ?? null,
+      park.surface_estimee_m2 ?? null,
+      park.partage ?? null,
+      (lead.entreprise as string) ?? null,
+    );
+    const comptage = await compterBornes(lat, lon);
+    const surSite = Math.max(comptage.sur_site, bornesVues);
+    const bornes = scorerBornes(surSite, comptage.voisinage_1km, comptage.rayon_10km, false, comptage.types);
+
+    const result = assembler(solaire, ombrieres, bornes, imageUrl);
     await supabase.from("leads").update({ vision_satellite: result }).eq("id", leadId);
     return { ok: true, result };
   } catch (e) {

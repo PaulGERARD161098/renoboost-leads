@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { scoreColor } from "@/lib/ui";
+
+// Carte Leaflet → client only (Leaflet a besoin de `window`).
+const SatelliteMap = dynamic(() => import("./satellite-map"), {
+  ssr: false,
+  loading: () => <div className="h-44 w-full animate-pulse rounded-lg bg-slate-100 lg:w-[200px]" />,
+});
 
 type PotentielSolaire = {
   score: number;
@@ -114,10 +121,14 @@ export function SatellitePanel({
   leadId,
   initial,
   canAnalyse,
+  lat,
+  lon,
 }: {
   leadId: string;
   initial: Record<string, unknown> | null;
   canAnalyse: boolean;
+  lat?: number | null;
+  lon?: number | null;
 }) {
   const [result, setResult] = useState<Vision | null>((initial as Vision) ?? null);
   const [loading, setLoading] = useState(false);
@@ -211,14 +222,20 @@ export function SatellitePanel({
               {result.synthese}
             </p>
           )}
-          <div className="grid gap-3 lg:grid-cols-[200px_1fr]">
-            {result.image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={result.image_url}
-                alt="Vue aérienne IGN centrée sur l'adresse"
-                className="h-44 w-full rounded-lg object-cover lg:w-[200px]"
-              />
+          <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
+            {typeof lat === "number" && typeof lon === "number" ? (
+              <div className="h-52 w-full overflow-hidden rounded-lg lg:h-44 lg:w-[260px]">
+                <SatelliteMap lat={lat} lon={lon} />
+              </div>
+            ) : (
+              result.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={result.image_url}
+                  alt="Vue aérienne IGN centrée sur l'adresse"
+                  className="h-44 w-full rounded-lg object-cover lg:w-[260px]"
+                />
+              )
             )}
             <div className="grid gap-3 sm:grid-cols-3">
               <PotentielCard

@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Lead } from "@/lib/database.types";
-import { LEAD_STATUS_COLOR, LEAD_STATUS_LABEL, scoreColor } from "@/lib/ui";
+import { LEAD_STATUS_COLOR, LEAD_STATUS_LABEL, satelliteScore100, scoreColor } from "@/lib/ui";
 import { setLeadsStatus } from "@/lib/actions/leads";
 
 type SortKey = "entreprise" | "ville" | "effectif" | "score";
@@ -16,8 +16,7 @@ function effectifNum(e: string | null): number {
 }
 
 function solaireScore(l: Lead): number {
-  const v = l.vision_satellite as { score?: number } | null;
-  return typeof v?.score === "number" ? v.score : -1;
+  return satelliteScore100(l.vision_satellite) ?? -1;
 }
 
 export function LeadsTable({ leads }: { leads: Lead[] }) {
