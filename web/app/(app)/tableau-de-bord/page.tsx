@@ -258,8 +258,14 @@ export default async function TableauDeBordPage() {
       {/* Potentiel solaire (satellite) */}
       {topSolaire.length > 0 && (
         <>
-          <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-            ☀️ Meilleurs potentiels solaires ({fortSolaire} à fort potentiel)
+          <h2 className="mb-2 mt-8 flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            <span>☀️ Meilleurs potentiels solaires ({fortSolaire} à fort potentiel)</span>
+            <Link
+              href="/solaire"
+              className="font-medium normal-case text-[var(--brand)] hover:underline"
+            >
+              Ouvrir le workspace Solaire →
+            </Link>
           </h2>
           <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
             <table className="w-full text-sm">
