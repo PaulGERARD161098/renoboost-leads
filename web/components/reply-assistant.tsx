@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { LeadReplySuggestion, ReplyCategorie } from "@/lib/database.types";
-import { appliquerBrouillonReponse } from "@/lib/actions/leads";
+import {
+  appliquerBrouillonReponse,
+  appliquerTransitionReponse,
+} from "@/lib/actions/leads";
+import { transitionForCategorie } from "@/lib/reply-actions";
 
 const CAT: Record<ReplyCategorie, { label: string; tone: string }> = {
   interesse: { label: "🟢 Intéressé / veut un RDV", tone: "bg-emerald-100 text-emerald-800" },
@@ -27,12 +31,15 @@ export function ReplyAssistant({ leadId }: { leadId: string }) {
   const [corps, setCorps] = useState("");
   const [applying, startApply] = useTransition();
   const [applied, setApplied] = useState(false);
+  const [transing, startTrans] = useTransition();
+  const [transDone, setTransDone] = useState(false);
 
   const charger = useCallback(
     async (force: boolean) => {
       setLoading(true);
       setError(null);
       setApplied(false);
+      setTransDone(false);
       try {
         const res = await fetch("/api/lead/reply-draft", {
           method: "POST",
@@ -69,6 +76,19 @@ export function ReplyAssistant({ leadId }: { leadId: string }) {
       const res = await appliquerBrouillonReponse(leadId, sugg.id, sujet, corps);
       if (!res.error) {
         setApplied(true);
+        router.refresh();
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  function appliquerTransition() {
+    if (!sugg) return;
+    startTrans(async () => {
+      const res = await appliquerTransitionReponse(leadId, sugg.categorie);
+      if (!res.error) {
+        setTransDone(true);
         router.refresh();
       } else {
         setError(res.error);
@@ -141,6 +161,30 @@ export function ReplyAssistant({ leadId }: { leadId: string }) {
               Reprend dans « Email proposé » ci-dessous — rien n'est envoyé.
             </span>
           </div>
+
+          {(() => {
+            const tr = transitionForCategorie(sugg.categorie);
+            if (!tr) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
+                <span className="text-xs font-medium text-[var(--muted)]">
+                  Action suggérée :
+                </span>
+                <button
+                  onClick={appliquerTransition}
+                  disabled={transing || transDone}
+                  className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-40"
+                >
+                  {transing ? "…" : tr.label}
+                </button>
+                {transDone && (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                    ✓ appliqué
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </div>
       ) : null}
     </div>

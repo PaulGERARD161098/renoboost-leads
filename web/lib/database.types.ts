@@ -213,6 +213,7 @@ export interface AgentConfig {
   relance_auto: boolean;
   relance_delai_jours: number;
   relance_max: number;
+  reponse_statut_auto: boolean;
   updated_by: string | null;
   updated_at: string;
   created_at: string;

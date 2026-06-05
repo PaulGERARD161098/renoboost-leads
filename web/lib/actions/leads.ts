@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { LeadStatus } from "@/lib/database.types";
+import type { LeadStatus, ReplyCategorie } from "@/lib/database.types";
+import { transitionForCategorie } from "@/lib/reply-actions";
 
 async function logEvent(
   leadId: string,
@@ -118,6 +119,37 @@ export async function marquerRdvPris(leadId: string) {
   revalidatePath("/suivi");
   revalidatePath("/inbox");
   revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
+/**
+ * Applique la transition de statut déduite de la catégorie de réponse (incrément
+ * C). Utilisé pour les actions PROPOSÉES en 1 clic (écarter…) et, côté route,
+ * pour l'application auto des transitions sûres. Tracé. Idempotent.
+ */
+export async function appliquerTransitionReponse(
+  leadId: string,
+  categorie: ReplyCategorie,
+) {
+  const tr = transitionForCategorie(categorie);
+  if (!tr) return { error: "Aucune transition pour cette catégorie." };
+  const supabase = await createClient();
+  const patch: { statut: LeadStatus; relance_at?: string } = { statut: tr.statut };
+  if (tr.relanceDansJours != null) {
+    patch.relance_at = new Date(
+      Date.now() + tr.relanceDansJours * 86_400_000,
+    ).toISOString();
+  }
+  const { error } = await supabase.from("leads").update(patch).eq("id", leadId);
+  if (error) return { error: error.message };
+  await logEvent(leadId, "note", {
+    action: "statut_auto",
+    categorie,
+    statut: tr.statut,
+  });
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/inbox");
+  revalidatePath("/suivi");
   return { ok: true };
 }
 
