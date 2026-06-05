@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { analyseSatellite } from "@/lib/satellite";
+import { generateOutreachDraft } from "@/lib/outreach";
 import type { AgentConfig, Run, Verticale } from "@/lib/database.types";
 
 const SATELLITE_PAR_TICK = 5;
 const RELANCES_PAR_TICK = 10;
+// Plafond dur de conversions veille→lead par tick : chaque conversion consomme
+// un appel IA (pré-rédaction). Garde-fou budget.
+const VEILLE_AUTO_PAR_TICK = 3;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -133,6 +137,103 @@ async function handle(req: NextRequest) {
       await admin.from("agent_journal").insert({
         type: "escalade_appel",
         message: `Canal mail épuisé : ${escaladesAppel} lead(s) basculé(s) « à appeler » (relances mail au plafond). À appeler depuis l'inbox.`,
+      });
+    }
+  }
+
+  // Passe speed-to-lead (incrément D) : les signaux de veille les plus chauds
+  // (score d'intention ≥ seuil) sont convertis en leads « à valider » et leur
+  // approche est pré-rédigée. Aucun envoi — l'humain valide et envoie. Plafonné.
+  if (cfg.veille_auto_lead) {
+    const { data: signaux } = await admin
+      .from("veille_signaux")
+      .select(
+        "id, entreprise, ville, declencheur, angle, resume, source_url, score_intention, score_fit",
+      )
+      .eq("statut", "nouveau")
+      .gte("score_intention", cfg.veille_auto_seuil)
+      .order("score_intention", { ascending: false, nullsFirst: false })
+      .limit(VEILLE_AUTO_PAR_TICK);
+
+    type Sig = {
+      id: string;
+      entreprise: string;
+      ville: string | null;
+      declencheur: string | null;
+      angle: string | null;
+      resume: string | null;
+      source_url: string | null;
+      score_intention: number | null;
+      score_fit: number | null;
+    };
+    const sigs = (signaux as Sig[]) ?? [];
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    let calendlyUrl: string | null = null;
+    if (apiKey && sigs.length > 0) {
+      const { data: ctx } = await admin
+        .from("app_context")
+        .select("calendly_url")
+        .eq("id", "main")
+        .maybeSingle();
+      calendlyUrl = (ctx as { calendly_url: string | null } | null)?.calendly_url ?? null;
+    }
+
+    let veilleConvertis = 0;
+    for (const s of sigs) {
+      const raison =
+        [s.declencheur, s.angle].filter(Boolean).join(" — ") ||
+        s.resume ||
+        "Signal de veille";
+      const { data: lead, error: insErr } = await admin
+        .from("leads")
+        .insert({
+          entreprise: s.entreprise,
+          ville: s.ville ?? null,
+          adresse: s.ville ?? null,
+          score: s.score_intention ?? s.score_fit ?? null,
+          score_raison: `Veille — ${raison}`,
+          site_web: s.source_url ?? null,
+          statut: "a_valider",
+        })
+        .select("id")
+        .single();
+      if (insErr || !lead) continue;
+      await admin
+        .from("veille_signaux")
+        .update({ statut: "converti", lead_id: lead.id })
+        .eq("id", s.id);
+
+      // Pré-rédaction de l'approche (si IA dispo) — persistée, jamais envoyée.
+      if (apiKey) {
+        const draft = await generateOutreachDraft(
+          apiKey,
+          "approche",
+          {
+            entreprise: s.entreprise,
+            ville: s.ville,
+            secteur: null,
+            effectif: null,
+            contact_nom: null,
+            score_raison: `Veille — ${raison}`,
+            solaire: null,
+          },
+          null,
+          calendlyUrl,
+        );
+        if (draft.ok) {
+          await admin
+            .from("leads")
+            .update({ mail_sujet: draft.sujet, mail_corps: draft.corps })
+            .eq("id", lead.id);
+        }
+      }
+      veilleConvertis++;
+    }
+    if (veilleConvertis > 0) {
+      await admin.from("agent_journal").insert({
+        type: "veille_auto",
+        message: `Veille → lead : ${veilleConvertis} signal(aux) chaud(s) converti(s) en lead(s) « à valider » + approche pré-rédigée. À valider dans l'inbox.`,
       });
     }
   }
