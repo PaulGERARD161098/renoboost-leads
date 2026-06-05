@@ -499,7 +499,11 @@ class RealPipeline:
         candidats = candidats[: satellite_max()]
         for i, lead in enumerate(candidats):
             res = analyser_potentiel(
-                float(lead["latitude"]), float(lead["longitude"]), api_key
+                float(lead["latitude"]),
+                float(lead["longitude"]),
+                api_key,
+                signaux_ve=bool(lead.get("signaux_ve")),
+                exploitant=lead.get("entreprise"),
             )
             if res is not None:
                 lead["vision_satellite"] = res

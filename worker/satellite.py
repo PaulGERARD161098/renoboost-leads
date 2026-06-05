@@ -26,14 +26,19 @@ _MODEL = os.environ.get("WORKER_SATELLITE_MODEL", "claude-haiku-4-5")
 
 _PROMPT = (
     "Tu analyses une vue aérienne IGN (orthophoto) centrée sur le site d'une entreprise, "
-    "pour évaluer son potentiel solaire (panneaux en toiture et ombrières de parking).\n"
+    "pour Rossini Energy (solaire en toiture, ombrières de parking, bornes de recharge). "
+    "Décris UNIQUEMENT ce que tu OBSERVES (n'invente rien, ne calcule pas de score).\n"
     "Réponds UNIQUEMENT par un objet JSON valide, sans texte autour, au format :\n"
-    '{"score":<0-100>,"verdict":"<phrase courte>","toiture":{"presente":<bool>,'
-    '"type":"plate|inclinee|inconnue","surface_estimee_m2":<number|null>},'
+    '{"toiture":{"presente":<bool>,'
+    '"type":"plate|inclinee|inclinee_nord|encombree|inconnue",'
+    '"surface_estimee_m2":<number|null>,"ratio_exploitable":<number 0-1|null>},'
     '"parking":{"present":<bool>,"surface_estimee_m2":<number|null>,'
-    '"ombrieres_possibles":<bool>},"commentaire":"<2-3 phrases>"}\n'
-    "Le score reflète l'intérêt global (grandes surfaces planes = élevé). "
-    "Sois prudent si l'image est ambiguë."
+    '"nb_places_estime":<integer|null>,"partage":<bool|null>},'
+    '"bornes_visibles":<integer>}\n'
+    "ratio_exploitable = part de toiture réellement équipable (hors édicules, "
+    "lanterneaux, ombres). partage = parking partagé entre plusieurs enseignes/occupants. "
+    "bornes_visibles = nombre de bornes de recharge VE visibles sur le site. "
+    "Mets null si tu n'es pas sûr d'une valeur chiffrée."
 )
 
 
@@ -70,58 +75,91 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         return None
 
 
-def analyser_potentiel(
-    lat: float, lon: float, api_key: str, timeout: float = 30.0
-) -> dict[str, Any] | None:
-    """Retourne le dict d'analyse (ou None si indisponible/erreur)."""
-    try:
-        url = _ign_url(lat, lon)
-        img = requests.get(url, timeout=timeout)
-        if img.status_code != 200 or len(img.content) < 1000:
-            return None
-        b64 = base64.b64encode(img.content).decode("ascii")
-        res = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": _MODEL,
-                "max_tokens": 700,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": b64,
-                                },
+def _vision_observations(
+    lat: float, lon: float, api_key: str, timeout: float
+) -> tuple[dict[str, Any], str] | None:
+    """Appelle Claude Vision sur l'orthophoto → (observations, image_url)."""
+    url = _ign_url(lat, lon)
+    img = requests.get(url, timeout=timeout)
+    if img.status_code != 200 or len(img.content) < 1000:
+        return None
+    b64 = base64.b64encode(img.content).decode("ascii")
+    res = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": _MODEL,
+            "max_tokens": 700,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": b64,
                             },
-                            {"type": "text", "text": _PROMPT},
-                        ],
-                    }
-                ],
-            },
-            timeout=timeout,
-        )
-        if res.status_code != 200:
-            log.warning("Vision satellite HTTP %s", res.status_code)
+                        },
+                        {"type": "text", "text": _PROMPT},
+                    ],
+                }
+            ],
+        },
+        timeout=timeout,
+    )
+    if res.status_code != 200:
+        log.warning("Vision satellite HTTP %s", res.status_code)
+        return None
+    data = res.json()
+    text = "".join(
+        b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+    )
+    parsed = _parse_json(text)
+    return (parsed, url) if parsed is not None else None
+
+
+def analyser_potentiel(
+    lat: float,
+    lon: float,
+    api_key: str,
+    timeout: float = 30.0,
+    *,
+    signaux_ve: bool = False,
+    exploitant: str | None = None,
+) -> dict[str, Any] | None:
+    """Analyse les 3 potentiels (solaire/ombrières/bornes) → dict, ou None.
+
+    Combine l'observation Claude Vision (orthophoto IGN), la surface d'emprise
+    bâtie IGN et le comptage de bornes IRVE, puis applique le scoring /10.
+    Tolérant : toute panne renvoie None et n'interrompt jamais le run.
+    """
+    from renoboost_leads.potentiel.analyse import analyser_potentiels
+    from renoboost_leads.potentiel.ign import surface_batie_m2
+    from renoboost_leads.potentiel.irve import ClientIRVE
+
+    try:
+        obs = _vision_observations(lat, lon, api_key, timeout)
+        if obs is None:
             return None
-        data = res.json()
-        text = "".join(
-            b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+        vision, url = obs
+        analyse = analyser_potentiels(
+            latitude=lat,
+            longitude=lon,
+            vision=vision,
+            signaux_ve=signaux_ve,
+            irve=ClientIRVE(),
+            surface_batie_m2=surface_batie_m2(lat, lon),
+            exploitant_probable=exploitant,
+            image_url=url,
+            analyzed_at=datetime.now(timezone.utc).isoformat(),
         )
-        parsed = _parse_json(text)
-        if parsed is None:
-            return None
-        parsed["image_url"] = url
-        parsed["analyse_le"] = datetime.now(timezone.utc).isoformat()
-        return parsed
+        return analyse.model_dump()
     except Exception:  # noqa: BLE001 — enrichissement optionnel, jamais bloquant
         log.exception("Analyse satellite échouée")
         return None
