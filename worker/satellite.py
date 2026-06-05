@@ -142,19 +142,27 @@ def analyser_potentiel(
     from renoboost_leads.potentiel.analyse import analyser_potentiels
     from renoboost_leads.potentiel.ign import surface_batie_m2
     from renoboost_leads.potentiel.irve import ClientIRVE
+    from renoboost_leads.potentiel.solar_api import surfaces_solar_api
 
     try:
         obs = _vision_observations(lat, lon, api_key, timeout)
         if obs is None:
             return None
         vision, url = obs
+        # Surface toiture : Google Solar API si dispo (précis), sinon emprise IGN.
+        solar = surfaces_solar_api(lat, lon)
+        if solar is not None:
+            surface_toiture, surface_exploitable = solar
+        else:
+            surface_toiture, surface_exploitable = surface_batie_m2(lat, lon), None
         analyse = analyser_potentiels(
             latitude=lat,
             longitude=lon,
             vision=vision,
             signaux_ve=signaux_ve,
             irve=ClientIRVE(),
-            surface_batie_m2=surface_batie_m2(lat, lon),
+            surface_batie_m2=surface_toiture,
+            surface_exploitable_m2=surface_exploitable,
             exploitant_probable=exploitant,
             image_url=url,
             analyzed_at=datetime.now(timezone.utc).isoformat(),
