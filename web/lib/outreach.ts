@@ -8,6 +8,13 @@ const MAX_TOKENS = 700;
 
 export type OutreachMode = "approche" | "relance";
 
+export type Solaire = {
+  toiture_m2: number | null;
+  toiture_type: string | null;
+  parking_m2: number | null;
+  ombrieres: boolean | null;
+} | null;
+
 export type LeadFiche = {
   entreprise: string;
   ville: string | null;
@@ -15,7 +22,55 @@ export type LeadFiche = {
   effectif: string | null;
   contact_nom: string | null;
   score_raison: string | null;
+  solaire?: Solaire;
 };
+
+// Extrait les éléments solaires exploitables de `vision_satellite` (analyse IGN+IA).
+// Renvoie null si rien d'exploitable — l'outreach reste alors strictement comme avant.
+export function solaireFromVision(
+  vision: Record<string, unknown> | null | undefined,
+): Solaire {
+  if (!vision || typeof vision !== "object") return null;
+  const num = (v: unknown): number | null =>
+    typeof v === "number"
+      ? v
+      : typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))
+        ? Number(v)
+        : null;
+  const toit = (vision.toiture ?? {}) as Record<string, unknown>;
+  const park = (vision.parking ?? {}) as Record<string, unknown>;
+  const s: NonNullable<Solaire> = {
+    toiture_m2: num(toit.surface_estimee_m2),
+    toiture_type: typeof toit.type === "string" ? toit.type : null,
+    parking_m2: num(park.surface_estimee_m2),
+    ombrieres:
+      typeof park.ombrieres_possibles === "boolean" ? park.ombrieres_possibles : null,
+  };
+  if (s.toiture_m2 == null && s.parking_m2 == null && !s.ombrieres) return null;
+  return s;
+}
+
+// Arrondi en ordre de grandeur (au 500 m² le plus proche) : on n'avance jamais
+// une estimation satellite comme une mesure exacte.
+function ordreDeGrandeur(m2: number | null): number | null {
+  if (m2 == null || m2 <= 0) return null;
+  return Math.max(500, Math.round(m2 / 500) * 500);
+}
+
+function formatTerrain(s: Solaire): string | null {
+  if (!s) return null;
+  const bouts: string[] = [];
+  const toit = ordreDeGrandeur(s.toiture_m2);
+  if (toit) {
+    const t =
+      s.toiture_type && s.toiture_type !== "inconnue" ? ` (toiture ${s.toiture_type})` : "";
+    bouts.push(`toiture exploitable de l'ordre de ${toit.toLocaleString("fr-FR")} m²${t}`);
+  }
+  const park = ordreDeGrandeur(s.parking_m2);
+  if (park) bouts.push(`parking de l'ordre de ${park.toLocaleString("fr-FR")} m²`);
+  if (s.ombrieres) bouts.push("ombrières de parking envisageables");
+  return bouts.length ? bouts.join(" ; ") : null;
+}
 
 export function buildOutreachPrompt(
   mode: OutreachMode,
@@ -34,6 +89,14 @@ export function buildOutreachPrompt(
     .filter(Boolean)
     .join("\n");
 
+  const terrain = formatTerrain(lead.solaire ?? null);
+  const blocTerrain = terrain
+    ? `\n\nÉléments terrain (ESTIMATION depuis vue aérienne — ordres de grandeur, jamais des mesures certifiées) : ${terrain}.`
+    : "";
+  const consigneTerrain = terrain
+    ? " Tu peux t'appuyer sur les éléments terrain pour personnaliser l'accroche, mais formule-les en ordre de grandeur prudent (« de l'ordre de », « environ ») et jamais comme une mesure exacte."
+    : "";
+
   const consigneRdv = calendlyUrl
     ? ` Termine en proposant un échange court et insère ce lien de réservation tel quel : ${calendlyUrl}.`
     : " Termine en proposant un échange court de 15 minutes.";
@@ -43,9 +106,9 @@ export function buildOutreachPrompt(
       offre ? ` (offre : ${offre})` : ""
     }. Rédige une RELANCE courte et non insistante à un premier email resté sans réponse, pour ce prospect B2B :
 
-${fiche}
+${fiche}${blocTerrain}
 
-Contraintes : français, ton professionnel et chaleureux, TRÈS concis (3-5 lignes), rappelle l'objet en une phrase, apporte une raison de répondre, sans culpabiliser.${consigneRdv} Signe « L'équipe RénoBoost ». N'invente aucun chiffre.
+Contraintes : français, ton professionnel et chaleureux, TRÈS concis (3-5 lignes), rappelle l'objet en une phrase, apporte une raison de répondre, sans culpabiliser.${consigneTerrain}${consigneRdv} Signe « L'équipe RénoBoost ». N'invente aucun chiffre.
 
 Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le texte>"}`;
   }
@@ -54,9 +117,9 @@ Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le t
     offre ? ` (offre : ${offre})` : ""
   }. Rédige un premier email d'APPROCHE (cold email) personnalisé pour ce prospect B2B :
 
-${fiche}
+${fiche}${blocTerrain}
 
-Contraintes : français, ton professionnel et chaleureux, concis (6-10 lignes), personnalise avec le secteur/angle d'accroche, va à l'essentiel sur la valeur concrète.${consigneRdv} Signe « L'équipe RénoBoost ». N'invente aucun chiffre ni engagement.
+Contraintes : français, ton professionnel et chaleureux, concis (6-10 lignes), personnalise avec le secteur/angle d'accroche, va à l'essentiel sur la valeur concrète.${consigneTerrain}${consigneRdv} Signe « L'équipe RénoBoost ». N'invente aucun chiffre ni engagement.
 
 Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le texte>"}`;
 }

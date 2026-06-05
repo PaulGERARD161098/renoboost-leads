@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
+import {
+  generateOutreachDraft,
+  solaireFromVision,
+  type OutreachMode,
+} from "@/lib/outreach";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +36,7 @@ export async function POST(req: NextRequest) {
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, verticale:verticales(nom)",
+      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, verticale:verticales(nom)",
     )
     .eq("id", leadId)
     .maybeSingle();
@@ -47,6 +51,7 @@ export async function POST(req: NextRequest) {
     libelle_naf: string | null;
     naf: string | null;
     score_raison: string | null;
+    vision_satellite: Record<string, unknown> | null;
     verticale?: { nom?: string } | { nom?: string }[];
   };
   const offre = Array.isArray(ld.verticale)
@@ -70,6 +75,7 @@ export async function POST(req: NextRequest) {
       effectif: ld.effectif,
       contact_nom: ld.contact_nom,
       score_raison: ld.score_raison,
+      solaire: solaireFromVision(ld.vision_satellite),
     },
     offre,
     calendlyUrl,
