@@ -35,8 +35,12 @@ cible:
 
 offre:
   produit: "Infrastructure de recharge VE sur site (bornes + supervision)"
-  argument_principal: "Obligation LOM, TCO flotte, prime ADVENIR, autonomie de recharge"
+  argument_principal: "Pilotage de la consommation de recharge et avantages fiscaux (suramortissement, prime ADVENIR) ; obligation LOM, TCO flotte et autonomie de recharge"
   ticket_moyen_eur: 60000
+
+# Client signataire des mails L4 (signature au nom du client, pas de RénoBoost).
+emetteur:
+  nom_entreprise: "Rossini Energy"
 
 cibles:
   secteurs_places:

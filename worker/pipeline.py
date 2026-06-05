@@ -327,6 +327,7 @@ class RealPipeline:
             StagesFlags,
             Volume,
         )
+        from renoboost_leads.verticale.contexte import contexte_client_depuis_verticale
 
         if not ctx.verticale or not ctx.verticale.get("slug"):
             raise RuntimeError(
@@ -372,10 +373,17 @@ class RealPipeline:
             cfg.secteurs = verticale_fichier.cibles.secteurs_places
             cfg.filtres_entreprise = verticale_fichier.cibles.filtres_entreprise
             cfg.claude_scoring.seuil_top_lead = verticale_fichier.qualification.seuil_score_top
+            # Mail L4 : offre + signature au nom du client (sinon défaut RénoBoost).
+            cfg.claude_scoring.contexte_client = contexte_client_depuis_verticale(
+                verticale_fichier
+            )
+            if verticale_fichier.emetteur is not None:
+                cfg.emetteur = verticale_fichier.emetteur
             sirene_first = False
         else:
             # Ciblage = config CRM (base) → découverte SIRENE-first par NAF.
             cfg.filtres_entreprise = self._filtres_depuis_config_crm(ctx.verticale, slug)
+            cfg.claude_scoring.contexte_client = self._contexte_depuis_config_crm(ctx.verticale)
             sirene_first = True
 
         # Override per-run : effectif min depuis la zone du CRM, sans toucher au
@@ -427,6 +435,27 @@ class RealPipeline:
             naf_inclus=naf,
             effectif_min=int(effectif_min) if effectif_min is not None else None,
         )
+
+    @staticmethod
+    def _contexte_depuis_config_crm(verticale_row: dict[str, Any]) -> str | None:
+        """Bloc « # Offre commerciale » d'une verticale CRM (base-only).
+
+        Évite le contexte par défaut (RénoBoost) pour les mails L4 : on reconstruit
+        une offre minimale depuis {nom, offre, signaux}. None si rien d'exploitable.
+        """
+        config = verticale_row.get("config") or {}
+        nom = verticale_row.get("nom") or "Notre société"
+        offre = config.get("offre")
+        signaux = [str(s) for s in (config.get("signaux") or []) if str(s).strip()]
+        if not offre and not signaux:
+            return None
+        lignes = [f"{nom}."]
+        if offre:
+            lignes.append(f"Offre : {offre}.")
+        if signaux:
+            lignes.append("Signaux d'intérêt :")
+            lignes.extend(f"- {s}" for s in signaux[:6])
+        return "\n".join(lignes)
 
     @staticmethod
     def _construire_zone(ctx: RunContext) -> Any:

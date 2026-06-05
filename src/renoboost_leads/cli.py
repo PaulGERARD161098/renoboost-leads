@@ -87,6 +87,16 @@ def _appliquer_verticale(cfg: CampaignConfig, slug: str) -> None:
 
     cfg.secteurs = verticale.cibles.secteurs_places
     cfg.filtres_entreprise = verticale.cibles.filtres_entreprise
+
+    # Mail L4 : offre + signature au nom du client portés par la verticale, sans
+    # écraser ce que le YAML --config fournit explicitement (il reste prioritaire).
+    if not cfg.claude_scoring.contexte_client:
+        from .verticale.contexte import contexte_client_depuis_verticale
+
+        cfg.claude_scoring.contexte_client = contexte_client_depuis_verticale(verticale)
+    if cfg.emetteur is None and verticale.emetteur is not None:
+        cfg.emetteur = verticale.emetteur
+
     console.print(
         f"[cyan]Verticale '{verticale.slug}' : {len(cfg.secteurs)} secteur(s) L1 "
         f"+ filtres NAF L2 appliqués (ciblage aligné).[/cyan]"
