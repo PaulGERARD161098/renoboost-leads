@@ -29,6 +29,14 @@ class TestContexteRossini:
         ctx = contexte_client_depuis_verticale(v)
         assert "Profil idéal" in ctx
 
+    def test_inclut_le_ton_de_la_verticale(self):
+        v = load_verticale("rossini")
+        ctx = contexte_client_depuis_verticale(v)
+        # Le ton propre à la verticale doit être transmis au mail.
+        assert "Ton et style" in ctx
+        assert v.ton_mail.registre in ctx
+        assert v.ton_mail.cta in ctx
+
 
 class TestEmetteurVerticales:
     def test_4_verticales_energie_signent_rossini(self):

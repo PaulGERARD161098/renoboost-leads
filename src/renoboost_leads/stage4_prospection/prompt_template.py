@@ -12,7 +12,8 @@ from ..models import Emetteur, LeadStage3
 # Le cache L4 utilise cette valeur comme partie de sa clé de hachage.
 # v4 : section « # Émetteur » optionnelle + signature entreprise/coordonnées.
 # v5 : adapte les volets d'offre au profil du lead (ne propose que le pertinent).
-PROMPT_VERSION = "v5"
+# v6 : respecte le ton de la verticale (registre, accroche, CTA, longueur).
+PROMPT_VERSION = "v6"
 
 
 CONTEXTE_CLIENT_DEFAUT = """\
@@ -147,7 +148,8 @@ def construire_prompt(
         )
         if emetteur is not None:
             regle_signature = (
-                "un appel à l'action clair (proposer un échange de 15 min), puis une "
+                "un appel à l'action clair (celui de l'offre commerciale s'il est "
+                "précisé, sinon proposer un échange de 15 min), puis une "
                 "signature « Cordialement, » suivie du nom du signataire (si fourni) et "
                 "de l'entreprise émettrice, et ENFIN un pied de coordonnées reprenant "
                 "EXACTEMENT les informations de la section « # Émetteur » ci-dessus "
@@ -156,7 +158,8 @@ def construire_prompt(
             )
         else:
             regle_signature = (
-                "un appel à l'action clair (proposer un échange de 15 min), puis une "
+                "un appel à l'action clair (celui de l'offre commerciale s'il est "
+                "précisé, sinon proposer un échange de 15 min), puis une "
                 "signature « Cordialement, » suivie du nom de l'entreprise émettrice "
                 "(issu de l'offre commerciale ci-dessus)."
             )
@@ -169,7 +172,9 @@ def construire_prompt(
             "sans majuscules criardes ni spam.\n"
             "5. `email_corps` : email B2B complet et personnalisé, prêt à envoyer, structuré : "
             "formule d'appel (utilise le nom du dirigeant si fourni, sinon « Madame, Monsieur »), "
-            "2-3 paragraphes courts reliant l'offre au profil du lead (activité, taille, bâti), "
+            "des paragraphes courts reliant l'offre au profil du lead (activité, taille, bâti) "
+            "en respectant le registre, l'accroche, l'appel à l'action et la longueur cible "
+            "indiqués dans la section « Ton et style » de l'offre (si présente), "
             f"{regle_signature} Sauts de ligne encodés en \\n.\n"
             "6. Aucune invention de chiffres (CA, économies, montants CEE) ni de fausse "
             "référence client. Reste factuel et sobre.\n"
