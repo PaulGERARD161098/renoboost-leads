@@ -3,7 +3,8 @@
 Sans ce câblage, le scoring L4 retombe sur le contexte par défaut (RénoBoost
 rénovation thermique) : le mail décrit alors la mauvaise offre et ne signe pas au
 nom du client. On compose ici un contexte fidèle à la verticale : offre, cible,
-argument clé, critères de qualification — utilisé par la CLI et le worker.
+argument clé, critères de qualification, et le **ton du mail** (registre, accroche,
+appel à l'action, longueur) — utilisé par la CLI et le worker.
 """
 
 from __future__ import annotations
@@ -32,6 +33,19 @@ def contexte_client_depuis_verticale(verticale: Verticale) -> str:
     if v.qualification.criteres_exclusion:
         lignes.append("À écarter :")
         lignes.extend(f"- {c}" for c in v.qualification.criteres_exclusion)
+
+    # Ton du mail propre à la verticale : le mail L4 doit respecter ce style.
+    t = v.ton_mail
+    lignes.append("Ton et style du mail (à respecter) :")
+    lignes.append(f"- Registre : {t.registre}")
+    lignes.append(f"- Longueur cible : ~{t.longueur_mots} mots")
+    lignes.append(f"- Accroche : {t.attaque}")
+    lignes.append(f"- Appel à l'action : {t.cta}")
+    if t.signaux_a_personnaliser:
+        lignes.append(
+            "- Personnaliser avec ces signaux s'ils sont présents : "
+            + ", ".join(t.signaux_a_personnaliser)
+        )
     return "\n".join(lignes)
 
 
