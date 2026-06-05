@@ -252,6 +252,41 @@ def test_real_pipeline_maps_leads_and_emits(monkeypatch):
     assert 4 in captured["stages"]  # L4 toujours exécuté en real
     assert 3.5 not in captured["stages"]  # pas de clé Dropcontact
 
+    # Mail L4 : signature au nom du client + offre câblée depuis la verticale.
+    cfg = captured["cfg"]
+    assert cfg.emetteur is not None
+    assert cfg.emetteur.nom_entreprise == "Rossini Energy"
+    assert cfg.claude_scoring.contexte_client
+    assert "RénoBoost" not in cfg.claude_scoring.contexte_client
+
+
+def test_real_pipeline_base_only_contexte_depuis_config(monkeypatch):
+    """Verticale CRM base-only : contexte_client construit depuis le config (pas RénoBoost)."""
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+    captured: dict[str, object] = {}
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        captured["cfg"] = cfg
+        return OrchestrationResult()
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+    ctx = RunContext(
+        run={"id": "r", "verticale_id": "v", "zone": {}, "volume_cible": 5},
+        verticale={
+            "slug": "cible-crm-x",
+            "nom": "Cible CRM X",
+            "config": {"secteurs_naf": ["43"], "offre": "Pose de bornes IRVE"},
+        },
+    )
+    RealPipeline().run(ctx, lambda *a: None)
+    ctx_client = captured["cfg"].claude_scoring.contexte_client
+    assert ctx_client and "Pose de bornes IRVE" in ctx_client
+    assert "RénoBoost" not in ctx_client
+
 
 def test_real_pipeline_email_dropcontact_prioritaire(monkeypatch):
     import renoboost_leads.orchestrateur as orch

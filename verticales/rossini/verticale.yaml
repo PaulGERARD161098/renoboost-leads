@@ -30,8 +30,12 @@ cible:
 
 offre:
   produit: "Ombrières solaires bois + bornes IRVE (installation) + contrat d'entretien"
-  argument_principal: "Obligation loi APER (parkings), revenu PV, recharge flotte, image RSE"
+  argument_principal: "Pilotage de la consommation énergétique et avantages fiscaux (suramortissement) ; obligation loi APER sur les parkings, revenu photovoltaïque, recharge de flotte et image RSE"
   ticket_moyen_eur: 150000
+
+# Client signataire des mails L4 (signature au nom du client, pas de RénoBoost).
+emetteur:
+  nom_entreprise: "Rossini Energy"
 
 cibles:
   secteurs_places:

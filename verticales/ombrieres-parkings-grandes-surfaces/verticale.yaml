@@ -19,8 +19,12 @@ cible:
 
 offre:
   produit: "Ombrières de parking photovoltaïques + bornes IRVE optionnelles"
-  argument_principal: "Décret tertiaire/parkings, ombrage clients, revenu PV, image RSE"
+  argument_principal: "Pilotage de la consommation et avantages fiscaux ; décret tertiaire/parkings (loi APER), ombrage clients, revenu photovoltaïque et image RSE"
   ticket_moyen_eur: 250000
+
+# Client signataire des mails L4 (signature au nom du client, pas de RénoBoost).
+emetteur:
+  nom_entreprise: "Rossini Energy"
 
 cibles:
   secteurs_places:

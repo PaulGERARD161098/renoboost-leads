@@ -18,8 +18,12 @@ cible:
 
 offre:
   produit: "Centrale PV en autoconsommation ou revente de surplus"
-  argument_principal: "ROI 6-8 ans, autonomie énergétique, conformité CSRD"
+  argument_principal: "Pilotage de la consommation (autoconsommation) et avantages fiscaux ; ROI 6-8 ans, autonomie énergétique, conformité CSRD"
   ticket_moyen_eur: 80000
+
+# Client signataire des mails L4 (signature au nom du client, pas de RénoBoost).
+emetteur:
+  nom_entreprise: "Rossini Energy"
 
 cibles:
   secteurs_places:

@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from ..models import FiltresEntreprise, SecteurCible
+from ..models import Emetteur, FiltresEntreprise, SecteurCible
 
 # V0 : seul `b2b` est exploitable. Le modèle connaît `b2c-particulier` pour
 # préparer la V1, mais le loader le refuse (cf loader.VerticaleHorsV0Error).
@@ -127,6 +127,9 @@ class Verticale(BaseModel):
     ton_mail: TonMail
     sequence: Sequence
     budget_typique: BudgetTypique
+    # Identité du client signataire des mails L4 (signature + pied). Absent =
+    # comportement historique (Claude devine l'émetteur depuis le contexte).
+    emetteur: Emetteur | None = None
 
     @property
     def slug(self) -> str:

@@ -11,7 +11,8 @@ from ..models import Emetteur, LeadStage3
 # Bump ce numéro à chaque modification du prompt (structure, instructions, JSON shape).
 # Le cache L4 utilise cette valeur comme partie de sa clé de hachage.
 # v4 : section « # Émetteur » optionnelle + signature entreprise/coordonnées.
-PROMPT_VERSION = "v4"
+# v5 : adapte les volets d'offre au profil du lead (ne propose que le pertinent).
+PROMPT_VERSION = "v5"
 
 
 CONTEXTE_CLIENT_DEFAUT = """\
@@ -175,7 +176,13 @@ def construire_prompt(
             "7. Si des signaux flotte / véhicule électrique sont détectés, traite-les "
             "comme un indicateur d'achat POSITIF uniquement s'ils sont pertinents pour "
             "l'offre commerciale ci-dessus (ex. ombrières, bornes IRVE, transition "
-            "énergétique) ; sinon ignore-les. N'invente aucun signal absent."
+            "énergétique) ; sinon ignore-les. N'invente aucun signal absent.\n"
+            "8. Quand l'offre comporte plusieurs volets (ex. ombrières photovoltaïques "
+            "ET bornes de recharge), n'avance dans le mail QUE ceux pertinents pour ce "
+            "lead : ombrières/solaire si foncier exploitable (parking, grande toiture, "
+            "site propriétaire) ; bornes de recharge si flotte ou signaux véhicule "
+            "électrique ; les deux si les deux s'appliquent. N'introduis pas un volet "
+            "hors sujet pour ce profil."
         )
     else:
         format_json = (
