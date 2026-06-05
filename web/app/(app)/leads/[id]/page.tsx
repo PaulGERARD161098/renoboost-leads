@@ -18,6 +18,7 @@ import {
   LEAD_STATUS_LABEL,
   formatDate,
   nextAction,
+  satelliteScore100,
   scoreColor,
   scoreGlobal,
   scoreVerdict,
@@ -94,7 +95,7 @@ export default async function LeadPage({
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
-  const satScore = (l.vision_satellite as { score?: number } | null)?.score ?? null;
+  const satScore = satelliteScore100(l.vision_satellite);
 
   return (
     <div>
@@ -186,6 +187,8 @@ export default async function LeadPage({
             canAnalyse={Boolean(
               (l.latitude != null && l.longitude != null) || l.adresse || l.ville,
             )}
+            lat={l.latitude as number | null}
+            lon={l.longitude as number | null}
           />
 
           <BornesLinks

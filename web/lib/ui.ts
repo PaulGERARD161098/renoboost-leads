@@ -72,13 +72,39 @@ export function scoreVerdict(score: number | null): { label: string; tone: strin
  * (potentiel solaire satellite). Pondération 60/40 ; retombe sur l'un si l'autre
  * est absent.
  */
+/**
+ * Score satellite ramené sur /100. v2 (3 potentiels /10) → meilleur des 3 ×10 ;
+ * v1 (ancien score /100) → tel quel. Null si pas d'analyse.
+ */
+export function satelliteScore100(
+  vision: Record<string, unknown> | null | undefined,
+): number | null {
+  const v = vision as
+    | {
+        version?: number;
+        score?: number;
+        solaire?: { score?: number };
+        ombrieres?: { score?: number };
+        bornes?: { score?: number };
+      }
+    | null
+    | undefined;
+  if (!v) return null;
+  if (v.version === 2) {
+    const xs = [v.solaire?.score, v.ombrieres?.score, v.bornes?.score].filter(
+      (x): x is number => typeof x === "number",
+    );
+    return xs.length ? Math.max(...xs) * 10 : null;
+  }
+  return typeof v.score === "number" ? v.score : null;
+}
+
 export function scoreGlobal(lead: {
   score?: number | null;
   vision_satellite?: Record<string, unknown> | null;
 }): number | null {
   const com = typeof lead.score === "number" ? lead.score : null;
-  const v = lead.vision_satellite as { score?: number } | null;
-  const sat = typeof v?.score === "number" ? v.score : null;
+  const sat = satelliteScore100(lead.vision_satellite);
   if (com === null && sat === null) return null;
   if (sat === null) return com;
   if (com === null) return sat;

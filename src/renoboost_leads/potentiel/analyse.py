@@ -49,6 +49,7 @@ def analyser_potentiels(
     signaux_ve: bool = False,
     irve: ClientIRVE | None = None,
     surface_batie_m2: float | None = None,
+    surface_exploitable_m2: float | None = None,
     exploitant_probable: str | None = None,
     image_url: str | None = None,
     analyzed_at: str | None = None,
@@ -59,7 +60,11 @@ def analyser_potentiels(
     # --- Solaire ---
     surface_toiture = surface_batie_m2 or toit.get("surface_estimee_m2")
     surface_toiture = surface_toiture if isinstance(surface_toiture, (int, float)) else None
-    exploitable = _surface_exploitable(surface_toiture, toit) if toit.get("presente") else None
+    # surface_exploitable_m2 fourni (ex. Google Solar API) prime sur l'estimation.
+    if isinstance(surface_exploitable_m2, (int, float)) and surface_exploitable_m2 > 0:
+        exploitable = round(float(surface_exploitable_m2), 1)
+    else:
+        exploitable = _surface_exploitable(surface_toiture, toit) if toit.get("presente") else None
     solaire = scorer_solaire(
         surface_exploitable_m2=exploitable,
         surface_toiture_m2=surface_toiture,

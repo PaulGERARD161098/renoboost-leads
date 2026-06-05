@@ -37,6 +37,23 @@ export function solaireFromVision(
       : typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))
         ? Number(v)
         : null;
+
+  // Format v2 (3 potentiels /10) : on lit solaire + ombrières.
+  if ((vision as { version?: number }).version === 2) {
+    const sol = (vision.solaire ?? {}) as Record<string, unknown>;
+    const omb = (vision.ombrieres ?? {}) as Record<string, unknown>;
+    const ombScore = num(omb.score);
+    const s2: NonNullable<Solaire> = {
+      toiture_m2: num(sol.surface_exploitable_m2) ?? num(sol.surface_toiture_m2),
+      toiture_type: typeof sol.type_toiture === "string" ? sol.type_toiture : null,
+      parking_m2: num(omb.surface_parking_m2),
+      ombrieres: ombScore != null ? ombScore >= 4 : null,
+    };
+    if (s2.toiture_m2 == null && s2.parking_m2 == null && !s2.ombrieres) return null;
+    return s2;
+  }
+
+  // Format v1 (rétro-compatibilité).
   const toit = (vision.toiture ?? {}) as Record<string, unknown>;
   const park = (vision.parking ?? {}) as Record<string, unknown>;
   const s: NonNullable<Solaire> = {
