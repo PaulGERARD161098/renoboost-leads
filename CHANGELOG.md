@@ -6,6 +6,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer
 
 ### Added — accueil « V1 en ligne » d'Henry (joué une seule fois)
 
+- **Confirmation préalable** : à la reconnexion d'Henry, un écran demande
+  d'abord *« Est-ce que vous voulez vous connecter à Outil Leads V1 pour la
+  première fois ? »*. La cinématique ne démarre qu'après acceptation ; un
+  « Pas maintenant » ferme sans marquer l'accueil comme vu (reproposé au login
+  suivant).
 - **Cinématique de bienvenue** (`web/components/welcome-v1.tsx`,
   `web/lib/welcome-v1.ts`) : « vidéo » scriptée ~20 s (cartes auto-déroulées,
   barre de progression, *skippable*, voix off optionnelle via synthèse

@@ -14,6 +14,9 @@ import {
 // UNE seule fois (gated côté layout par profiles.welcomed_v1_at), skippable.
 // À la fin, elle active le pop-up de retours qui suivra Henry partout.
 export function WelcomeV1() {
+  // « ask » : on demande d'abord confirmation (« se connecter à Leads V1 pour la
+  // première fois ? ») ; « playing » : la cinématique se déroule.
+  const [phase, setPhase] = useState<"ask" | "playing">("ask");
   const [i, setI] = useState(0);
   const [done, setDone] = useState(false);
   const [voiceOn, setVoiceOn] = useState(false);
@@ -25,6 +28,14 @@ export function WelcomeV1() {
     if (marked.current) return;
     marked.current = true;
     void markWelcomedV1();
+  }
+
+  // Refus / « pas maintenant » : on ferme SANS marquer comme vu, pour que la
+  // proposition soit reposée à la prochaine connexion d'Henry.
+  function dismiss() {
+    stopSpeaking();
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setDone(true);
   }
 
   // Termine la cinématique : on horodate, on coupe la voix, et on amorce le
@@ -44,7 +55,7 @@ export function WelcomeV1() {
 
   // Déroulé auto des slides ; à la dernière, on attend sa durée puis on termine.
   useEffect(() => {
-    if (done) return;
+    if (done || phase !== "playing") return;
     const slide = WELCOME_V1_SLIDES[i];
     timerRef.current = setTimeout(() => {
       if (i < WELCOME_V1_SLIDES.length - 1) setI((n) => n + 1);
@@ -54,18 +65,52 @@ export function WelcomeV1() {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [i, done]);
+  }, [i, done, phase]);
 
   // Voix off optionnelle : lit la slide courante quand l'option est active.
   useEffect(() => {
-    if (done || !voiceOn) return;
+    if (done || phase !== "playing" || !voiceOn) return;
     speak(WELCOME_V1_SLIDES[i].voix);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [i, voiceOn, done]);
+  }, [i, voiceOn, done, phase]);
 
   useEffect(() => () => stopSpeaking(), []);
 
   if (done) return null;
+
+  // Écran de confirmation préalable.
+  if (phase === "ask") {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-2xl">
+          <div className="px-7 py-8 text-center">
+            <div className="mb-4 text-5xl">🎬</div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand)]">
+              Leads — V1
+            </p>
+            <h1 className="mt-3 text-xl font-bold leading-snug">
+              Est-ce que vous voulez vous connecter à Outil Leads V1 pour la
+              première fois ?
+            </h1>
+          </div>
+          <div className="flex items-center justify-center gap-3 border-t border-white/10 bg-white/5 px-7 py-4">
+            <button
+              onClick={dismiss}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/10"
+            >
+              Pas maintenant
+            </button>
+            <button
+              onClick={() => setPhase("playing")}
+              className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
+            >
+              Oui, c'est parti →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const slide = WELCOME_V1_SLIDES[i];
   const elapsedBefore = WELCOME_V1_SLIDES.slice(0, i).reduce(
