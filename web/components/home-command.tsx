@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { isTourRequest, isDriveRequest } from "@/lib/tour";
+import { useRouter } from "next/navigation";
+import { isTourRequest, isDriveRequest, isAnalyseRequest } from "@/lib/tour";
 
 // Barre de commande de l'accueil : on écrit OU on parle (Web Speech, fr-FR), et la
 // demande est transmise à Magellan (assistant-widget) via un event window
@@ -10,6 +11,7 @@ import { isTourRequest, isDriveRequest } from "@/lib/tour";
 // Bonus : délègue aussi les clics sur tout [data-magellan-open] (ex. bloc
 // « Autre chose ? ») pour ouvrir Magellan sans demande pré-remplie.
 export function HomeCommand() {
+  const router = useRouter();
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -34,6 +36,10 @@ export function HomeCommand() {
     }
     if (q && isDriveRequest(q)) {
       window.dispatchEvent(new CustomEvent("leads:drive"));
+      return;
+    }
+    if (q && isAnalyseRequest(q)) {
+      router.push("/analyse");
       return;
     }
     window.dispatchEvent(new CustomEvent("magellan:ask", { detail: q }));

@@ -103,6 +103,20 @@ export function isTourRequest(text: string): boolean {
   return visite && parleDeLeads;
 }
 
+// Phrases qui déclenchent l'ouverture de la landing d'analyse satellite
+// (« M, analyse cette zone », « analyse satellite », « analyse cette capture »…).
+export function isAnalyseRequest(text: string): boolean {
+  const t = text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return (
+    /\banalyse\b.*\b(zone|carte|capture|satellite|image|vue)\b/.test(t) ||
+    /\b(zone|carte|capture|satellite|image|vue)\b.*\banalyse\b/.test(t) ||
+    /\b(reconnait|lis|decris)\b.*\b(image|capture|photo|satellite)\b/.test(t)
+  );
+}
+
 // Phrases qui déclenchent le mode déplacement (« je suis en voiture », etc.).
 export function isDriveRequest(text: string): boolean {
   const t = text

@@ -10,6 +10,7 @@ import { RunActions } from "@/components/run-actions";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { WorkerStatus } from "@/components/worker-status";
 import { KeysPanel } from "@/components/keys-panel";
+import { ExplorerMap } from "@/components/explorer-map";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,28 @@ export default async function RecherchePage({
       ) : (
         <RechercheForm verticales={vlist} zones={zones} initial={initial} />
       )}
+
+      {/* 2ᵉ grand badge : explorateur Google Maps satellite + analyse Magellan
+          (Vision). La carte reprend toujours le dernier point que tu as exploré. */}
+      <section className="mt-6 rounded-2xl border border-[var(--border)] bg-white p-5">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-bold">🗺️ Explorer & analyser une zone</h2>
+            <p className="text-sm text-[var(--muted)]">
+              Recherche une adresse, balade-toi sur la vue satellite Google Maps,
+              puis fais analyser la zone par Magellan (entreprises visibles, terrain,
+              opportunités).
+            </p>
+          </div>
+          <Link
+            href="/analyse"
+            className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-slate-50"
+          >
+            📂 Mes analyses →
+          </Link>
+        </div>
+        <ExplorerMap />
+      </section>
 
       {runs.length > 0 && (
         <div className="mt-8">
