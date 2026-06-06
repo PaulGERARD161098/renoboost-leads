@@ -2,6 +2,22 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [1.2.0] — Mail piloté par les potentiels + LinkedIn dans la fiche
+
+### Added
+
+- **Brouillon mail piloté par l'analyse v2** (`web/lib/outreach.ts`) : le cold
+  mail / la relance mettent en avant le **meilleur potentiel** (solaire /
+  ombrières / bornes), intègrent le **contexte bornes de la zone** et relient
+  l'angle à l'offre du client. Repli inchangé sur l'estimation v1.
+- **LinkedIn dans la fiche prospect** : `leads.contact_linkedin` +
+  `leads.entreprise_linkedin` (migration `0034`), propagés depuis Dropcontact
+  (déjà collectés en L3.5, jusqu'ici jetés au mapping worker). Affichés en liens
+  cliquables dans la carte « Décideur ».
+- **Enrichissement contact on-demand** : bouton « Enrichir le contact » →
+  route `/api/lead/enrich-contact` (Dropcontact, polling borné `maxDuration` 60 s)
+  qui remplit email / téléphone / LinkedIn pour un lead, sans écraser le vide.
+
 ## [Unreleased] — Lancement V1 : accueil d'Henry + boucle de retours
 
 ### Added — accueil « V1 en ligne » d'Henry (joué une seule fois)

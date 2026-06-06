@@ -107,6 +107,8 @@ export interface Lead {
   contact_nom: string | null;
   contact_email: string | null;
   contact_tel: string | null;
+  contact_linkedin: string | null;
+  entreprise_linkedin: string | null;
   site_web: string | null;
   hors_filtre: boolean;
   raison_hors_filtre: string | null;

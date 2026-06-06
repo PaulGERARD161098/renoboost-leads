@@ -559,6 +559,8 @@ class RealPipeline:
             "contact_nom": contact_nom,
             "contact_email": contact_email,
             "contact_tel": contact_tel,
+            "contact_linkedin": getattr(lead, "linkedin_dirigeant_dropcontact", None),
+            "entreprise_linkedin": getattr(lead, "linkedin_entreprise_dropcontact", None),
             "site_web": getattr(lead, "site_web", None),
             "hors_filtre": getattr(lead, "hors_filtre_entreprise", False),
             "raison_hors_filtre": getattr(lead, "raison_hors_filtre", None),

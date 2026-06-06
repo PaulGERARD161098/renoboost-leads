@@ -216,7 +216,7 @@ async function handle(req: NextRequest) {
             effectif: null,
             contact_nom: null,
             score_raison: `Veille — ${raison}`,
-            solaire: null,
+            vision: null,
           },
           null,
           calendlyUrl,

@@ -11,6 +11,7 @@ import { MailThread } from "@/components/mail-thread";
 import { ReplyAssistant } from "@/components/reply-assistant";
 import { ColdCallPanel } from "@/components/cold-call-panel";
 import { BornesLinks } from "@/components/bornes-links";
+import { ContactCard } from "@/components/contact-card";
 import { bornesProximite } from "@/lib/bornes";
 import { twilioConfigure } from "@/lib/twilio";
 import {
@@ -227,17 +228,17 @@ export default async function LeadPage({
             </dl>
           </div>
 
-          <div className="rounded-xl border border-[var(--border)] bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Décideur
-            </h2>
-            <dl className="space-y-2 text-sm">
-              <Field label="Nom" value={l.contact_nom} />
-              <Field label="Email" value={l.contact_email} />
-              <Field label="Téléphone" value={l.contact_tel} />
-              <Field label="Site" value={l.site_web} href={l.site_web ?? undefined} />
-            </dl>
-          </div>
+          <ContactCard
+            leadId={l.id}
+            initial={{
+              contact_nom: l.contact_nom,
+              contact_email: l.contact_email,
+              contact_tel: l.contact_tel,
+              contact_linkedin: l.contact_linkedin,
+              entreprise_linkedin: l.entreprise_linkedin,
+              site_web: l.site_web,
+            }}
+          />
 
           <div className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">

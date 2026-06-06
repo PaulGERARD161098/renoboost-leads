@@ -353,6 +353,8 @@ def test_real_pipeline_email_dropcontact_prioritaire(monkeypatch):
             _lead4(
                 email_dropcontact="dc@acme.fr",
                 telephone_direct_dropcontact="0600000000",
+                linkedin_dirigeant_dropcontact="https://www.linkedin.com/in/marie-durand",
+                linkedin_entreprise_dropcontact="https://www.linkedin.com/company/acme",
             )
         ]
         return res
@@ -362,6 +364,14 @@ def test_real_pipeline_email_dropcontact_prioritaire(monkeypatch):
     result = RealPipeline().run(_real_ctx(), lambda *a: None)
     assert result.leads[0]["contact_email"] == "dc@acme.fr"
     assert result.leads[0]["contact_tel"] == "0600000000"
+    assert (
+        result.leads[0]["contact_linkedin"]
+        == "https://www.linkedin.com/in/marie-durand"
+    )
+    assert (
+        result.leads[0]["entreprise_linkedin"]
+        == "https://www.linkedin.com/company/acme"
+    )
 
 
 def test_real_pipeline_missing_key_raises(monkeypatch):
