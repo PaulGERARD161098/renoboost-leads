@@ -395,6 +395,7 @@ def _executer_stage3(cfg, leads_l2, cache, output_dir, stats):
         scraper=scraper,
         cache=cache,
         callback_save_incremental=callback_save,
+        max_workers=cfg.scraping_l3.parallelisme,
     )
 
     leads_l3 = enricheur.enrichir(leads_l2)

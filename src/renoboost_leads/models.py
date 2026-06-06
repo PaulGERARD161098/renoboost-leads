@@ -242,6 +242,13 @@ class ScrapingL3(BaseModel):
 
     signaux_ve: dict[str, str] | None = None
 
+    # Nombre de leads scrapés en parallèle (étage 3). 1 = séquentiel (défaut sûr,
+    # comportement historique). >1 accélère le gros volume : le scraping est
+    # majoritairement de l'attente réseau, et chaque lead vise un domaine distinct.
+    # La politesse par hôte (rate-limit) reste respectée (réservation de créneau
+    # thread-safe côté scraper).
+    parallelisme: int = Field(default=1, ge=1, le=32)
+
     @field_validator("signaux_ve")
     @classmethod
     def _compilable(cls, v: dict[str, str] | None) -> dict[str, str] | None:
