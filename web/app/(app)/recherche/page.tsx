@@ -27,6 +27,7 @@ function initialFromRun(run: Run): RechercheInitial {
     adresse: zone.adresse ?? "",
     rayon: zone.rayon_par_point_km ? String(zone.rayon_par_point_km) : "10",
     effectifMin: zone.effectif_min != null ? String(zone.effectif_min) : "50",
+    volume: run.volume_cible != null ? String(run.volume_cible) : "200",
     budget: run.budget_eur != null ? String(run.budget_eur) : "50",
     isTest: run.is_test,
   };
