@@ -22,8 +22,19 @@ export type LeadFiche = {
   effectif: string | null;
   contact_nom: string | null;
   score_raison: string | null;
-  solaire?: Solaire;
+  // Analyse `vision_satellite` brute (3 potentiels /10 en v2). L'outreach en
+  // dérive l'angle terrain ; null/absent → mail strictement comme avant.
+  vision?: Record<string, unknown> | null;
 };
+
+// Parse un nombre tolérant (number direct ou string numérique), sinon null.
+function num(v: unknown): number | null {
+  return typeof v === "number"
+    ? v
+    : typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))
+      ? Number(v)
+      : null;
+}
 
 // Extrait les éléments solaires exploitables de `vision_satellite` (analyse IGN+IA).
 // Renvoie null si rien d'exploitable — l'outreach reste alors strictement comme avant.
@@ -31,12 +42,6 @@ export function solaireFromVision(
   vision: Record<string, unknown> | null | undefined,
 ): Solaire {
   if (!vision || typeof vision !== "object") return null;
-  const num = (v: unknown): number | null =>
-    typeof v === "number"
-      ? v
-      : typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))
-        ? Number(v)
-        : null;
 
   // Format v2 (3 potentiels /10) : on lit solaire + ombrières.
   if ((vision as { version?: number }).version === 2) {
@@ -89,6 +94,77 @@ function formatTerrain(s: Solaire): string | null {
   return bouts.length ? bouts.join(" ; ") : null;
 }
 
+// --- Angle terrain v2 : piloté par les 3 potentiels /10 -----------------------
+
+type PotentielLu = {
+  cle: "solaire" | "ombrieres" | "bornes";
+  label: string;
+  score: number;
+  justification: string | null;
+};
+
+const POTENTIELS_DEF: { cle: PotentielLu["cle"]; label: string }[] = [
+  { cle: "solaire", label: "🔆 Solaire (toiture)" },
+  { cle: "ombrieres", label: "🅿️ Ombrières (parking)" },
+  { cle: "bornes", label: "🔌 Bornes de recharge VE" },
+];
+
+// Lit les 3 potentiels /10 de `vision_satellite` (format v2). Renvoie la liste
+// (scores + justifications déjà rédigées côté moteur) et le meilleur potentiel.
+// null si la vision n'est pas en v2 ou ne contient aucun score exploitable.
+function potentielsV2(
+  vision: Record<string, unknown> | null | undefined,
+): { liste: PotentielLu[]; meilleur: PotentielLu } | null {
+  if (!vision || typeof vision !== "object") return null;
+  if ((vision as { version?: number }).version !== 2) return null;
+
+  const liste: PotentielLu[] = [];
+  for (const def of POTENTIELS_DEF) {
+    const sub = (vision as Record<string, unknown>)[def.cle];
+    if (!sub || typeof sub !== "object") continue;
+    const score = num((sub as Record<string, unknown>).score);
+    if (score == null) continue;
+    const just = (sub as Record<string, unknown>).justification;
+    liste.push({
+      cle: def.cle,
+      label: def.label,
+      score,
+      justification: typeof just === "string" && just.trim() ? just.trim() : null,
+    });
+  }
+  if (liste.length === 0) return null;
+
+  const meilleurCle = (vision as { meilleur?: unknown }).meilleur;
+  const meilleur =
+    liste.find((p) => p.cle === meilleurCle) ??
+    liste.reduce((a, b) => (b.score > a.score ? b : a));
+  return { liste, meilleur };
+}
+
+// Construit le bloc « potentiels détectés » + la consigne d'angle pour le prompt.
+function blocsPotentiels(
+  vision: Record<string, unknown> | null | undefined,
+): { bloc: string; consigne: string } | null {
+  const p = potentielsV2(vision);
+  if (!p) return null;
+  const lignes = p.liste
+    .map((x) => `- ${x.label} : ${x.score}/10${x.justification ? ` — ${x.justification}` : ""}`)
+    .join("\n");
+  const bloc =
+    `\n\nPotentiels du site détectés par analyse de vue aérienne (ESTIMATION — ` +
+    `ordres de grandeur, jamais des mesures certifiées) :\n${lignes}\n` +
+    `Potentiel à mettre en avant en priorité : ${p.meilleur.label} (${p.meilleur.score}/10).`;
+  const consigne =
+    ` Construis l'accroche autour du potentiel le plus fort ci-dessus et relie-le ` +
+    `concrètement à l'offre. N'évoque les autres potentiels que s'ils sont eux aussi ` +
+    `élevés (≥6/10) ET cohérents avec l'offre ; ignore les potentiels à faible score. ` +
+    `Pour le potentiel « bornes de recharge », appuie-toi sur la dynamique ` +
+    `d'électrification de la zone (présence/absence de bornes alentour) telle qu'indiquée. ` +
+    `Formule toute surface ou quantité en ordre de grandeur prudent (« de l'ordre de », ` +
+    `« environ »), jamais comme une mesure exacte.`;
+  return { bloc, consigne };
+}
+
 export function buildOutreachPrompt(
   mode: OutreachMode,
   lead: LeadFiche,
@@ -111,13 +187,22 @@ export function buildOutreachPrompt(
     .filter(Boolean)
     .join("\n");
 
-  const terrain = formatTerrain(lead.solaire ?? null);
-  const blocTerrain = terrain
-    ? `\n\nÉléments terrain (ESTIMATION depuis vue aérienne — ordres de grandeur, jamais des mesures certifiées) : ${terrain}.`
-    : "";
-  const consigneTerrain = terrain
-    ? " Tu peux t'appuyer sur les éléments terrain pour personnaliser l'accroche, mais formule-les en ordre de grandeur prudent (« de l'ordre de », « environ ») et jamais comme une mesure exacte."
-    : "";
+  // Angle terrain : on privilégie les 3 potentiels /10 (v2) pour piloter le mail
+  // par le potentiel le plus fort + l'offre. Repli sur l'estimation brute (v1).
+  const potentiels = blocsPotentiels(lead.vision);
+  let blocTerrain = "";
+  let consigneTerrain = "";
+  if (potentiels) {
+    blocTerrain = potentiels.bloc;
+    consigneTerrain = potentiels.consigne;
+  } else {
+    const terrain = formatTerrain(solaireFromVision(lead.vision));
+    if (terrain) {
+      blocTerrain = `\n\nÉléments terrain (ESTIMATION depuis vue aérienne — ordres de grandeur, jamais des mesures certifiées) : ${terrain}.`;
+      consigneTerrain =
+        " Tu peux t'appuyer sur les éléments terrain pour personnaliser l'accroche, mais formule-les en ordre de grandeur prudent (« de l'ordre de », « environ ») et jamais comme une mesure exacte.";
+    }
+  }
 
   const consigneRdv = calendlyUrl
     ? ` Termine en proposant un échange court et insère ce lien de réservation tel quel : ${calendlyUrl}.`

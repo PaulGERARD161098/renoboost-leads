@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import {
-  generateOutreachDraft,
-  solaireFromVision,
-  type OutreachMode,
-} from "@/lib/outreach";
+import { generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,7 +96,7 @@ export async function POST(req: NextRequest) {
         effectif: ld.effectif,
         contact_nom: ld.contact_nom,
         score_raison: ld.score_raison,
-        solaire: solaireFromVision(ld.vision_satellite),
+        vision: ld.vision_satellite,
       },
       offre,
       calendlyUrl,
