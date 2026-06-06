@@ -297,6 +297,17 @@ export interface WorkerHeartbeat {
   updated_at: string;
 }
 
+export type SystemSeverite = "ok" | "warning" | "critical";
+
+export interface SystemStatus {
+  id: string;
+  severite: SystemSeverite;
+  message: string | null;
+  since: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
 export type ReplyCategorie =
   | "interesse"
   | "info"

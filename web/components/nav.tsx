@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import type { SystemSeverite } from "@/lib/database.types";
+import { HealthName } from "@/components/health-name";
+import { versionLabel } from "@/lib/version";
 
 const LINKS = [
   { href: "/accueil", label: "Accueil", icon: "🧭" },
@@ -20,7 +23,13 @@ const LINKS = [
 
 // Sidebar gauche compacte (icônes) qui s'étend au survol pour révéler les
 // libellés. Défile verticalement si trop d'entrées. N'encombre plus le haut.
-export function Nav({ email }: { email: string | null }) {
+export function Nav({
+  email,
+  health = "ok",
+}: {
+  email: string | null;
+  health?: SystemSeverite;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -39,8 +48,12 @@ export function Nav({ email }: { email: string | null }) {
         className="flex h-14 shrink-0 items-center gap-2 overflow-hidden px-4 text-[var(--brand)]"
       >
         <span className="text-xl">🧭</span>
-        <span className="whitespace-nowrap text-lg font-bold opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          Leads
+        <span className="flex flex-col whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          {/* Le nom = voyant de santé (vert OK / ambre dégradé / rouge incident). */}
+          <HealthName name="Leads" severite={health} className="text-lg font-bold leading-none" />
+          <span className="text-[10px] font-medium leading-tight text-[var(--muted)]">
+            {versionLabel()}
+          </span>
         </span>
       </Link>
 
