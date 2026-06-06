@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isTourRequest, isDriveRequest } from "@/lib/tour";
 
 // Barre de commande de l'accueil : on écrit OU on parle (Web Speech, fr-FR), et la
 // demande est transmise à Magellan (assistant-widget) via un event window
@@ -22,11 +23,20 @@ export function HomeCommand() {
     );
   }, []);
 
-  // Ouvre Magellan (panneau de droite) avec une demande optionnelle.
+  // Ouvre Magellan (panneau de droite) avec une demande optionnelle. Court-circuite
+  // si la demande est en fait « montre-moi comment marche Leads » (→ visite guidée)
+  // ou « je suis en déplacement » (→ mode mains-libres).
   function ask(question?: string) {
-    window.dispatchEvent(
-      new CustomEvent("magellan:ask", { detail: question?.trim() ?? "" }),
-    );
+    const q = question?.trim() ?? "";
+    if (q && isTourRequest(q)) {
+      window.dispatchEvent(new CustomEvent("leads:tour"));
+      return;
+    }
+    if (q && isDriveRequest(q)) {
+      window.dispatchEvent(new CustomEvent("leads:drive"));
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("magellan:ask", { detail: q }));
   }
 
   // Délégation : un clic sur un bloc marqué [data-magellan-open] ouvre Magellan.

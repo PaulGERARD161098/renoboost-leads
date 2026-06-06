@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Markdown } from "@/components/markdown";
+import { isTourRequest, isDriveRequest } from "@/lib/tour";
+import { speak, stopSpeaking, ttsSupported } from "@/lib/speech";
 
 type Message = { role: "user" | "assistant"; content: string; steps?: string[] };
 
@@ -43,6 +45,26 @@ export function AssistantWidget() {
   const [briefingLoading, setBriefingLoading] = useState(false);
   const briefed = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Lecture vocale (TTS) d'une réponse : index du message en cours de lecture.
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+
+  function toggleSpeak(idx: number, text: string) {
+    if (speakingIdx === idx) {
+      stopSpeaking();
+      setSpeakingIdx(null);
+      return;
+    }
+    setSpeakingIdx(idx);
+    speak(text, () => setSpeakingIdx(null));
+  }
+
+  // Coupe toute lecture quand on ferme le panneau.
+  useEffect(() => {
+    if (!open) {
+      stopSpeaking();
+      setSpeakingIdx(null);
+    }
+  }, [open]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -143,6 +165,29 @@ export function AssistantWidget() {
   async function send(text: string) {
     const content = text.trim();
     if (!content || loading) return;
+
+    // Commandes à l'agent court-circuitées localement : visite guidée / mode déplacement.
+    if (isTourRequest(content)) {
+      window.dispatchEvent(new CustomEvent("leads:tour"));
+      setInput("");
+      setMessages((m) => [
+        ...m,
+        { role: "user", content },
+        { role: "assistant", content: "🧭 C'est parti pour la visite guidée de Leads !" },
+      ]);
+      return;
+    }
+    if (isDriveRequest(content)) {
+      window.dispatchEvent(new CustomEvent("leads:drive"));
+      setInput("");
+      setMessages((m) => [
+        ...m,
+        { role: "user", content },
+        { role: "assistant", content: "🚗 J'ouvre le mode déplacement, mains-libres." },
+      ]);
+      return;
+    }
+
     const next = [...messages, { role: "user" as const, content }];
     setMessages(next);
     setInput("");
@@ -258,6 +303,15 @@ export function AssistantWidget() {
                       </span>
                     ))}
                   </div>
+                )}
+                {m.role === "assistant" && ttsSupported() && (
+                  <button
+                    onClick={() => toggleSpeak(i, m.content)}
+                    className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-[var(--muted)] hover:bg-slate-100"
+                    title={speakingIdx === i ? "Arrêter la lecture" : "Lire à voix haute"}
+                  >
+                    {speakingIdx === i ? "⏹️ Stop" : "🔊 Lire"}
+                  </button>
                 )}
               </div>
             ))}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { AppContext, Lead } from "@/lib/database.types";
 import { HomeCommand } from "@/components/home-command";
+import { HomeModes } from "@/components/home-modes";
 import { WelcomeGreeting } from "@/components/welcome-greeting";
 import { WorkerStatus } from "@/components/worker-status";
 
@@ -169,6 +170,9 @@ export default async function AccueilPage() {
       <div className="mb-5">
         <WorkerStatus />
       </div>
+
+      {/* ── Accès rapides : mode déplacement (vocal) + visite guidée ── */}
+      <HomeModes />
 
       {/* ── Commande vocale : parler à l'agent, orienter vite ── */}
       <HomeCommand />
