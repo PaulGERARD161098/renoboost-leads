@@ -10,6 +10,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 from types import FrameType
 
@@ -49,6 +50,16 @@ def main() -> int:
 
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
+
+    # Thread de heartbeat : garde `last_seen_at` frais MÊME pendant un run long
+    # (la boucle principale est bloquée dans process_run pendant ce temps, donc
+    # sans ce thread la pastille « Worker » paraîtrait à tort silencieuse).
+    def _heartbeat_loop() -> None:
+        while running["on"]:
+            worker.heartbeat_tick()
+            time.sleep(config.poll_interval_s)
+
+    threading.Thread(target=_heartbeat_loop, name="heartbeat", daemon=True).start()
 
     while running["on"]:
         try:

@@ -99,6 +99,31 @@ class SupabaseRest:
         )
         return rows[0] if rows else None
 
+    def requeue_stale_runs(self, older_than_s: float) -> int:
+        """Remet en file (`en_cours` → `demande`) les runs orphelins.
+
+        Un run dont le worker est mort/redéployé en plein traitement reste figé
+        en `en_cours` et n'est jamais repris (on ne ramasse que les `demande`).
+        On le détecte par l'ancienneté de `updated_at` : pas de progrès depuis
+        `older_than_s`. Renvoie le nombre de runs remis en file.
+        """
+        from datetime import timedelta
+
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(seconds=older_than_s)
+        ).isoformat()
+        rows = self.update(
+            "runs",
+            {"status": "eq.en_cours", "updated_at": f"lt.{cutoff}"},
+            {
+                "status": "demande",
+                "etape_courante": "En attente (réamorcé après interruption)",
+                "progress": 0,
+            },
+            return_representation=True,
+        )
+        return len(rows)
+
     def get_verticale(self, verticale_id: str | None) -> dict[str, Any] | None:
         if not verticale_id:
             return None

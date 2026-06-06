@@ -67,8 +67,26 @@ class Worker:
         except Exception:  # noqa: BLE001 — l'observabilité ne doit pas casser le traitement
             logger.warning("Heartbeat échoué (non bloquant).", exc_info=True)
 
+    def heartbeat_tick(self) -> None:
+        """Battement de cœur léger, appelé par un thread dédié pour garder le
+        `last_seen_at` frais MÊME pendant un run long (la boucle principale est
+        bloquée dans process_run pendant ce temps)."""
+        self._heartbeat()
+
+    def _reap_stale_runs(self) -> None:
+        """Remet en file les runs orphelins (worker mort/redéployé en plein run)."""
+        try:
+            n = self.db.requeue_stale_runs(self.config.stale_run_timeout_s)
+            if n:
+                logger.warning("Reaper : %d run(s) orphelin(s) remis en file.", n)
+        except Exception:  # noqa: BLE001 — la récupération ne doit pas casser la boucle
+            logger.warning("Reaper échoué (non bloquant).", exc_info=True)
+
     def poll_once(self) -> int:
         """Traite les runs en attente. Renvoie le nombre de runs traités."""
+        # Récupère d'abord les runs orphelins (les remet en `demande`) pour
+        # qu'ils soient repris au même tour.
+        self._reap_stale_runs()
         pending = self.db.fetch_pending_runs(limit=5)
         # Battement de cœur à chaque tour (y compris à vide) → l'UI sait que le
         # process tourne et combien de runs attendent.

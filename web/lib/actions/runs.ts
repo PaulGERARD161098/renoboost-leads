@@ -50,6 +50,34 @@ export async function createRun(input: {
   return { ok: true, runId: data.id };
 }
 
+/**
+ * Relance le TRAITEMENT d'un run bloqué ou échoué : le remet en file
+ * (`demande`) pour que le worker le reprenne. Ne touche que les runs `echoue`
+ * ou `en_cours` (un run figé en cours peut être orphelin — worker interrompu).
+ * Distinct de « relancer (pré-rempli) » qui crée une NOUVELLE recherche.
+ */
+export async function requeueRun(runId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("runs")
+    .update({
+      status: "demande",
+      progress: 0,
+      etape_courante: "En attente (relancé)",
+      erreur: null,
+    })
+    .eq("id", runId)
+    .in("status", ["echoue", "en_cours"])
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: "Ce run n'est pas relançable (déjà terminé ou déjà en file)." };
+  }
+  revalidatePath("/recherche");
+  revalidatePath("/inbox");
+  return { ok: true };
+}
+
 /** Supprime une recherche et tous ses prospects. */
 export async function deleteRun(runId: string) {
   const supabase = await createClient();

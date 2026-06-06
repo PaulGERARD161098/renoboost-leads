@@ -22,6 +22,12 @@ class FakeDB:
         self.leads: list[dict[str, Any]] = []
         self.progress_calls: list[tuple[str, int, dict[str, int]]] = []
         self.heartbeats: list[dict[str, Any]] = []
+        self.requeue_calls: list[float] = []
+        self.requeue_return = 0
+
+    def requeue_stale_runs(self, older_than_s: float) -> int:
+        self.requeue_calls.append(older_than_s)
+        return self.requeue_return
 
     def heartbeat(
         self,
@@ -491,6 +497,33 @@ def test_worker_heartbeat_each_poll_reports_mode_and_pending():
     # Présence des clés rapportée (booléens, jamais les valeurs).
     assert set(first["keys"]) == {"google_places", "anthropic", "pappers", "dropcontact"}
     assert all(isinstance(v, bool) for v in first["keys"].values())
+
+
+def test_worker_poll_reaps_stale_runs():
+    db = FakeDB(runs=[], verticales={})
+    db.requeue_return = 2
+    config = WorkerConfig(
+        supabase_url="https://x.supabase.co",
+        service_role_key="k",
+        mode="demo",
+        stale_run_timeout_s=600,
+    )
+    worker = Worker(config, db=db, pipeline=DemoPipeline(seed=1))
+
+    worker.poll_once()
+
+    # Le reaper est invoqué à chaque poll, avec le seuil configuré.
+    assert db.requeue_calls == [600]
+
+
+def test_heartbeat_tick_writes_heartbeat():
+    db = FakeDB(runs=[], verticales={})
+    worker = Worker(_config(), db=db, pipeline=DemoPipeline(seed=1))
+
+    worker.heartbeat_tick()
+
+    assert len(db.heartbeats) == 1
+    assert db.heartbeats[0]["mode"] == "demo"
 
 
 def test_config_reads_version_from_railway_sha():
