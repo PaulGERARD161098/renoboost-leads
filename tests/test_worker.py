@@ -227,6 +227,7 @@ def test_real_pipeline_maps_leads_and_emits(monkeypatch):
     from renoboost_leads.orchestrateur import OrchestrationResult
 
     monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+    monkeypatch.delenv("WORKER_SCORE_HORS_FILTRE", raising=False)
 
     captured: dict[str, object] = {}
 
@@ -284,6 +285,8 @@ def test_real_pipeline_maps_leads_and_emits(monkeypatch):
     assert cfg.emetteur.nom_entreprise == "Rossini Energy"
     assert cfg.claude_scoring.contexte_client
     assert "RénoBoost" not in cfg.claude_scoring.contexte_client
+    # Économie par défaut : Claude ne score/rédige pas les leads hors-filtre.
+    assert cfg.claude_scoring.scorer_hors_filtre is False
 
 
 def test_real_pipeline_base_only_contexte_depuis_config(monkeypatch):
@@ -312,6 +315,29 @@ def test_real_pipeline_base_only_contexte_depuis_config(monkeypatch):
     ctx_client = captured["cfg"].claude_scoring.contexte_client
     assert ctx_client and "Pose de bornes IRVE" in ctx_client
     assert "RénoBoost" not in ctx_client
+
+
+def test_real_pipeline_score_hors_filtre_via_env(monkeypatch):
+    """WORKER_SCORE_HORS_FILTRE=true → Claude score aussi les hors-filtre."""
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+    monkeypatch.setenv("WORKER_SCORE_HORS_FILTRE", "true")
+    captured: dict[str, object] = {}
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        captured["cfg"] = cfg
+        return OrchestrationResult()
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+    ctx = RunContext(
+        run={"id": "r", "verticale_id": "v", "zone": {}, "volume_cible": 5},
+        verticale={"slug": "cible-crm-x", "nom": "Cible CRM X", "config": {"secteurs_naf": ["43"]}},
+    )
+    RealPipeline().run(ctx, lambda *a: None)
+    assert captured["cfg"].claude_scoring.scorer_hors_filtre is True
 
 
 def test_real_pipeline_email_dropcontact_prioritaire(monkeypatch):

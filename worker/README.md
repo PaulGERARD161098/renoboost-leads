@@ -62,6 +62,7 @@ permet aussi de le faire à la demande sur un run bloqué ou échoué.
 | `MAX_BUDGET_EUR_PER_RUN` | — | `50` | Plafond budget par run (BudgetGuard) |
 | `WORKER_REQUEST_TIMEOUT_S` | — | `30` | Timeout des appels HTTP |
 | `WORKER_STALE_RUN_TIMEOUT_S` | — | `900` | Délai sans progrès au-delà duquel un run `en_cours` est jugé orphelin et remis en file (reaper) |
+| `WORKER_SCORE_HORS_FILTRE` | — | `false` | `true` = Claude score/rédige aussi les leads hors-filtre. Par défaut `false` : on ne paie pas le scoring L4 des leads hors cible (ils restent insérés, flagués, sans score/mail) → coût L4 fortement réduit. |
 | `WORKER_VERSION` | — | `RAILWAY_GIT_COMMIT_SHA` | Version affichée dans le heartbeat (SHA court). Sur Railway, déduit automatiquement du commit déployé. |
 | `LOG_LEVEL` | — | `INFO` | Niveau de log |
 
