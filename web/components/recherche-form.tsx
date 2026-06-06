@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createRun } from "@/lib/actions/runs";
 import { createZoneCible, deleteZoneCible } from "@/lib/actions/zones";
 import type { Verticale, ZoneCible } from "@/lib/database.types";
+import { estimerCoutRun, formatEur } from "@/lib/costs";
 
 export type RechercheInitial = {
   verticaleId?: string;
@@ -13,9 +14,13 @@ export type RechercheInitial = {
   adresse?: string;
   rayon?: string;
   effectifMin?: string;
+  volume?: string;
   budget?: string;
   isTest?: boolean;
 };
+
+/** Presets de volume rapides (le moteur s'arrête au volume atteint OU au budget). */
+const VOLUME_PRESETS = [100, 500, 1000] as const;
 
 export function RechercheForm({
   verticales,
@@ -38,8 +43,16 @@ export function RechercheForm({
   const [rayon, setRayon] = useState(initial?.rayon ?? "10");
   const [nomZone, setNomZone] = useState("");
   const [effectifMin, setEffectifMin] = useState(initial?.effectifMin ?? "50");
+  const [volume, setVolume] = useState(initial?.volume ?? "200");
   const [budget, setBudget] = useState(initial?.budget ?? "50");
   const [isTest, setIsTest] = useState(initial?.isTest ?? false);
+
+  // Estimation de coût (garde-fou budget) — recalculée à chaque changement.
+  const volumeNum = Number(volume) || 0;
+  const budgetNum = Number(budget) || 0;
+  const estimation = estimerCoutRun(volumeNum);
+  const budgetInsuffisant =
+    !isTest && budgetNum > 0 && estimation.bas > budgetNum;
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -92,6 +105,7 @@ export function RechercheForm({
         adresse: mode === "adresse" ? adresse : null,
         rayonKm: mode === "adresse" ? Number(rayon) || 10 : null,
         effectifMin: effectifMin ? Number(effectifMin) : null,
+        volumeCible: volume ? Number(volume) : null,
         budgetEur: budget ? Number(budget) : null,
         isTest,
       });
@@ -255,6 +269,39 @@ export function RechercheForm({
       </div>
 
       <div>
+        <label className="mb-1 block text-sm font-medium">Volume cible</label>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min={1}
+            value={volume}
+            onChange={(e) => setVolume(e.target.value)}
+            className="w-32 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+          />
+          <div className="flex gap-1">
+            {VOLUME_PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setVolume(String(p))}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                  volume === String(p)
+                    ? "border-[var(--brand)] bg-[var(--brand)] text-white"
+                    : "border-[var(--border)] text-[var(--muted)] hover:bg-slate-50"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          Le moteur s&apos;arrête au volume atteint ou au budget plafond, au
+          premier des deux.
+        </p>
+      </div>
+
+      <div>
         <label className="mb-1 block text-sm font-medium">
           Budget plafond (€)
         </label>
@@ -264,6 +311,28 @@ export function RechercheForm({
           onChange={(e) => setBudget(e.target.value)}
           className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
         />
+        {!isTest && volumeNum > 0 && (
+          <p
+            className={`mt-1 text-xs ${
+              budgetInsuffisant ? "text-amber-700" : "text-[var(--muted)]"
+            }`}
+          >
+            Coût estimé pour {volumeNum} leads :{" "}
+            <span className="font-medium">
+              {formatEur(estimation.bas)}–{formatEur(estimation.haut)}
+            </span>{" "}
+            <span className="text-[var(--muted)]">
+              (Places + Claude ; haut = avec enrichissement Dropcontact)
+            </span>
+            {budgetInsuffisant && (
+              <>
+                {" "}
+                — ⚠️ budget plafond ({formatEur(budgetNum)}) sous l&apos;estimé
+                basse : le run pourrait s&apos;arrêter avant le volume visé.
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       <label className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-slate-50 p-3 text-sm">

@@ -174,6 +174,65 @@ def _l2(place_id: str = "A") -> LeadStage2:
     )
 
 
+class _SlowScraper:
+    """Scraper qui dort un délai dépendant du site → l'ordre de complétion
+    diffère de l'ordre d'entrée (teste réellement la préservation d'ordre)."""
+
+    def __init__(self, delais: dict[str, float]):
+        self._delais = delais
+
+    def scraper(self, site_web: str | None) -> ResultatScraping:
+        import time as _t
+
+        _t.sleep(self._delais.get(site_web or "", 0.0))
+        domaine = (site_web or "").replace("https://", "").rstrip("/")
+        return ResultatScraping(domaine=domaine)
+
+
+def _l2_site(place_id: str, site: str) -> LeadStage2:
+    return LeadStage2(
+        place_id=place_id,
+        extraction_date=datetime.now(timezone.utc),
+        nom=place_id,
+        site_web=site,
+    )
+
+
+class TestEnricheurParallele:
+    def _jeu(self):
+        # Les premiers leads dorment le plus longtemps → finiraient en dernier
+        # sans préservation d'ordre.
+        leads = [_l2_site(f"P{i}", f"https://site{i}.fr") for i in range(6)]
+        delais = {f"https://site{i}.fr": (6 - i) * 0.02 for i in range(6)}
+        return leads, delais
+
+    def test_ordre_preserve_en_parallele(self):
+        leads, delais = self._jeu()
+        enricheur = EnricheurStage3(scraper=_SlowScraper(delais), max_workers=4)
+        res = enricheur.enrichir(leads)
+        assert [l3.place_id for l3 in res] == [lead.place_id for lead in leads]
+
+    def test_parite_sequentiel_parallele(self):
+        leads, delais = self._jeu()
+        seq = EnricheurStage3(scraper=_SlowScraper(delais), max_workers=1).enrichir(leads)
+        par = EnricheurStage3(scraper=_SlowScraper(delais), max_workers=4).enrichir(leads)
+        assert [(x.place_id, x.domaine_extrait) for x in seq] == [
+            (x.place_id, x.domaine_extrait) for x in par
+        ]
+
+    def test_callback_incremental_appele_en_parallele(self):
+        leads = [_l2_site(f"Q{i}", f"https://d{i}.fr") for i in range(40)]
+        vus: list[int] = []
+        enricheur = EnricheurStage3(
+            scraper=_SlowScraper({}),
+            callback_save_incremental=lambda partial: vus.append(len(partial)),
+            max_workers=8,
+        )
+        enricheur.enrichir(leads)
+        # Sauvegarde tous les 20 leads (cf. boucle enrichir).
+        assert vus == [20, 40]
+
+
 class TestEnricheurPropageSignauxVe:
     def test_signaux_ve_propages_vers_l3(self):
         scraper = _FakeScraper(

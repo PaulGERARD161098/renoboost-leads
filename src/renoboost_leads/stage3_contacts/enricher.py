@@ -13,6 +13,7 @@ Logique :
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from ..common.cache import SessionCache
@@ -32,10 +33,12 @@ class EnricheurStage3:
         scraper: ScraperContact,
         cache: SessionCache | None = None,
         callback_save_incremental=None,
+        max_workers: int = 1,
     ):
         self.scraper = scraper
         self.cache = cache
         self.callback_save = callback_save_incremental
+        self.max_workers = max(1, int(max_workers))
         self._reseau_bloque_signale = False
 
     def _scraper_avec_cache(self, site_web: str | None) -> ResultatScraping:
@@ -155,8 +158,25 @@ class EnricheurStage3:
             signaux_ve=signaux_ve,
         )
 
+    def _enrichir_un_lead_robuste(self, lead: LeadStage2) -> LeadStage3:
+        """`_enrichir_un_lead` avec capture d'erreur → jamais d'exception remontée."""
+        try:
+            return self._enrichir_un_lead(lead)
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Erreur sur lead %s : %s", lead.place_id, e)
+            return LeadStage3(
+                **lead.model_dump(),
+                source_globale="aucun_email",
+            )
+
     def enrichir(self, leads_l2: list[LeadStage2]) -> list[LeadStage3]:
-        """Pipeline L2 → L3 sur une liste."""
+        """Pipeline L2 → L3 sur une liste.
+
+        Avec `max_workers > 1`, les leads sont scrapés en parallèle (le scraping
+        est dominé par l'attente réseau). `ThreadPoolExecutor.map` préserve
+        l'ordre d'entrée et la cadence de sauvegarde incrémentale ; la politesse
+        par hôte reste garantie côté scraper.
+        """
         logger.info("=== Étage 3 — Contacts (scraping + patterns) (%d leads) ===", len(leads_l2))
         t0 = time.monotonic()
         leads_l3: list[LeadStage3] = []
@@ -166,16 +186,16 @@ class EnricheurStage3:
         nb_aucun = 0
         nb_chaines_skip = 0
 
-        for i, lead in enumerate(leads_l2, start=1):
-            try:
-                l3 = self._enrichir_un_lead(lead)
-            except Exception as e:  # noqa: BLE001
-                logger.exception("Erreur sur lead %s : %s", lead.place_id, e)
-                l3 = LeadStage3(
-                    **lead.model_dump(),
-                    source_globale="aucun_email",
-                )
+        parallele = self.max_workers > 1 and len(leads_l2) > 1
+        if parallele:
+            logger.info("  L3 en parallèle : %d workers", self.max_workers)
+            executor = ThreadPoolExecutor(max_workers=self.max_workers)
+            resultats = executor.map(self._enrichir_un_lead_robuste, leads_l2)
+        else:
+            executor = None
+            resultats = (self._enrichir_un_lead_robuste(lead) for lead in leads_l2)
 
+        for i, l3 in enumerate(resultats, start=1):
             leads_l3.append(l3)
 
             if l3.source_globale == "chaine_non_traitee":
@@ -197,6 +217,9 @@ class EnricheurStage3:
 
             if i % 25 == 0:
                 logger.info("  L3 progress: %d/%d", i, len(leads_l2))
+
+        if executor is not None:
+            executor.shutdown(wait=True)
 
         duree = time.monotonic() - t0
         logger.info(

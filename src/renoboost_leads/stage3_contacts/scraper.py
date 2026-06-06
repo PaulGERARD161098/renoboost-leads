@@ -14,6 +14,7 @@ Logique :
 from __future__ import annotations
 
 import re
+import threading
 import time
 import unicodedata
 import urllib.parse
@@ -283,6 +284,8 @@ class ScraperContact:
     ):
         self.rate_limit_seconds = rate_limit_seconds
         self._last_request_per_host: dict[str, float] = {}
+        # Protège le rate-limit par hôte quand l'étage 3 scrape en parallèle.
+        self._rate_lock = threading.Lock()
         self._robots_cache: dict[str, urllib.robotparser.RobotFileParser] = {}
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
@@ -292,12 +295,20 @@ class ScraperContact:
         self._reseau_bloque = False
 
     def _attendre_rate_limit(self, host: str) -> None:
-        last = self._last_request_per_host.get(host)
-        if last is not None:
-            ecoule = time.monotonic() - last
-            if ecoule < self.rate_limit_seconds:
-                time.sleep(self.rate_limit_seconds - ecoule + 0.05)
-        self._last_request_per_host[host] = time.monotonic()
+        # Réserve atomiquement le prochain créneau pour cet hôte, puis dort HORS
+        # du lock : deux threads visant le même hôte se sérialisent (politesse),
+        # tandis que des hôtes distincts ne se bloquent pas mutuellement.
+        with self._rate_lock:
+            now = time.monotonic()
+            last = self._last_request_per_host.get(host)
+            attente = 0.0
+            if last is not None:
+                ecoule = now - last
+                if ecoule < self.rate_limit_seconds:
+                    attente = self.rate_limit_seconds - ecoule + 0.05
+            self._last_request_per_host[host] = now + attente
+        if attente > 0:
+            time.sleep(attente)
 
     def _verifier_robots(self, base_url: str, path: str) -> bool:
         """Renvoie True si le path est autorisé par robots.txt."""

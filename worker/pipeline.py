@@ -368,6 +368,16 @@ class RealPipeline:
         # Le CRM doit voir TOUS les leads découverts (flagués hors-filtre compris).
         cfg.claude_scoring.scorer_hors_filtre = True
 
+        # Gros volume : scraping L3 parallélisé (attente réseau dominante). Pilotable
+        # via WORKER_SCRAPE_WORKERS ; défaut 8, borné par la validation du modèle.
+        import os
+
+        try:
+            workers = int(os.environ.get("WORKER_SCRAPE_WORKERS", "8"))
+        except ValueError:
+            workers = 8
+        cfg.scraping_l3.parallelisme = max(1, min(workers, 32))
+
         if verticale_fichier is not None:
             # Ciblage = verticale fichier (source de vérité, ciblage riche Places).
             cfg.secteurs = verticale_fichier.cibles.secteurs_places
