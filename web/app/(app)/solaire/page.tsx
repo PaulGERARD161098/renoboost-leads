@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead } from "@/lib/database.types";
 import { solaireFromVision } from "@/lib/outreach";
 import { estimerSolaire } from "@/lib/solaire";
+import { solaireScore100 } from "@/lib/ui";
 import { SolaireWorkspace, type SolaireLead } from "@/components/solaire-workspace";
 
 // Workspace ☀️ Solaire — domaine à part entière (charte agent-first).
@@ -36,10 +37,8 @@ export default async function SolairePage() {
 
   const leads: SolaireLead[] = rows.map((l) => {
     const vision = l.vision_satellite as Record<string, unknown> | null;
-    const scoreSolaire =
-      typeof (vision as { score?: number } | null)?.score === "number"
-        ? (vision as { score: number }).score
-        : null;
+    // Score solaire /100, v2-aware (sous-score `solaire`), repli v1.
+    const scoreSolaire = solaireScore100(vision);
     const surfaces = solaireFromVision(vision);
     const estim = surfaces ? estimerSolaire(surfaces) : null;
     // Analysable si on a de quoi localiser (coordonnées, adresse ou ville).

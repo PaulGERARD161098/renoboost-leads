@@ -99,6 +99,25 @@ export function satelliteScore100(
   return typeof v.score === "number" ? v.score : null;
 }
 
+/**
+ * Potentiel SOLAIRE (toiture) ramené sur /100 — spécifique au workspace Solaire,
+ * contrairement à satelliteScore100 qui prend le meilleur des 3 axes.
+ * v2 → `solaire.score` ×10 ; v1 → ancien `score` /100. Null si pas d'analyse.
+ */
+export function solaireScore100(
+  vision: Record<string, unknown> | null | undefined,
+): number | null {
+  const v = vision as
+    | { version?: number; score?: number; solaire?: { score?: number } }
+    | null
+    | undefined;
+  if (!v) return null;
+  if (v.version === 2) {
+    return typeof v.solaire?.score === "number" ? v.solaire.score * 10 : null;
+  }
+  return typeof v.score === "number" ? v.score : null;
+}
+
 export function scoreGlobal(lead: {
   score?: number | null;
   vision_satellite?: Record<string, unknown> | null;

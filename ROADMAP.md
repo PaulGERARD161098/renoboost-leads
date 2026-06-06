@@ -15,6 +15,10 @@ réelles et fiabiliser le matching SIREN.
 
 ### P0 — Activer L3.5 Dropcontact en mode réel
 
+> ✅ **Code livré** (étage 3.5 `stage3_5_enrichment` en prod, piloté par
+> `DROPCONTACT_API_KEY` + flag `enable_stage_3_5_enrichment`). Reste opérationnel :
+> fournir une clé valide et mesurer les taux sur une campagne pilote.
+
 - Retirer `--dry-run` côté L3.5 dans la commande de run (laisser dry-run
   sur L4 si on ne veut pas encore consommer d'Anthropic).
 - Tester sur 10 leads d'une campagne pilote (~5 € budget).
@@ -25,6 +29,11 @@ réelles et fiabiliser le matching SIREN.
   passer à Hunter (P2).
 
 ### P1 — Brancher l'API Pappers en L2 (en parallèle de Sirene)
+
+> ✅ **Code livré** : fallback Pappers branché en L2 (compteurs
+> `nb_fallback_pappers` / `cout_pappers_eur`), data.gouv en provider primaire
+> gratuit. Reste opérationnel : `PAPPERS_API_KEY` valide (la clé actuelle
+> renvoie 401 → fallback inopérant tant qu'elle n'est pas régénérée).
 
 - Nouveau client `src/renoboost_leads/stage2_entreprises/pappers_client.py`
   à côté de l'existant `recherche_entreprises_client.py`.
