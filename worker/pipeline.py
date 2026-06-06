@@ -365,13 +365,20 @@ class RealPipeline:
             volume=Volume(cible=volume_cible),
             budget=Budget(max_eur=budget_eur),
         )
-        # Le CRM doit voir TOUS les leads découverts (flagués hors-filtre compris).
-        cfg.claude_scoring.scorer_hors_filtre = True
+        import os
+
+        # Économie (défaut) : Claude NE score/rédige PAS les leads hors-filtre
+        # (souvent ~60% de la découverte) — tu ne les contactes pas. Ils restent
+        # insérés au CRM (flagués hors-filtre), simplement sans score ni mail, ce
+        # qui réduit d'autant le coût L4. Mettre WORKER_SCORE_HORS_FILTRE=true pour
+        # les faire scorer quand même (ancien comportement).
+        cfg.claude_scoring.scorer_hors_filtre = (
+            os.environ.get("WORKER_SCORE_HORS_FILTRE", "false").strip().lower()
+            in ("1", "true", "yes", "on")
+        )
 
         # Gros volume : scraping L3 parallélisé (attente réseau dominante). Pilotable
         # via WORKER_SCRAPE_WORKERS ; défaut 8, borné par la validation du modèle.
-        import os
-
         try:
             workers = int(os.environ.get("WORKER_SCRAPE_WORKERS", "8"))
         except ValueError:
