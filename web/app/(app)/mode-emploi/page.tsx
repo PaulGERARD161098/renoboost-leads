@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Mode d'emploi — ReSign CRM",
+  title: "Mode d'emploi — Leads",
 };
 
 const ETAGES = [
@@ -54,7 +54,7 @@ export default function ModeEmploiPage() {
         <p>
           RénoBoost construit des listes de <strong>prospects B2B qualifiés</strong> à
           partir d&apos;une zone et d&apos;un type d&apos;activité, puis aide à les
-          travailler. Ce site (CRM « ReSign ») est l&apos;interface de pilotage ;
+          travailler. Ce site (CRM « Leads ») est l&apos;interface de pilotage ;
           <strong> Magellan</strong> est l&apos;assistant IA intégré.
         </p>
       </Card>

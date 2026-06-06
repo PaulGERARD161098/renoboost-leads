@@ -25,7 +25,11 @@ function buildPrompt(
   contact: string | null,
   thread: LeadMessage[],
   calendlyUrl: string | null,
+  client: string | null,
 ): string {
+  // Si la campagne du lead est affectée à un client, la réponse est signée en
+  // son nom (cohérence avec l'email d'approche émis au nom du client).
+  const marque = client?.trim() || "RénoBoost";
   const fil = thread
     .map((m) => {
       const qui = m.direction === "out" ? "NOUS" : "PROSPECT";
@@ -38,7 +42,7 @@ function buildPrompt(
     ? ` Si la catégorie est "interesse", propose explicitement un créneau en invitant le prospect à réserver directement via ce lien de réservation, inséré tel quel dans le brouillon : ${calendlyUrl}`
     : "";
 
-  return `Tu es l'assistant commercial de RénoBoost${
+  return `Tu es l'assistant commercial de ${marque}${
     verticale ? ` (offre : ${verticale})` : ""
   }. Un prospect B2B (${entreprise}${
     contact ? `, contact ${contact}` : ""
@@ -59,7 +63,7 @@ Tâche :
 2. RÉDIGE un brouillon de réponse en français, professionnel, chaleureux et CONCIS
    (4-8 lignes), adapté à la catégorie : oriente vers la prochaine étape concrète si
    intérêt (proposer un échange court), réponds à la question si info, reste courtois
-   et bref si refus. Signe « L'équipe RénoBoost ». N'invente aucun chiffre ni engagement.${consigneRdv}
+   et bref si refus. Signe « L'équipe ${marque} ». N'invente aucun chiffre ni engagement.${consigneRdv}
 
 Réponds UNIQUEMENT par un objet JSON valide, sans texte autour :
 {"categorie":"<une des clés ci-dessus>","confiance":<0-100>,"sujet":"<objet de la réponse>","brouillon":"<le texte de la réponse>"}`;
@@ -130,7 +134,7 @@ export async function POST(req: NextRequest) {
 
   const { data: lead } = await supabase
     .from("leads")
-    .select("entreprise, contact_nom, statut, verticale:verticales(nom)")
+    .select("entreprise, contact_nom, statut, verticale:verticales(nom), campaign:campaigns(client_nom)")
     .eq("id", leadId)
     .maybeSingle();
   if (!lead) {
@@ -140,6 +144,11 @@ export async function POST(req: NextRequest) {
   const verticale = Array.isArray(verticaleRaw)
     ? verticaleRaw[0]?.nom ?? null
     : verticaleRaw?.nom ?? null;
+  const campaignRaw = (lead as { campaign?: { client_nom?: string | null } | { client_nom?: string | null }[] })
+    .campaign;
+  const client = Array.isArray(campaignRaw)
+    ? campaignRaw[0]?.client_nom ?? null
+    : campaignRaw?.client_nom ?? null;
 
   // Lien de réservation Calendly (oriente les « intéressés » vers la prise de RDV).
   const { data: ctx } = await supabase
@@ -169,6 +178,7 @@ export async function POST(req: NextRequest) {
               (lead as { contact_nom: string | null }).contact_nom,
               thread,
               calendlyUrl,
+              client,
             ),
           },
         ],

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Campaign, CampaignStatus, Lead, Verticale } from "@/lib/database.types";
-import { CampaignActions, CreateCampaignForm } from "@/components/campaigns-ui";
+import { CampaignActions, CampaignClient, CreateCampaignForm } from "@/components/campaigns-ui";
 import { ActionsBand } from "@/components/actions-band";
 import { rankBandActions } from "@/lib/suggestions";
 
@@ -181,13 +181,14 @@ export default async function CampagnesPage({
               >
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-semibold">{c.nom}</h2>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUT_COLOR[c.statut]}`}
                       >
                         {STATUT_LABEL[c.statut]}
                       </span>
+                      <CampaignClient id={c.id} clientNom={c.client_nom} />
                     </div>
                     <p className="text-xs text-[var(--muted)]">
                       {c.verticale_id ? vNom.get(c.verticale_id) ?? "—" : "Toutes verticales"}

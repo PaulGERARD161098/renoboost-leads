@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   const { data: leadsData } = await supabase
     .from("leads")
     .select(
-      "id, entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, verticale:verticales(nom)",
+      "id, entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, verticale:verticales(nom), campaign:campaigns(client_nom)",
     )
     .in("id", leadIds);
   type Row = {
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     score_raison: string | null;
     vision_satellite: Record<string, unknown> | null;
     verticale?: { nom?: string } | { nom?: string }[];
+    campaign?: { client_nom?: string | null } | { client_nom?: string | null }[];
   };
   const leads = (leadsData as Row[] | null) ?? [];
   if (leads.length === 0) {
@@ -86,6 +87,9 @@ export async function POST(req: NextRequest) {
     const offre = Array.isArray(ld.verticale)
       ? ld.verticale[0]?.nom ?? null
       : ld.verticale?.nom ?? null;
+    const client = Array.isArray(ld.campaign)
+      ? ld.campaign[0]?.client_nom ?? null
+      : ld.campaign?.client_nom ?? null;
     const draft = await generateOutreachDraft(
       apiKey,
       mode,
@@ -100,6 +104,7 @@ export async function POST(req: NextRequest) {
       },
       offre,
       calendlyUrl,
+      client,
     );
     if (!draft.ok) {
       failed++;

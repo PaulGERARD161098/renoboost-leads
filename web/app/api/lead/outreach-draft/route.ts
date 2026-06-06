@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, verticale:verticales(nom)",
+      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, verticale:verticales(nom), campaign:campaigns(client_nom)",
     )
     .eq("id", leadId)
     .maybeSingle();
@@ -53,10 +53,14 @@ export async function POST(req: NextRequest) {
     score_raison: string | null;
     vision_satellite: Record<string, unknown> | null;
     verticale?: { nom?: string } | { nom?: string }[];
+    campaign?: { client_nom?: string | null } | { client_nom?: string | null }[];
   };
   const offre = Array.isArray(ld.verticale)
     ? ld.verticale[0]?.nom ?? null
     : ld.verticale?.nom ?? null;
+  const client = Array.isArray(ld.campaign)
+    ? ld.campaign[0]?.client_nom ?? null
+    : ld.campaign?.client_nom ?? null;
 
   const { data: ctx } = await supabase
     .from("app_context")
@@ -79,6 +83,7 @@ export async function POST(req: NextRequest) {
     },
     offre,
     calendlyUrl,
+    client,
   );
   if (!draft.ok) {
     return NextResponse.json({ error: draft.error }, { status: draft.status });

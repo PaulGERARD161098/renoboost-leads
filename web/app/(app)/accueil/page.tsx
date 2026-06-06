@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { AppContext, Lead } from "@/lib/database.types";
 import { HomeCommand } from "@/components/home-command";
+import { WelcomeGreeting } from "@/components/welcome-greeting";
 
 // Poste de pilotage (charte agent-first) : l'arrivée n'est plus l'inbox brute mais
 // une macro-page qui ORIENTE — synthèse Magellan en tête, 4 grands blocs d'entrée,
@@ -126,7 +127,7 @@ export default async function AccueilPage() {
             <p className="text-xs font-medium capitalize text-[var(--muted)]">
               {dateLabel}
             </p>
-            <h1 className="text-2xl font-bold">Bonjour {prenom} 👋</h1>
+            <WelcomeGreeting prenom={prenom} />
 
             {context?.objectif_final && (
               <p className="mt-2 text-sm">

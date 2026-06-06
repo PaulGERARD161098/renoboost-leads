@@ -247,6 +247,7 @@ export interface Campaign {
   id: string;
   nom: string;
   verticale_id: string | null;
+  client_nom: string | null;
   statut: CampaignStatus;
   note: string | null;
   instantly_campaign_id: string | null;
