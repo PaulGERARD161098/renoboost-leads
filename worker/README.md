@@ -26,7 +26,19 @@ heartbeat rapporte aussi la **présence** (jamais la valeur) des clés API du mo
 real (`google_places`, `anthropic`, `pappers`, `dropcontact`) → le panneau
 « Clés API » de l'UI sait, sans accès Railway, ce qui est prêt pour la vraie
 génération. Le heartbeat est best-effort : un échec d'écriture n'interrompt
-jamais la boucle.
+jamais la boucle. Un **thread dédié** réécrit le heartbeat toutes les
+`WORKER_POLL_INTERVAL_S` secondes pour garder `last_seen_at` frais **même
+pendant un run long** (sinon la boucle principale, bloquée dans le traitement,
+laisserait la pastille paraître « silencieuse »).
+
+## Récupération des runs orphelins (reaper)
+
+Si le worker meurt ou est redéployé **en plein run**, ce run reste figé en
+`en_cours` et n'est jamais repris (on ne ramasse que les `demande`). À chaque
+poll, le worker remet en file (`en_cours` → `demande`) tout run sans progrès
+depuis plus de `WORKER_STALE_RUN_TIMEOUT_S` (15 min par défaut), de sorte qu'il
+soit retraité automatiquement. Côté UI, un bouton **« Relancer le traitement »**
+permet aussi de le faire à la demande sur un run bloqué ou échoué.
 
 ## Modes (`WORKER_MODE`)
 
@@ -49,6 +61,7 @@ jamais la boucle.
 | `MAX_LEADS_PER_RUN` | — | `500` | Plafond de leads par run |
 | `MAX_BUDGET_EUR_PER_RUN` | — | `50` | Plafond budget par run (BudgetGuard) |
 | `WORKER_REQUEST_TIMEOUT_S` | — | `30` | Timeout des appels HTTP |
+| `WORKER_STALE_RUN_TIMEOUT_S` | — | `900` | Délai sans progrès au-delà duquel un run `en_cours` est jugé orphelin et remis en file (reaper) |
 | `WORKER_VERSION` | — | `RAILWAY_GIT_COMMIT_SHA` | Version affichée dans le heartbeat (SHA court). Sur Railway, déduit automatiquement du commit déployé. |
 | `LOG_LEVEL` | — | `INFO` | Niveau de log |
 

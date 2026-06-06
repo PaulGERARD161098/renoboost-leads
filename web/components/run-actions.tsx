@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Run, RunQualite } from "@/lib/database.types";
-import { deleteRun, updateRun } from "@/lib/actions/runs";
+import { deleteRun, requeueRun, updateRun } from "@/lib/actions/runs";
 
 const QUALITES: { value: RunQualite; label: string }[] = [
   { value: "bonne", label: "Bonne" },
@@ -51,6 +51,13 @@ export function RunActions({ run }: { run: Run }) {
     router.push(`/recherche?from=${run.id}`);
   }
 
+  // Relance le TRAITEMENT du même run (remise en file) — pour un run bloqué/échoué.
+  function relancerTraitement() {
+    act(() => requeueRun(run.id));
+  }
+
+  const relancable = run.status === "echoue" || run.status === "en_cours";
+
   function ouvrir(d: Dialog) {
     setOpen(false);
     setDialog(d);
@@ -58,6 +65,17 @@ export function RunActions({ run }: { run: Run }) {
 
   return (
     <div className="flex items-center gap-0.5" onClick={stop}>
+      {run.status === "echoue" && (
+        <button
+          type="button"
+          onClick={relancerTraitement}
+          disabled={pending}
+          title="Relancer le traitement de cette recherche"
+          className="rounded-md px-2 py-0.5 text-xs font-medium text-[var(--brand)] hover:bg-blue-50 disabled:opacity-50"
+        >
+          ↻ Relancer
+        </button>
+      )}
       <button
         type="button"
         onClick={() => ouvrir({ kind: "supprimer" })}
@@ -82,6 +100,9 @@ export function RunActions({ run }: { run: Run }) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-lg border border-[var(--border)] bg-white py-1 text-sm shadow-lg">
+            {relancable && (
+              <Item onClick={relancerTraitement}>↻ Relancer le traitement</Item>
+            )}
             <Item onClick={relancer}>↻ Relancer (pré-rempli)</Item>
             <Item onClick={() => ouvrir({ kind: "renommer", value: run.nom ?? "" })}>
               ✎ Renommer

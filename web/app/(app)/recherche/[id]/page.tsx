@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead, Run, Verticale } from "@/lib/database.types";
 import { RUN_STATUS_LABEL, LEAD_STATUS_LABEL, scoreColor, formatDate } from "@/lib/ui";
 import { RunMapLoader } from "@/components/run-map-loader";
+import { RunReportLauncher } from "@/components/run-report";
+import { getRunReport } from "@/lib/run-report";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +43,9 @@ export default async function RechercheDetailPage({
     .limit(500);
   const leads = (leadsData as Partial<Lead>[]) ?? [];
 
+  // Rapport de fin de recherche (coûts, temps, périmètre, entreprises ciblées).
+  const report = await getRunReport(supabase, id);
+
   const zone = run.zone as
     | { departement?: string; adresse?: string; rayon_par_point_km?: number }
     | undefined;
@@ -69,10 +74,15 @@ export default async function RechercheDetailPage({
         {cibleNom}
         {zone?.departement ? ` · Dépt ${zone.departement}` : ""}
       </h1>
-      <p className="mb-5 text-sm text-[var(--muted)]">
+      <p className="mb-3 text-sm text-[var(--muted)]">
         {formatDate(run.created_at)} · {RUN_STATUS_LABEL[run.status]}
         {run.status === "en_cours" ? ` · ${run.progress}%` : ""}
       </p>
+      {report && (
+        <div className="mb-5">
+          <RunReportLauncher report={report} />
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Résultats" value={leads.length} />

@@ -107,6 +107,12 @@ export function RunCard({
         </div>
       )}
 
+      {run.status === "echoue" && run.erreur && (
+        <p className="mt-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">
+          ⚠ {run.erreur}
+        </p>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <Metric value={counts.total} label="prospects" />
         {counts.top > 0 && (

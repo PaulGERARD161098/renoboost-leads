@@ -11,6 +11,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { WorkerStatus } from "@/components/worker-status";
 import { KeysPanel } from "@/components/keys-panel";
 import { ExplorerMap } from "@/components/explorer-map";
+import { RunReportLauncher } from "@/components/run-report";
+import { getRunReport } from "@/lib/run-report";
 
 export const dynamic = "force-dynamic";
 
@@ -109,9 +111,19 @@ export default async function RecherchePage({
     (r) => r.status === "en_cours" || r.status === "demande",
   );
 
+  // Rapport de fin de recherche : auto-popup (une fois) quand le run le plus
+  // récent vient de se terminer/échouer.
+  const dernierTermine = runs.find(
+    (r) => r.status === "termine" || r.status === "echoue",
+  );
+  const autoReport = dernierTermine
+    ? await getRunReport(supabase, dernierTermine.id)
+    : null;
+
   return (
     <div>
       <AutoRefresh enabled={!!activeRun} />
+      {autoReport && <RunReportLauncher report={autoReport} mode="auto" />}
       <h1 className="mb-1 text-2xl font-bold">Nouvelle recherche</h1>
       <p className="mb-3 text-sm text-[var(--muted)]">
         {initial

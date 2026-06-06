@@ -20,6 +20,9 @@ class WorkerConfig:
     max_budget_eur: float = 50.0
     request_timeout_s: float = 30.0
     version: str | None = None  # SHA court du build déployé (heartbeat → UI)
+    # Un run `en_cours` sans progrès depuis ce délai est considéré orphelin
+    # (worker mort/redéployé en plein run) et remis en file par le reaper.
+    stale_run_timeout_s: float = 900.0
 
     @property
     def rest_url(self) -> str:
@@ -60,4 +63,5 @@ class WorkerConfig:
             max_budget_eur=float(env.get("MAX_BUDGET_EUR_PER_RUN", "50")),
             request_timeout_s=float(env.get("WORKER_REQUEST_TIMEOUT_S", "30")),
             version=version,
+            stale_run_timeout_s=float(env.get("WORKER_STALE_RUN_TIMEOUT_S", "900")),
         )
