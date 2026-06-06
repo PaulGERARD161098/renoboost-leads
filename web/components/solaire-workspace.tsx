@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { LeadStatus } from "@/lib/database.types";
-import { LEAD_STATUS_COLOR, LEAD_STATUS_LABEL, scoreColor } from "@/lib/ui";
+import { LEAD_STATUS_COLOR, LEAD_STATUS_LABEL, scoreColor, solaireScore100 } from "@/lib/ui";
 import { solaireFromVision } from "@/lib/outreach";
 import { estimerSolaire, fmtEur, fmtKwc, fmtKwh } from "@/lib/solaire";
 
@@ -98,10 +98,8 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
   function applyVision(id: string, result: Record<string, unknown>) {
     const surfaces = solaireFromVision(result);
     const estim = surfaces ? estimerSolaire(surfaces) : null;
-    const score =
-      typeof (result as { score?: number }).score === "number"
-        ? (result as { score: number }).score
-        : null;
+    // Score solaire /100, v2-aware (le résultat on-demand est au format v2).
+    const score = solaireScore100(result);
     setLeads((prev) =>
       prev.map((l) =>
         l.id === id
