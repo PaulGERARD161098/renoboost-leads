@@ -2,6 +2,37 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [Unreleased] — Lancement V1 : accueil d'Henry + boucle de retours
+
+### Added — accueil « V1 en ligne » d'Henry (joué une seule fois)
+
+- **Cinématique de bienvenue** (`web/components/welcome-v1.tsx`,
+  `web/lib/welcome-v1.ts`) : « vidéo » scriptée ~20 s (cartes auto-déroulées,
+  barre de progression, *skippable*, voix off optionnelle via synthèse
+  navigateur). Titre : *« Bienvenue sur LEADS, Henry ! Voilà à quoi a servi ton
+  argent ! »*. Résume les fonctionnalités et se clôt sur la chute convenue.
+- **Réservée à Henry** (`henry.huvey@renoboostia.fr`) et **jouée une seule
+  fois** : horodatée par `profiles.welcomed_v1_at` (migration 0033). Déclenchée
+  à son prochain login.
+
+### Added — boucle de retours structurée (drainée par Claude)
+
+- **Pop-up de retours d'Henry** (`web/components/feedback-dock.tsx`) : monté
+  dans le layout → **suit Henry sur toutes les pages**. Il consigne ses retours
+  en vrac (page courante auto-jointe) ; ils s'empilent dans la table `retours`.
+  Henry tape **« fin du retour »** (ou le bouton) pour clore → le pop-up
+  disparaît.
+- **Magellan capte les idées d'amélioration** (Paul & co) : une note produit
+  adressée à l'assistant (« il faudrait… », « amélioration : … ») est rangée
+  dans `retours` (source `magellan`) au lieu d'appeler le modèle. Magellan
+  confirme et rappelle qu'**aucun changement ne se fait sans la validation de
+  Paul**.
+- **Acheminement** : la table `retours` (migration 0033, RLS authenticated) est
+  drainée par Claude en session (lecture Supabase) → correctifs **proposés en
+  PR draft**, jamais appliqués sans validation de Paul (garde-fou CLAUDE.md).
+- Server actions `logRetour` / `markWelcomedV1` (`web/lib/actions/feedback.ts`),
+  détection d'intention `web/lib/feedback.ts`.
+
 ## [0.11.0] — 2026-05-19 — Déploiement en ligne : persistance Supabase + auth
 
 ### Added — persistance des sessions sur Supabase Storage

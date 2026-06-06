@@ -2,11 +2,14 @@ import { redirect } from "next/navigation";
 import { Nav } from "@/components/nav";
 import { AssistantWidget } from "@/components/assistant-widget";
 import { WelcomeModal } from "@/components/welcome-modal";
+import { WelcomeV1 } from "@/components/welcome-v1";
+import { FeedbackDock } from "@/components/feedback-dock";
 import { GuidedTour } from "@/components/guided-tour";
 import { DriveMode } from "@/components/drive-mode";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionBriefing } from "@/lib/briefing";
 import { getSystemHealth } from "@/lib/health";
+import { isHenry } from "@/lib/welcome-v1";
 
 export default async function AppLayout({
   children,
@@ -29,6 +32,18 @@ export default async function AppLayout({
   // Voyant de santé (nom du CRM coloré dans le header).
   const health = await getSystemHealth();
 
+  // Lancement V1 : accueil spécial + boucle de retours, réservés à Henry.
+  const henry = isHenry(user.email);
+  let showWelcomeV1 = false;
+  if (henry) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("welcomed_v1_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    showWelcomeV1 = !prof?.welcomed_v1_at; // joué une seule fois (prochain login)
+  }
+
   return (
     <div className="min-h-screen">
       <Nav email={user.email ?? null} health={health.severite} />
@@ -40,6 +55,8 @@ export default async function AppLayout({
       <GuidedTour />
       <DriveMode />
       {briefing.shouldShow && <WelcomeModal briefing={briefing} />}
+      {showWelcomeV1 && <WelcomeV1 />}
+      {henry && <FeedbackDock />}
     </div>
   );
 }
