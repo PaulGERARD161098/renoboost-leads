@@ -8,6 +8,7 @@ import {
 import { RunCard, type RunCounts } from "@/components/run-card";
 import { RunActions } from "@/components/run-actions";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { WorkerStatus } from "@/components/worker-status";
 
 export const dynamic = "force-dynamic";
 
@@ -110,11 +111,15 @@ export default async function RecherchePage({
     <div>
       <AutoRefresh enabled={!!activeRun} />
       <h1 className="mb-1 text-2xl font-bold">Nouvelle recherche</h1>
-      <p className="mb-5 text-sm text-[var(--muted)]">
+      <p className="mb-3 text-sm text-[var(--muted)]">
         {initial
           ? "Recherche pré-remplie depuis une recherche existante — ajuste puis relance."
           : "Décris la cible : le moteur trouve et qualifie les prospects."}
       </p>
+      {/* État du worker : une recherche ne sera traitée que s'il tourne. */}
+      <div className="mb-5">
+        <WorkerStatus />
+      </div>
 
       {vlist.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] bg-white p-8 text-center text-[var(--muted)]">

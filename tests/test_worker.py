@@ -21,6 +21,19 @@ class FakeDB:
         self.verticales = verticales
         self.leads: list[dict[str, Any]] = []
         self.progress_calls: list[tuple[str, int, dict[str, int]]] = []
+        self.heartbeats: list[dict[str, Any]] = []
+
+    def heartbeat(
+        self,
+        *,
+        mode: str,
+        version: str | None = None,
+        pending: int | None = None,
+        last_error: str | None = None,
+    ) -> None:
+        self.heartbeats.append(
+            {"mode": mode, "version": version, "pending": pending, "last_error": last_error}
+        )
 
     def fetch_pending_runs(self, limit: int = 5) -> list[dict[str, Any]]:
         pend = [dict(r) for r in self.runs.values() if r["status"] == "demande"]
@@ -449,7 +462,36 @@ def test_worker_marks_failure_on_pipeline_error():
 
     assert db.runs[run["id"]]["status"] == "echoue"
     assert "kaboom" in db.runs[run["id"]]["erreur"]
-    assert db.leads == []
+    # L'échec remonte aussi au heartbeat (visible dans l'UI sans logs Railway).
+    assert any("kaboom" in (h["last_error"] or "") for h in db.heartbeats)
+
+
+def test_worker_heartbeat_each_poll_reports_mode_and_pending():
+    run = _make_run(volume=4)
+    db = FakeDB(runs=[run], verticales={})
+    config = WorkerConfig(
+        supabase_url="https://x.supabase.co", service_role_key="k", mode="demo", version="abc1234"
+    )
+    worker = Worker(config, db=db, pipeline=DemoPipeline(seed=1))
+
+    worker.poll_once()
+
+    # Premier heartbeat du tour : mode + version + nombre de runs en file.
+    first = db.heartbeats[0]
+    assert first["mode"] == "demo"
+    assert first["version"] == "abc1234"
+    assert first["pending"] == 1
+
+
+def test_config_reads_version_from_railway_sha():
+    cfg = WorkerConfig.from_env(
+        {
+            "SUPABASE_URL": "https://x.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "k",
+            "RAILWAY_GIT_COMMIT_SHA": "0123456789abcdef",
+        }
+    )
+    assert cfg.version == "0123456"  # tronqué à 7 caractères
 
 
 def test_worker_test_run_forces_demo_pipeline():

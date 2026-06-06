@@ -6,9 +6,14 @@ pour garder le worker léger et sans dépendance lourde sur Railway.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 class SupabaseRest:
@@ -134,3 +139,27 @@ class SupabaseRest:
             "erreur": erreur,
         }
         self.update("runs", {"id": f"eq.{run_id}"}, patch)
+
+    def heartbeat(
+        self,
+        *,
+        mode: str,
+        version: str | None = None,
+        pending: int | None = None,
+        last_error: str | None = None,
+    ) -> None:
+        """Écrit le battement de cœur du worker (table singleton worker_heartbeat).
+
+        L'UI déduit la liveness du process de la fraîcheur de `last_seen_at`.
+        `pending`/`last_error` ne sont écrits que s'ils sont fournis (un échec de
+        run ne doit pas réinitialiser le compteur de file, et inversement).
+        """
+        patch: dict[str, Any] = {"last_seen_at": _now_iso(), "mode": mode, "updated_at": _now_iso()}
+        if version is not None:
+            patch["version"] = version
+        if pending is not None:
+            patch["pending_runs"] = pending
+        if last_error is not None:
+            patch["last_error"] = last_error[:500]
+            patch["last_error_at"] = _now_iso()
+        self.update("worker_heartbeat", {"id": "eq.main"}, patch)
