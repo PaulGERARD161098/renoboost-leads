@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { LoginHealthBanner } from "@/components/login-health-banner";
+import { versionLabel } from "@/lib/version";
 
 type Mode = "password" | "reset";
 
@@ -50,10 +52,15 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-white p-8 shadow-sm">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold text-[var(--brand)]">Leads</h1>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">{versionLabel()}</p>
           <p className="mt-1 text-sm text-[var(--muted)]">
             Connexion à l&apos;espace commercial
           </p>
         </div>
+
+        {/* Bandeau d'avertissement en cas de problème majeur (hors-ligne, base
+            indisponible, incident déclaré) — visible sans être connecté. */}
+        <LoginHealthBanner />
 
         {mode === "password" ? (
           <form onSubmit={loginPassword} className="space-y-4">

@@ -4,6 +4,7 @@ import { AssistantWidget } from "@/components/assistant-widget";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionBriefing } from "@/lib/briefing";
+import { getSystemHealth } from "@/lib/health";
 
 export default async function AppLayout({
   children,
@@ -23,9 +24,12 @@ export default async function AppLayout({
     email: user.email ?? null,
   });
 
+  // Voyant de santé (nom du CRM coloré dans le header).
+  const health = await getSystemHealth();
+
   return (
     <div className="min-h-screen">
-      <Nav email={user.email ?? null} />
+      <Nav email={user.email ?? null} health={health.severite} />
       {/* Décalage = largeur de la sidebar repliée (elle s'étend en overlay au survol). */}
       <main className="ml-16 px-4 py-6">
         <div className="mx-auto max-w-6xl">{children}</div>
