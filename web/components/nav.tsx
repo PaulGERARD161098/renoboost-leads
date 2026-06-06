@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/bornes", label: "Bornes VE", icon: "🔌" },
   { href: "/solaire", label: "Solaire", icon: "☀️" },
   { href: "/recherche", label: "Recherches", icon: "🔎" },
+  { href: "/analyse", label: "Analyse satellite", icon: "🛰️" },
   { href: "/cibles", label: "Cibles", icon: "🎯" },
   { href: "/tableau-de-bord", label: "Tableau de bord", icon: "📈" },
   { href: "/agent", label: "Agent", icon: "🤖" },
