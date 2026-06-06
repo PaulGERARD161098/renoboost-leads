@@ -35,9 +35,24 @@ class Worker:
             return self._demo_pipeline or build_pipeline("demo")
         return self.pipeline
 
+    def _heartbeat(self, *, pending: int | None = None, last_error: str | None = None) -> None:
+        """Écrit le battement de cœur (non bloquant : ne doit jamais tuer la boucle)."""
+        try:
+            self.db.heartbeat(
+                mode=self.config.mode,
+                version=self.config.version,
+                pending=pending,
+                last_error=last_error,
+            )
+        except Exception:  # noqa: BLE001 — l'observabilité ne doit pas casser le traitement
+            logger.warning("Heartbeat échoué (non bloquant).", exc_info=True)
+
     def poll_once(self) -> int:
         """Traite les runs en attente. Renvoie le nombre de runs traités."""
         pending = self.db.fetch_pending_runs(limit=5)
+        # Battement de cœur à chaque tour (y compris à vide) → l'UI sait que le
+        # process tourne et combien de runs attendent.
+        self._heartbeat(pending=len(pending))
         traites = 0
         for run in pending:
             claimed = self.db.claim_run(run["id"])
@@ -81,6 +96,8 @@ class Worker:
             )
         except Exception as exc:  # noqa: BLE001 — on veut capturer pour marquer le run échoué
             logger.exception("Run %s : échec", run_id)
+            # Remonte aussi l'erreur au heartbeat → visible dans l'UI sans logs Railway.
+            self._heartbeat(last_error=str(exc)[:500])
             try:
                 self.db.finalize_run(
                     run_id, status="echoue", counts={}, cout_eur=0.0, erreur=str(exc)[:500]

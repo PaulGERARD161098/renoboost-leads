@@ -14,6 +14,16 @@ Process long-running qui transforme les **runs** créés dans le CRM (statut
 4. Insertion des leads (statut initial `a_valider`).
 5. Finalisation : `termine` (progress 100) ou `echoue` (`erreur` renseignée).
 
+## Observabilité (heartbeat)
+
+À chaque poll, le worker écrit un **battement de cœur** dans la table singleton
+`worker_heartbeat` (`last_seen_at`, `mode`, `version`, `pending_runs`,
+`last_error`). L'UI (pages **Accueil** et **Recherche**) en déduit si le process
+tourne : au-delà de 60 s sans battement, il est signalé **silencieux**, et si des
+recherches sont en attente, **à l'arrêt** (rouge). La `version` (SHA court du
+build) permet de confirmer depuis l'app qu'un redéploiement a bien atterri. Le
+heartbeat est best-effort : un échec d'écriture n'interrompt jamais la boucle.
+
 ## Modes (`WORKER_MODE`)
 
 - `demo` (défaut) — génère des leads plausibles **sans API externe**. Permet de
@@ -35,6 +45,7 @@ Process long-running qui transforme les **runs** créés dans le CRM (statut
 | `MAX_LEADS_PER_RUN` | — | `500` | Plafond de leads par run |
 | `MAX_BUDGET_EUR_PER_RUN` | — | `50` | Plafond budget par run (BudgetGuard) |
 | `WORKER_REQUEST_TIMEOUT_S` | — | `30` | Timeout des appels HTTP |
+| `WORKER_VERSION` | — | `RAILWAY_GIT_COMMIT_SHA` | Version affichée dans le heartbeat (SHA court). Sur Railway, déduit automatiquement du commit déployé. |
 | `LOG_LEVEL` | — | `INFO` | Niveau de log |
 
 ⚠️ Utiliser la clé **service_role**, pas la clé `anon` : le worker écrit dans

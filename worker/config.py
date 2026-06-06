@@ -19,6 +19,7 @@ class WorkerConfig:
     max_leads: int = 500
     max_budget_eur: float = 50.0
     request_timeout_s: float = 30.0
+    version: str | None = None  # SHA court du build déployé (heartbeat → UI)
 
     @property
     def rest_url(self) -> str:
@@ -45,6 +46,11 @@ class WorkerConfig:
         if mode not in ("demo", "real"):
             raise ConfigError(f"WORKER_MODE invalide : {mode!r} (attendu 'demo' ou 'real').")
 
+        # Version déployée : override manuel WORKER_VERSION, sinon SHA fourni par
+        # Railway. Tronqué à 7 caractères pour l'affichage UI.
+        raw_version = (env.get("WORKER_VERSION") or env.get("RAILWAY_GIT_COMMIT_SHA") or "").strip()
+        version = raw_version[:7] if raw_version else None
+
         return cls(
             supabase_url=url,
             service_role_key=key,
@@ -53,4 +59,5 @@ class WorkerConfig:
             max_leads=int(env.get("MAX_LEADS_PER_RUN", "500")),
             max_budget_eur=float(env.get("MAX_BUDGET_EUR_PER_RUN", "50")),
             request_timeout_s=float(env.get("WORKER_REQUEST_TIMEOUT_S", "30")),
+            version=version,
         )

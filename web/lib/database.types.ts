@@ -286,6 +286,17 @@ export interface AppContext {
   updated_at: string;
 }
 
+export interface WorkerHeartbeat {
+  id: string;
+  last_seen_at: string | null;
+  mode: string | null;
+  version: string | null;
+  pending_runs: number;
+  last_error: string | null;
+  last_error_at: string | null;
+  updated_at: string;
+}
+
 export type ReplyCategorie =
   | "interesse"
   | "info"

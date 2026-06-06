@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { AppContext, Lead } from "@/lib/database.types";
 import { HomeCommand } from "@/components/home-command";
 import { WelcomeGreeting } from "@/components/welcome-greeting";
+import { WorkerStatus } from "@/components/worker-status";
 
 // Poste de pilotage (charte agent-first) : l'arrivée n'est plus l'inbox brute mais
 // une macro-page qui ORIENTE — synthèse Magellan en tête, 4 grands blocs d'entrée,
@@ -162,6 +163,11 @@ export default async function AccueilPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── État du moteur : le worker traite-t-il les recherches ? ── */}
+      <div className="mb-5">
+        <WorkerStatus />
       </div>
 
       {/* ── Commande vocale : parler à l'agent, orienter vite ── */}
