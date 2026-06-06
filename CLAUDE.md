@@ -32,7 +32,14 @@ ne peut pas « rappeler » au login. À construire en premier quand on reprend c
 ## Convention "fin de session"
 
 Quand l'utilisateur écrit **`fin de session`** (ou variante : *fin de session.*,
-*on s'arrête*, *fin de journée*), produire **quatre livrables**, dans l'ordre :
+*on s'arrête*, *fin de journée*), produire **cinq livrables**, dans l'ordre :
+
+0. **Repo à jour & branche unique** — le repo doit finir *propre* : merger les
+   PR que Paul a validées (« fin de session » vaut accord de merge pour le travail
+   livré de la session), puis **supprimer les branches** mergées/orphelines (locales
+   ET remote) afin que **`main` soit la seule branche** restante. Cible :
+   `git branch -a` ne montre plus que `main` (+ `origin/main`). Ne jamais laisser de
+   branche divergente derrière soi.
 
 1. **Synthèse du travail effectué** — le passage d'un point A (état d'ouverture)
    à un point B (état de fermeture) : ce qui a été livré, mergé, décidé.
