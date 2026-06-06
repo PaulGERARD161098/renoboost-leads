@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Markdown } from "@/components/markdown";
 import { isTourRequest, isDriveRequest } from "@/lib/tour";
+import { parseImprovementNote } from "@/lib/feedback";
+import { logRetour } from "@/lib/actions/feedback";
 import { speak, stopSpeaking, ttsSupported } from "@/lib/speech";
 
 type Message = { role: "user" | "assistant"; content: string; steps?: string[] };
@@ -36,6 +39,7 @@ const STEP_LABEL: Record<string, string> = {
 };
 
 export function AssistantWidget() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -184,6 +188,24 @@ export function AssistantWidget() {
         ...m,
         { role: "user", content },
         { role: "assistant", content: "🚗 J'ouvre le mode déplacement, mains-libres." },
+      ]);
+      return;
+    }
+
+    // Note d'amélioration adressée à Magellan → file `retours` (remontée à Paul +
+    // Claude, jamais appliquée sans son OK). Court-circuite l'appel au modèle.
+    const note = parseImprovementNote(content);
+    if (note) {
+      setInput("");
+      setMessages((m) => [...m, { role: "user", content }]);
+      void logRetour({ source: "magellan", texte: note, page: pathname });
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content:
+            "📝 Noté, je le remonte à **Paul & Claude**. Aucun changement ne sera fait sans la validation de Paul : il verra ce que ça change et tranchera. 👍",
+        },
       ]);
       return;
     }

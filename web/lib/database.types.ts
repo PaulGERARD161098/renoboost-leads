@@ -32,6 +32,20 @@ export interface Profile {
   nom: string | null;
   role: UserRole;
   last_seen_at: string | null;
+  welcomed_v1_at: string | null;
+  created_at: string;
+}
+
+export type RetourSource = "henry_popup" | "magellan";
+export type RetourStatut = "nouveau" | "traite";
+
+export interface Retour {
+  id: string;
+  source: RetourSource;
+  page: string | null;
+  texte: string;
+  statut: RetourStatut;
+  created_by: string | null;
   created_at: string;
 }
 
