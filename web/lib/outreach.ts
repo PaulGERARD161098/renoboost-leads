@@ -94,7 +94,12 @@ export function buildOutreachPrompt(
   lead: LeadFiche,
   offre: string | null,
   calendlyUrl: string | null,
+  client: string | null = null,
 ): string {
+  // Quand la campagne est affectée à un client, l'email est rédigé et signé en
+  // son nom (RénoBoost reste l'outil, le client est l'émetteur visible).
+  const marque = client?.trim() || "RénoBoost";
+  const signature = `Signe « L'équipe ${marque} ».`;
   const fiche = [
     `Entreprise : ${lead.entreprise}`,
     lead.secteur ? `Secteur : ${lead.secteur}` : null,
@@ -119,24 +124,24 @@ export function buildOutreachPrompt(
     : " Termine en proposant un échange court de 15 minutes.";
 
   if (mode === "relance") {
-    return `Tu es l'assistant commercial de RénoBoost${
+    return `Tu es l'assistant commercial de ${marque}${
       offre ? ` (offre : ${offre})` : ""
     }. Rédige une RELANCE courte et non insistante à un premier email resté sans réponse, pour ce prospect B2B :
 
 ${fiche}${blocTerrain}
 
-Contraintes : français, ton professionnel et chaleureux, TRÈS concis (3-5 lignes), rappelle l'objet en une phrase, apporte une raison de répondre, sans culpabiliser.${consigneTerrain}${consigneRdv} Signe « L'équipe RénoBoost ». N'invente aucun chiffre.
+Contraintes : français, ton professionnel et chaleureux, TRÈS concis (3-5 lignes), rappelle l'objet en une phrase, apporte une raison de répondre, sans culpabiliser.${consigneTerrain}${consigneRdv} ${signature} N'invente aucun chiffre.
 
 Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le texte>"}`;
   }
 
-  return `Tu es l'assistant commercial de RénoBoost${
+  return `Tu es l'assistant commercial de ${marque}${
     offre ? ` (offre : ${offre})` : ""
   }. Rédige un premier email d'APPROCHE (cold email) personnalisé pour ce prospect B2B :
 
 ${fiche}${blocTerrain}
 
-Contraintes : français, ton professionnel et chaleureux, concis (6-10 lignes), personnalise avec le secteur/angle d'accroche, va à l'essentiel sur la valeur concrète.${consigneTerrain}${consigneRdv} Signe « L'équipe RénoBoost ». N'invente aucun chiffre ni engagement.
+Contraintes : français, ton professionnel et chaleureux, concis (6-10 lignes), personnalise avec le secteur/angle d'accroche, va à l'essentiel sur la valeur concrète.${consigneTerrain}${consigneRdv} ${signature} N'invente aucun chiffre ni engagement.
 
 Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le texte>"}`;
 }
@@ -170,6 +175,7 @@ export async function generateOutreachDraft(
   lead: LeadFiche,
   offre: string | null,
   calendlyUrl: string | null,
+  client: string | null = null,
 ): Promise<DraftResult> {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -183,7 +189,7 @@ export async function generateOutreachDraft(
         model: OUTREACH_MODEL,
         max_tokens: MAX_TOKENS,
         messages: [
-          { role: "user", content: buildOutreachPrompt(mode, lead, offre, calendlyUrl) },
+          { role: "user", content: buildOutreachPrompt(mode, lead, offre, calendlyUrl, client) },
         ],
       }),
     });

@@ -49,7 +49,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-white p-8 shadow-sm">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-[var(--brand)]">ReSign CRM</h1>
+          <h1 className="text-2xl font-bold text-[var(--brand)]">Leads</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             Connexion à l&apos;espace commercial
           </p>

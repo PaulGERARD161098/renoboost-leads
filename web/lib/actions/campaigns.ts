@@ -5,8 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import type { CampaignStatus } from "@/lib/database.types";
 import { sendLead } from "@/lib/actions/leads";
 
-/** Crée une campagne (brouillon par défaut), éventuellement liée à une verticale. */
-export async function createCampaign(nom: string, verticaleId?: string | null) {
+/**
+ * Crée une campagne (brouillon par défaut), éventuellement liée à une verticale
+ * et affectée à un client (donneur d'ordre dont les mails seront signés au nom).
+ */
+export async function createCampaign(
+  nom: string,
+  verticaleId?: string | null,
+  clientNom?: string | null,
+) {
   const t = nom.trim();
   if (!t) return { error: "Nom de campagne requis." };
   const supabase = await createClient();
@@ -15,12 +22,29 @@ export async function createCampaign(nom: string, verticaleId?: string | null) {
   } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("campaigns")
-    .insert({ nom: t, verticale_id: verticaleId ?? null, created_by: user?.id ?? null })
+    .insert({
+      nom: t,
+      verticale_id: verticaleId ?? null,
+      client_nom: clientNom?.trim() || null,
+      created_by: user?.id ?? null,
+    })
     .select("id")
     .single();
   if (error) return { error: error.message };
   revalidatePath("/campagnes");
   return { ok: true, id: data.id as string };
+}
+
+/** Affecte (ou retire) le client d'une campagne. Vide = retire l'affectation. */
+export async function setCampaignClient(id: string, clientNom: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("campaigns")
+    .update({ client_nom: clientNom.trim() || null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/campagnes");
+  return { ok: true };
 }
 
 /** Change le statut d'une campagne (active / pause / terminée). */

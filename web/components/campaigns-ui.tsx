@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   createCampaign,
   launchCampaign,
+  setCampaignClient,
   setCampaignStatus,
 } from "@/lib/actions/campaigns";
 import type { CampaignStatus } from "@/lib/database.types";
@@ -16,6 +17,7 @@ export function CreateCampaignForm({ verticales }: { verticales: Verticale[] }) 
   const router = useRouter();
   const [nom, setNom] = useState("");
   const [verticaleId, setVerticaleId] = useState("");
+  const [client, setClient] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -23,11 +25,12 @@ export function CreateCampaignForm({ verticales }: { verticales: Verticale[] }) 
     e.preventDefault();
     if (!nom.trim()) return;
     start(async () => {
-      const res = await createCampaign(nom, verticaleId || null);
+      const res = await createCampaign(nom, verticaleId || null, client || null);
       if (res.error) setError(res.error);
       else {
         setNom("");
         setVerticaleId("");
+        setClient("");
         setError(null);
         router.refresh();
       }
@@ -48,6 +51,17 @@ export function CreateCampaignForm({ verticales }: { verticales: Verticale[] }) 
           onChange={(e) => setNom(e.target.value)}
           placeholder="Nom (ex. Solaire PME 59 — juin)"
           className="w-full rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
+          Client
+        </label>
+        <input
+          value={client}
+          onChange={(e) => setClient(e.target.value)}
+          placeholder="Ex. Rossini Energy"
+          className="w-44 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
         />
       </div>
       <select
@@ -134,5 +148,76 @@ export function CampaignActions({
       )}
       {msg && <span className="text-xs text-[var(--muted)]">{msg}</span>}
     </div>
+  );
+}
+
+/**
+ * Affecte / modifie le client d'une campagne en inline. Les mails auto-générés
+ * pour les leads de la campagne sont signés au nom de ce client.
+ */
+export function CampaignClient({
+  id,
+  clientNom,
+}: {
+  id: string;
+  clientNom: string | null;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(clientNom ?? "");
+  const [pending, start] = useTransition();
+
+  function save() {
+    start(async () => {
+      const res = await setCampaignClient(id, val);
+      if (!res.error) {
+        setEditing(false);
+        router.refresh();
+      }
+    });
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => {
+          setVal(clientNom ?? "");
+          setEditing(true);
+        }}
+        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+        title="Affecter cette campagne à un client (signe les mails à son nom)"
+      >
+        {clientNom ? `Client : ${clientNom}` : "+ Affecter un client"}
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        value={val}
+        autoFocus
+        onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        placeholder="Nom du client"
+        className="w-40 rounded-lg border border-[var(--border)] px-2 py-0.5 text-xs outline-none focus:border-[var(--brand)]"
+      />
+      <button
+        disabled={pending}
+        onClick={save}
+        className="rounded-lg bg-[var(--brand)] px-2 py-0.5 text-xs font-medium text-white disabled:opacity-40"
+      >
+        {pending ? "…" : "OK"}
+      </button>
+      <button
+        onClick={() => setEditing(false)}
+        className="rounded-lg px-1 py-0.5 text-xs text-[var(--muted)] hover:bg-slate-50"
+      >
+        Annuler
+      </button>
+    </span>
   );
 }

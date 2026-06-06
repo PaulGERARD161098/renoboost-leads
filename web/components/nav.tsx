@@ -40,7 +40,7 @@ export function Nav({ email }: { email: string | null }) {
       >
         <span className="text-xl">🧭</span>
         <span className="whitespace-nowrap text-lg font-bold opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          ReSign CRM
+          Leads
         </span>
       </Link>
 
