@@ -9,6 +9,7 @@ import { RunCard, type RunCounts } from "@/components/run-card";
 import { RunActions } from "@/components/run-actions";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { WorkerStatus } from "@/components/worker-status";
+import { KeysPanel } from "@/components/keys-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -116,9 +117,11 @@ export default async function RecherchePage({
           ? "Recherche pré-remplie depuis une recherche existante — ajuste puis relance."
           : "Décris la cible : le moteur trouve et qualifie les prospects."}
       </p>
-      {/* État du worker : une recherche ne sera traitée que s'il tourne. */}
-      <div className="mb-5">
+      {/* État du worker + clés API : une recherche réelle n'aboutit que si le
+          worker tourne en mode real avec les clés requises. */}
+      <div className="mb-5 space-y-2">
         <WorkerStatus />
+        <KeysPanel />
       </div>
 
       {vlist.length === 0 ? (

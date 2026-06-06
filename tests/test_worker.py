@@ -30,9 +30,16 @@ class FakeDB:
         version: str | None = None,
         pending: int | None = None,
         last_error: str | None = None,
+        keys: dict[str, bool] | None = None,
     ) -> None:
         self.heartbeats.append(
-            {"mode": mode, "version": version, "pending": pending, "last_error": last_error}
+            {
+                "mode": mode,
+                "version": version,
+                "pending": pending,
+                "last_error": last_error,
+                "keys": keys,
+            }
         )
 
     def fetch_pending_runs(self, limit: int = 5) -> list[dict[str, Any]]:
@@ -481,6 +488,9 @@ def test_worker_heartbeat_each_poll_reports_mode_and_pending():
     assert first["mode"] == "demo"
     assert first["version"] == "abc1234"
     assert first["pending"] == 1
+    # Présence des clés rapportée (booléens, jamais les valeurs).
+    assert set(first["keys"]) == {"google_places", "anthropic", "pappers", "dropcontact"}
+    assert all(isinstance(v, bool) for v in first["keys"].values())
 
 
 def test_config_reads_version_from_railway_sha():

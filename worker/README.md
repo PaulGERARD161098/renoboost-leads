@@ -22,7 +22,11 @@ Process long-running qui transforme les **runs** créés dans le CRM (statut
 tourne : au-delà de 60 s sans battement, il est signalé **silencieux**, et si des
 recherches sont en attente, **à l'arrêt** (rouge). La `version` (SHA court du
 build) permet de confirmer depuis l'app qu'un redéploiement a bien atterri. Le
-heartbeat est best-effort : un échec d'écriture n'interrompt jamais la boucle.
+heartbeat rapporte aussi la **présence** (jamais la valeur) des clés API du mode
+real (`google_places`, `anthropic`, `pappers`, `dropcontact`) → le panneau
+« Clés API » de l'UI sait, sans accès Railway, ce qui est prêt pour la vraie
+génération. Le heartbeat est best-effort : un échec d'écriture n'interrompt
+jamais la boucle.
 
 ## Modes (`WORKER_MODE`)
 
