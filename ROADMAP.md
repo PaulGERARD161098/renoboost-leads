@@ -11,6 +11,50 @@ permet de lancer Instantly en cold-mail ciblé (≥ 40% email vérifié,
 ≥ 25% tél direct). Pour ça il faut activer les sources d'enrichissement
 réelles et fiabiliser le matching SIREN.
 
+## Chantiers produit — expérience agent & onboarding
+
+> Demandés explicitement par le métier. **À lancer dès la fin de la V1**
+> (incrément groupé, shippable, CI verte). Cap « agent-first » (cf. CLAUDE.md).
+
+### PA — Tuto interactif de prise en main (« à actionner dès la fin V1 »)
+
+- Un **vrai parcours guidé interactif** (pas la page statique « Mode d'emploi »
+  actuelle) : étapes pas-à-pas qui *montrent* l'outil, idéalement en
+  surbrillance/ancrage sur les vrais éléments d'UI (onglets, boutons),
+  progression, suivant/précédent, skip.
+- **Couvre l'outil écran par écran** : Accueil/pilotage → Cibles → Recherches →
+  Prospects → Suivi → Campagnes (dont affectation client) → Veille/Bornes →
+  Solaire → Agent/Magellan → Compte.
+- **Rejouable à volonté, déclenché par commande à l'agent** : Magellan reconnaît
+  une intention type **« remontre-moi comment marche Leads (en détails) »**
+  (et variantes : « comment fonctionne Leads », « refais-moi la visite ») et
+  relance le tuto.
+- **Livraison one-shot.** Arbitrage à trancher au lancement : (a) overlay /
+  coach-marks sur les vraies pages (immersif, plus lourd) vs (b) page dédiée
+  « visite guidée » avec captures/mini-démos (plus simple, robuste).
+
+### PB — Commande vocale conversationnelle (parler à Magellan)
+
+État actuel : dictée push-to-talk déjà en place (`home-command.tsx`, Web Speech
+`fr-FR`) → envoie le texte à Magellan, qui répond **en texte**. À faire :
+
+- **Mot d'éveil** « M » / « Magellan » : écoute continue en fond qui détecte le
+  mot-clé puis capte la demande (sans cliquer le micro). Garde-fous : conso
+  batterie, onglet actif, opt-in explicite.
+- **Réponse vocale (TTS)** : Magellan lit sa réponse à voix haute
+  (`speechSynthesis`), pour un vrai échange mains-libres.
+- Boucle conversationnelle : enchaîner question → réponse lue → réécoute.
+
+### PC — Mode « déplacement » / on-the-go (session téléphone)
+
+- **Badge « 🚗 Mode déplacement »** sur l'accueil, cliquable depuis le tél.
+- Ouvre une **vue plein écran ultra-simplifiée = agent vocal seul** : gros
+  bouton micro + réponses lues à voix haute, le reste de l'UI masqué.
+- Magellan **navigue dans la donnée** (RDV du jour, relances dues, réponses
+  reçues, top leads) et restitue **l'essentiel, vite, à l'oral**, mains-libres.
+- S'appuie sur PB (mot d'éveil + TTS) ; les outils de lecture de l'assistant
+  existent déjà (`plan_du_jour`, `compter_leads`, `lister_runs`, etc.).
+
 ## Chantiers sources de données
 
 ### P0 — Activer L3.5 Dropcontact en mode réel
