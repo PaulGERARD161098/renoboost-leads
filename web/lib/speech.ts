@@ -23,6 +23,8 @@ export function plainForSpeech(text: string): string {
     .trim();
 }
 
+// Référence retenue volontairement : sans elle, Chrome peut collecter
+// l'utterance avant que `onend` ne se déclenche (bug connu). Write-only à dessein.
 let currentUtterance: SpeechSynthesisUtterance | null = null;
 
 // Lit `text` à voix haute (fr-FR). Annule toute lecture en cours.
@@ -68,8 +70,4 @@ export function stopSpeaking(): void {
     /* no-op */
   }
   currentUtterance = null;
-}
-
-export function isSpeaking(): boolean {
-  return ttsSupported() && window.speechSynthesis.speaking;
 }
