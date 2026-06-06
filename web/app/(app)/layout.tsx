@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { Nav } from "@/components/nav";
 import { AssistantWidget } from "@/components/assistant-widget";
 import { WelcomeModal } from "@/components/welcome-modal";
+import { GuidedTour } from "@/components/guided-tour";
+import { DriveMode } from "@/components/drive-mode";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionBriefing } from "@/lib/briefing";
 import { getSystemHealth } from "@/lib/health";
@@ -35,6 +37,8 @@ export default async function AppLayout({
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
       <AssistantWidget />
+      <GuidedTour />
+      <DriveMode />
       {briefing.shouldShow && <WelcomeModal briefing={briefing} />}
     </div>
   );
