@@ -36,11 +36,21 @@ Optionnelles (sinon l'étage est sauté / dégradé) :
 | `PAPPERS_API_KEY` | fallback firmographique L2 (sinon data.gouv seul) |
 | `SOCIETEINFO_API_KEY` | provider L2/L3.7 registres officiels |
 | `MAX_BUDGET_EUR_PER_RUN` | plafond budget/run (défaut 50) — mettre bas pour les premiers essais |
-| `MAX_LEADS_PER_RUN` | plafond leads/run (défaut 500) |
+| `MAX_LEADS_PER_RUN` | plafond leads/run (défaut 500) — **relever à 1000+ pour le gros volume** |
+| `WORKER_SCRAPE_WORKERS` | leads scrapés en parallèle à l'étage 3 (défaut 8, max 32) |
 | `CLAUDE_MODEL` | modèle L4 (défaut Haiku 4.5) |
 
 Puis **Redeploy**. Vérifier que le déploiement passe bien par le **Dockerfile
 worker** (#46) et non un build générique.
+
+> **Go-live gros volume (plusieurs centaines → 1000 leads)**
+> 1. `MAX_LEADS_PER_RUN=1000` (sinon le worker plafonne à 500 et tronque le run).
+> 2. `MAX_BUDGET_EUR_PER_RUN` cohérent : ~30 € sans Dropcontact, ~150 € avec
+>    (≈ 0,05 €/lead Places + 0,005–0,02 €/lead Claude + 0,10 €/lead Dropcontact).
+> 3. `WORKER_SCRAPE_WORKERS=8` (défaut) garde l'étage 3 à quelques minutes sur
+>    1000 leads au lieu de 15-30 min en séquentiel.
+> 4. Côté CRM : renseigner le champ **Volume cible** (preset 1000) — sans lui le
+>    run retombe sur 25 leads. L'estimation de coût affichée sert de garde-fou.
 
 > Garde-fou : en `real`, si `GOOGLE_PLACES_API_KEY` **ou** `ANTHROPIC_API_KEY`
 > manque, le run est marqué `echoue` avec un message clair **sans consommer de
