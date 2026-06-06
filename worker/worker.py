@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from .config import WorkerConfig
@@ -35,6 +36,24 @@ class Worker:
             return self._demo_pipeline or build_pipeline("demo")
         return self.pipeline
 
+    @staticmethod
+    def _keys_presence() -> dict[str, bool]:
+        """Présence (jamais la valeur) des clés API du mode real, pour l'UI.
+
+        Lue directement de l'environnement (≈ « la clé est-elle posée sur
+        Railway ») sans instancier la config cœur, qui échouerait si une clé
+        requise manque.
+        """
+        return {
+            name: bool(os.environ.get(env, "").strip())
+            for name, env in (
+                ("google_places", "GOOGLE_PLACES_API_KEY"),
+                ("anthropic", "ANTHROPIC_API_KEY"),
+                ("pappers", "PAPPERS_API_KEY"),
+                ("dropcontact", "DROPCONTACT_API_KEY"),
+            )
+        }
+
     def _heartbeat(self, *, pending: int | None = None, last_error: str | None = None) -> None:
         """Écrit le battement de cœur (non bloquant : ne doit jamais tuer la boucle)."""
         try:
@@ -43,6 +62,7 @@ class Worker:
                 version=self.config.version,
                 pending=pending,
                 last_error=last_error,
+                keys=self._keys_presence(),
             )
         except Exception:  # noqa: BLE001 — l'observabilité ne doit pas casser le traitement
             logger.warning("Heartbeat échoué (non bloquant).", exc_info=True)

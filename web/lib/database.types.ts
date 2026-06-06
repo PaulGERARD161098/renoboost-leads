@@ -294,6 +294,7 @@ export interface WorkerHeartbeat {
   pending_runs: number;
   last_error: string | null;
   last_error_at: string | null;
+  keys: Record<string, boolean>;
   updated_at: string;
 }
 

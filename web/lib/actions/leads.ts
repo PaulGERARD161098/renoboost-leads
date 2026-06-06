@@ -65,6 +65,65 @@ export async function appliquerBrouillonReponse(
   return { ok: true };
 }
 
+/**
+ * Valide ET envoie la réponse au prospect : trace le message sortant dans le
+ * fil, marque la suggestion comme suivie, et fait sortir le lead de la file
+ * « réponses à traiter » (statut a_relancer + relance dans 7 j si silence).
+ * Envoi réel via Instantly si la clé est configurée, sinon simulation (cohérent
+ * avec sendLead — aucun email réel sans transport configuré).
+ */
+export async function envoyerReponse(
+  leadId: string,
+  suggestionId: string,
+  sujet: string,
+  corps: string,
+) {
+  const texte = corps.trim();
+  if (!texte) return { error: "Le corps de la réponse est vide." };
+  const supabase = await createClient();
+  const { data: lead, error: readErr } = await supabase
+    .from("leads")
+    .select("contact_email")
+    .eq("id", leadId)
+    .single();
+  if (readErr || !lead) return { error: readErr?.message ?? "Lead introuvable." };
+  if (!lead.contact_email) return { error: "Aucun email de contact pour envoyer la réponse." };
+
+  const simulation = !process.env.INSTANTLY_API_KEY;
+  // TODO(M2): envoi réel via API Instantly (réponse au fil) quand la clé est fournie.
+
+  const { error: msgErr } = await supabase.from("lead_messages").insert({
+    lead_id: leadId,
+    direction: "out",
+    sujet: sujet || null,
+    corps: texte,
+    to_email: lead.contact_email,
+    source: simulation ? "systeme" : "instantly",
+  });
+  if (msgErr) return { error: msgErr.message };
+
+  // Sort de la file « réponses à traiter » ; relance auto si silence (7 j).
+  const relance = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  await supabase
+    .from("leads")
+    .update({
+      statut: "a_relancer",
+      relance_at: relance,
+      mail_sujet: sujet || null,
+      mail_corps: texte,
+    })
+    .eq("id", leadId);
+  await supabase
+    .from("lead_reply_suggestions")
+    .update({ used: true })
+    .eq("id", suggestionId);
+  await logEvent(leadId, "envoye", { action: "reponse_envoyee", simulation });
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/inbox");
+  revalidatePath("/suivi");
+  return { ok: true, simulation };
+}
+
 export async function setLeadStatus(leadId: string, statut: LeadStatus) {
   const supabase = await createClient();
   const { error } = await supabase

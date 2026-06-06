@@ -6,6 +6,7 @@ import type { LeadReplySuggestion, ReplyCategorie } from "@/lib/database.types";
 import {
   appliquerBrouillonReponse,
   appliquerTransitionReponse,
+  envoyerReponse,
 } from "@/lib/actions/leads";
 import { transitionForCategorie } from "@/lib/reply-actions";
 
@@ -33,6 +34,9 @@ export function ReplyAssistant({ leadId }: { leadId: string }) {
   const [applied, setApplied] = useState(false);
   const [transing, startTrans] = useTransition();
   const [transDone, setTransDone] = useState(false);
+  const [sending, startSend] = useTransition();
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [sent, setSent] = useState<null | { simulation: boolean }>(null);
 
   const charger = useCallback(
     async (force: boolean) => {
@@ -96,6 +100,21 @@ export function ReplyAssistant({ leadId }: { leadId: string }) {
     });
   }
 
+  function envoyer() {
+    if (!sugg) return;
+    setConfirmSend(false);
+    startSend(async () => {
+      const res = await envoyerReponse(leadId, sugg.id, sujet, corps);
+      if ("error" in res && res.error) {
+        setError(res.error);
+      } else {
+        setSent({ simulation: "simulation" in res ? !!res.simulation : false });
+        setApplied(true);
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div className="rounded-xl border border-[var(--brand)]/30 bg-gradient-to-br from-[var(--brand)]/5 to-transparent p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -149,17 +168,46 @@ export function ReplyAssistant({ leadId }: { leadId: string }) {
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={appliquer}
-              disabled={applying || !corps.trim()}
-              className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[var(--brand-dark)] disabled:opacity-40"
-            >
-              {applying ? "Enregistrement…" : "Enregistrer comme brouillon"}
-            </button>
-            <span className="text-xs text-[var(--muted)]">
-              Reprend dans « Email proposé » ci-dessous — rien n'est envoyé.
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {sent ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+                ✓ Réponse envoyée{sent.simulation ? " (simulation — aucun email réel)" : ""}
+              </span>
+            ) : confirmSend ? (
+              <>
+                <button
+                  onClick={envoyer}
+                  disabled={sending}
+                  className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
+                >
+                  {sending ? "Envoi…" : "Confirmer l'envoi"}
+                </button>
+                <button
+                  onClick={() => setConfirmSend(false)}
+                  disabled={sending}
+                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-slate-50"
+                >
+                  Annuler
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setConfirmSend(true)}
+                  disabled={sending || applying || !corps.trim()}
+                  className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[var(--brand-dark)] disabled:opacity-40"
+                >
+                  ✅ Valider &amp; envoyer
+                </button>
+                <button
+                  onClick={appliquer}
+                  disabled={applying || !corps.trim()}
+                  className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-40"
+                >
+                  {applying ? "Enregistrement…" : "Enregistrer comme brouillon"}
+                </button>
+              </>
+            )}
           </div>
 
           {(() => {
