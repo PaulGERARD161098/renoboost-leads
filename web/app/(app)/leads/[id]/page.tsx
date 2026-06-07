@@ -11,8 +11,10 @@ import { MailThread } from "@/components/mail-thread";
 import { ReplyAssistant } from "@/components/reply-assistant";
 import { ColdCallPanel } from "@/components/cold-call-panel";
 import { BornesLinks } from "@/components/bornes-links";
+import { SignauxVeLies } from "@/components/signaux-ve-lies";
 import { ContactCard } from "@/components/contact-card";
 import { bornesProximite } from "@/lib/bornes";
+import { signauxDuLead } from "@/lib/veille-signaux";
 import { twilioConfigure } from "@/lib/twilio";
 import {
   LEAD_STATUS_COLOR,
@@ -93,6 +95,9 @@ export default async function LeadPage({
     };
   }
 
+
+  // Signaux de veille rattachés à ce lead (interconnexion veille → lead).
+  const signauxVeille = await signauxDuLead(supabase, l.id);
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
@@ -198,6 +203,8 @@ export default async function LeadPage({
             codePostal={l.code_postal}
             irve={irveProx}
           />
+
+          <SignauxVeLies signaux={signauxVeille} />
 
           <MailThread messages={(messages as LeadMessage[] | null) ?? []} />
 
