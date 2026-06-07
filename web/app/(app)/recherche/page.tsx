@@ -23,6 +23,7 @@ function initialFromRun(run: Run): RechercheInitial {
     adresse?: string;
     rayon_par_point_km?: number;
     effectif_min?: number;
+    effectif_max?: number;
   };
   const isAdresse = !!zone.adresse;
   return {
@@ -31,7 +32,8 @@ function initialFromRun(run: Run): RechercheInitial {
     departement: zone.departement ?? "59",
     adresse: zone.adresse ?? "",
     rayon: zone.rayon_par_point_km ? String(zone.rayon_par_point_km) : "10",
-    effectifMin: zone.effectif_min != null ? String(zone.effectif_min) : "50",
+    effectifMin: zone.effectif_min != null ? String(zone.effectif_min) : undefined,
+    effectifMax: zone.effectif_max != null ? String(zone.effectif_max) : undefined,
     volume: run.volume_cible != null ? String(run.volume_cible) : "200",
     budget: run.budget_eur != null ? String(run.budget_eur) : "50",
     isTest: run.is_test,
@@ -82,7 +84,6 @@ export default async function RecherchePage({
       departement: dept,
       adresse: "",
       rayon: "10",
-      effectifMin: "50",
       budget: "50",
       isTest: false,
     };

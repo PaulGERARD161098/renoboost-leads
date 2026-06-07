@@ -403,11 +403,15 @@ class RealPipeline:
             cfg.claude_scoring.contexte_client = self._contexte_depuis_config_crm(ctx.verticale)
             sirene_first = True
 
-        # Override per-run : effectif min depuis la zone du CRM, sans toucher au
-        # ciblage NAF porté par la verticale.
+        # Override per-run : tranche d'effectif (min ET max) depuis la zone du CRM,
+        # sans toucher au ciblage NAF porté par la verticale. Le plafond évite de
+        # remonter des grands groupes hors cœur de cible PME.
         effectif_min = ctx.zone.get("effectif_min")
         if effectif_min is not None:
             cfg.filtres_entreprise.effectif_min = int(effectif_min)
+        effectif_max = ctx.zone.get("effectif_max")
+        if effectif_max is not None:
+            cfg.filtres_entreprise.effectif_max = int(effectif_max)
 
         return cfg, sirene_first
 

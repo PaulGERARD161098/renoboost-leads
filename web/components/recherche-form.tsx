@@ -6,6 +6,15 @@ import { createRun } from "@/lib/actions/runs";
 import { createZoneCible, deleteZoneCible } from "@/lib/actions/zones";
 import type { Verticale, ZoneCible } from "@/lib/database.types";
 import { estimerCoutRun, formatEur } from "@/lib/costs";
+import {
+  EFFECTIF_DEFAUT,
+  EFFECTIF_PRESETS,
+  type EffectifPresetId,
+  effectifLabel,
+  presetParId,
+  presetPour,
+  validerCiblage,
+} from "@/lib/run-targeting";
 
 export type RechercheInitial = {
   verticaleId?: string;
@@ -14,6 +23,7 @@ export type RechercheInitial = {
   adresse?: string;
   rayon?: string;
   effectifMin?: string;
+  effectifMax?: string;
   volume?: string;
   budget?: string;
   isTest?: boolean;
@@ -42,10 +52,44 @@ export function RechercheForm({
   const [adresse, setAdresse] = useState(initial?.adresse ?? "");
   const [rayon, setRayon] = useState(initial?.rayon ?? "10");
   const [nomZone, setNomZone] = useState("");
-  const [effectifMin, setEffectifMin] = useState(initial?.effectifMin ?? "50");
+  // Effectif : tranche par preset (PME 10–250 par défaut), avec min/max libres en
+  // mode « Personnalisé ». Pré-rempli depuis un run relancé si min/max fournis.
+  const initMin =
+    initial?.effectifMin != null && initial.effectifMin !== ""
+      ? Number(initial.effectifMin)
+      : null;
+  const initMax =
+    initial?.effectifMax != null && initial.effectifMax !== ""
+      ? Number(initial.effectifMax)
+      : null;
+  const [effectifPreset, setEffectifPreset] = useState<EffectifPresetId>(
+    initMin != null || initMax != null ? presetPour(initMin, initMax) : EFFECTIF_DEFAUT,
+  );
+  const [effectifMinCustom, setEffectifMinCustom] = useState(
+    initMin != null ? String(initMin) : "",
+  );
+  const [effectifMaxCustom, setEffectifMaxCustom] = useState(
+    initMax != null ? String(initMax) : "",
+  );
   const [volume, setVolume] = useState(initial?.volume ?? "200");
   const [budget, setBudget] = useState(initial?.budget ?? "50");
   const [isTest, setIsTest] = useState(initial?.isTest ?? false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Tranche d'effectif effective (preset, ou min/max libres si « Personnalisé »).
+  const preset = presetParId(effectifPreset);
+  const effMin =
+    effectifPreset === "custom"
+      ? effectifMinCustom.trim()
+        ? Number(effectifMinCustom)
+        : null
+      : preset.min;
+  const effMax =
+    effectifPreset === "custom"
+      ? effectifMaxCustom.trim()
+        ? Number(effectifMaxCustom)
+        : null
+      : preset.max;
 
   // Estimation de coût (garde-fou budget) — recalculée à chaque changement.
   const volumeNum = Number(volume) || 0;
@@ -53,6 +97,15 @@ export function RechercheForm({
   const estimation = estimerCoutRun(volumeNum);
   const budgetInsuffisant =
     !isTest && budgetNum > 0 && estimation.bas > budgetNum;
+  // Garde-fous (bloquant + alertes) consolidés pour la modale de validation.
+  const verdict = validerCiblage({
+    effectifMin: effMin,
+    effectifMax: effMax,
+    volume: volume ? Number(volume) : null,
+    budgetEur: budget ? Number(budget) : null,
+    coutEstimeBas: estimation.bas,
+    isTest,
+  });
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -91,12 +144,24 @@ export function RechercheForm({
     });
   }
 
+  // Submit = validation puis RÉCAP (modale). On ne lance jamais sans confirmation.
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (mode === "adresse" && !adresse.trim()) {
       setMsg("❌ Renseigne une adresse (centre de la zone).");
       return;
     }
+    if (verdict.erreurs.length > 0) {
+      setMsg(`❌ ${verdict.erreurs.join(" ")}`);
+      return;
+    }
+    setMsg(null);
+    setConfirmOpen(true);
+  }
+
+  // Lancement réel, déclenché par le bouton « Confirmer » de la modale.
+  function confirmer() {
+    setConfirmOpen(false);
     setMsg(null);
     startTransition(async () => {
       const res = await createRun({
@@ -104,7 +169,8 @@ export function RechercheForm({
         departement: mode === "departement" ? departement : null,
         adresse: mode === "adresse" ? adresse : null,
         rayonKm: mode === "adresse" ? Number(rayon) || 10 : null,
-        effectifMin: effectifMin ? Number(effectifMin) : null,
+        effectifMin: effMin,
+        effectifMax: effMax,
         volumeCible: volume ? Number(volume) : null,
         budgetEur: budget ? Number(budget) : null,
         isTest,
@@ -119,7 +185,10 @@ export function RechercheForm({
     });
   }
 
+  const cibleNom = verticales.find((v) => v.id === verticaleId)?.nom ?? "—";
+
   return (
+    <>
     <form
       onSubmit={submit}
       className="max-w-lg space-y-4 rounded-xl border border-[var(--border)] bg-white p-6"
@@ -259,13 +328,53 @@ export function RechercheForm({
       )}
 
       <div>
-        <label className="mb-1 block text-sm font-medium">Effectif min.</label>
-        <input
-          type="number"
-          value={effectifMin}
-          onChange={(e) => setEffectifMin(e.target.value)}
-          className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-        />
+        <label className="mb-1 block text-sm font-medium">Taille des entreprises</label>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {EFFECTIF_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setEffectifPreset(p.id)}
+              title={p.hint}
+              className={`rounded-lg border px-2.5 py-1.5 text-sm font-medium transition ${
+                effectifPreset === p.id
+                  ? "border-[var(--brand)] bg-[var(--brand)] text-white"
+                  : "border-[var(--border)] text-[var(--muted)] hover:bg-slate-50"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {effectifPreset === "custom" ? (
+          <div className="mt-2 flex items-end gap-2">
+            <div>
+              <label className="mb-1 block text-xs text-[var(--muted)]">Min. (salariés)</label>
+              <input
+                type="number"
+                min={0}
+                value={effectifMinCustom}
+                onChange={(e) => setEffectifMinCustom(e.target.value)}
+                placeholder="10"
+                className="w-28 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
+            </div>
+            <span className="pb-2 text-[var(--muted)]">–</span>
+            <div>
+              <label className="mb-1 block text-xs text-[var(--muted)]">Max. (salariés)</label>
+              <input
+                type="number"
+                min={0}
+                value={effectifMaxCustom}
+                onChange={(e) => setEffectifMaxCustom(e.target.value)}
+                placeholder="250"
+                className="w-28 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-[var(--muted)]">{preset.hint}</p>
+        )}
       </div>
 
       <div>
@@ -363,10 +472,105 @@ export function RechercheForm({
         {pending
           ? "Envoi…"
           : isTest
-            ? "Lancer la recherche test"
-            : "Lancer la recherche"}
+            ? "Vérifier la recherche test"
+            : "Vérifier la recherche"}
       </button>
       {msg && <p className="text-sm">{msg}</p>}
     </form>
+
+      {/* Modale de validation « Voilà ce que tu vas lancer » (garde-fou agent-first :
+          on récapitule, on alerte si le ciblage déborde, l'utilisateur confirme). */}
+      {confirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center"
+          onClick={() => setConfirmOpen(false)}
+        >
+          <div
+            className="my-auto w-full max-w-md rounded-2xl border border-[var(--border)] bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="rounded-t-2xl bg-gradient-to-br from-[var(--brand)]/10 to-transparent px-6 pb-4 pt-5">
+              <h2 className="text-lg font-bold">
+                {isTest ? "Vérifier la recherche test" : "Vérifier la recherche"}
+              </h2>
+              <p className="mt-0.5 text-sm text-[var(--muted)]">
+                Voilà ce que tu vas lancer — confirme ou reviens ajuster.
+              </p>
+            </div>
+
+            <div className="space-y-3 px-6 py-4 text-sm">
+              <dl className="space-y-1.5">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--muted)]">Cible</dt>
+                  <dd className="text-right font-medium">{cibleNom}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--muted)]">Périmètre</dt>
+                  <dd className="text-right font-medium">
+                    {mode === "departement"
+                      ? `Département ${departement || "—"}`
+                      : `${adresse || "—"} · ${Number(rayon) || 10} km`}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--muted)]">Effectif</dt>
+                  <dd className="text-right font-medium">
+                    {effectifLabel(effMin, effMax)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--muted)]">Volume visé</dt>
+                  <dd className="text-right font-medium">{volumeNum || "—"} leads</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--muted)]">Budget plafond</dt>
+                  <dd className="text-right font-medium">
+                    {isTest
+                      ? "Gratuit (mode démo)"
+                      : `${formatEur(budgetNum)} · est. ${formatEur(estimation.bas)}–${formatEur(estimation.haut)}`}
+                  </dd>
+                </div>
+              </dl>
+
+              {verdict.alertes.length > 0 && (
+                <ul className="space-y-1.5">
+                  {verdict.alertes.map((a, i) => (
+                    <li
+                      key={i}
+                      className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                    >
+                      <span aria-hidden>⚠️</span>
+                      <span>{a}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 rounded-b-2xl border-t border-[var(--border)] bg-slate-50 px-6 py-3">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                className="rounded-lg border border-[var(--border)] bg-white px-4 py-1.5 text-sm font-medium hover:bg-slate-50"
+              >
+                Modifier
+              </button>
+              <button
+                type="button"
+                onClick={confirmer}
+                disabled={pending}
+                className={`rounded-lg px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50 ${
+                  isTest
+                    ? "bg-violet-600 hover:bg-violet-700"
+                    : "bg-[var(--brand)] hover:bg-[var(--brand-dark)]"
+                }`}
+              >
+                {pending ? "Envoi…" : "Confirmer le lancement"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
