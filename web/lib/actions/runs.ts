@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { RunQualite } from "@/lib/database.types";
+import { validerCiblage } from "@/lib/run-targeting";
 
 export async function createRun(input: {
   verticaleId: string;
@@ -10,10 +11,22 @@ export async function createRun(input: {
   adresse?: string | null;
   rayonKm?: number | null;
   effectifMin?: number | null;
+  effectifMax?: number | null;
   budgetEur?: number | null;
   volumeCible?: number | null;
   isTest?: boolean;
 }) {
+  // Garde-fou serveur (défense en profondeur) : on refuse un ciblage invalide
+  // même si l'appel contourne le formulaire. Les alertes restent côté UI.
+  const { erreurs } = validerCiblage({
+    effectifMin: input.effectifMin ?? null,
+    effectifMax: input.effectifMax ?? null,
+    volume: input.volumeCible ?? null,
+    budgetEur: input.budgetEur ?? null,
+    isTest: input.isTest,
+  });
+  if (erreurs.length > 0) return { error: erreurs.join(" ") };
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -22,6 +35,7 @@ export async function createRun(input: {
   // Zone : autour d'une adresse (point GPS géocodé) si fournie, sinon département.
   const zone: Record<string, unknown> = {
     effectif_min: input.effectifMin ?? null,
+    effectif_max: input.effectifMax ?? null,
   };
   if (input.adresse && input.adresse.trim()) {
     zone.adresse = input.adresse.trim();

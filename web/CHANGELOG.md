@@ -7,6 +7,8 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
+| **1.3.0** | #127 | Garde-fous au lancement d'une recherche : tranche d'effectif par preset (PME 10–250 par défaut, plafond honoré par le worker) + modale de validation « Voilà ce que tu vas lancer » avec alertes (ciblage ETI/grands groupes, budget) + validation serveur |
+| **1.2.0** | #125 | Mail piloté par les 3 potentiels (meilleur + zone bornes + offre client) · LinkedIn dirigeant/entreprise dans la fiche · bouton « Enrichir le contact » on-demand |
 | **1.1.0** | #124 | Économie de coût : Claude ne score plus les leads hors-filtre par défaut (coût L4 ÷~2-3) · versionnage V1.x par PR + ce journal |
 | 1.0.x | #123 | Fiabilité runs (reaper + bouton Relancer + heartbeat continu) + rapport de fin de recherche |
 | 1.0.x | #119 | Boucle réponse « valider & envoyer » + panneau Clés API |

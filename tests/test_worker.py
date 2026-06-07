@@ -317,6 +317,35 @@ def test_real_pipeline_base_only_contexte_depuis_config(monkeypatch):
     assert "RénoBoost" not in ctx_client
 
 
+def test_real_pipeline_override_effectif_tranche(monkeypatch):
+    """Zone CRM {effectif_min, effectif_max} → override la tranche (plafond PME)."""
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+    captured: dict[str, object] = {}
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        captured["cfg"] = cfg
+        return OrchestrationResult()
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+    ctx = RunContext(
+        run={
+            "id": "r",
+            "verticale_id": "v",
+            "zone": {"departement": "59", "effectif_min": 10, "effectif_max": 250},
+            "volume_cible": 5,
+        },
+        verticale={"slug": "irve-flottes-b2b"},
+    )
+    RealPipeline().run(ctx, lambda *a: None)
+    filtres = captured["cfg"].filtres_entreprise
+    assert filtres.effectif_min == 10
+    assert filtres.effectif_max == 250
+
+
 def test_real_pipeline_score_hors_filtre_via_env(monkeypatch):
     """WORKER_SCORE_HORS_FILTRE=true → Claude score aussi les hors-filtre."""
     import renoboost_leads.orchestrateur as orch
