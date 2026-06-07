@@ -4,7 +4,13 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { LeadStatus } from "@/lib/database.types";
-import { LEAD_STATUS_COLOR, LEAD_STATUS_LABEL, scoreColor, solaireScore100 } from "@/lib/ui";
+import {
+  type AxePotentiel,
+  LEAD_STATUS_COLOR,
+  LEAD_STATUS_LABEL,
+  potentielsScores,
+  scoreColor,
+} from "@/lib/ui";
 import { solaireFromVision } from "@/lib/outreach";
 import { estimerSolaire, fmtEur, fmtKwc, fmtKwh } from "@/lib/solaire";
 
@@ -16,6 +22,9 @@ export type SolaireLead = {
   statut: LeadStatus;
   scoreCommercial: number | null;
   scoreSolaire: number | null;
+  scoreOmbrieres: number | null;
+  scoreBornes: number | null;
+  meilleur: AxePotentiel | null;
   latitude: number | null;
   longitude: number | null;
   analyse: boolean;
@@ -27,6 +36,28 @@ export type SolaireLead = {
   productionKwhAn: number | null;
   caAnnuelEur: number | null;
 };
+
+// Métadonnées d'affichage des 3 axes de potentiel (ordre = colonnes de badges).
+const AXES: { id: AxePotentiel; icon: string; court: string; label: string }[] = [
+  { id: "solaire", icon: "☀️", court: "Toit", label: "Solaire (toiture)" },
+  { id: "ombrieres", icon: "🅿️", court: "Ombr.", label: "Ombrières (parking)" },
+  { id: "bornes", icon: "🔌", court: "Bornes", label: "Bornes VE" },
+];
+
+/** Score /100 d'un lead sur un axe donné (null si non analysé sur cet axe). */
+function scoreSur(l: SolaireLead, axe: AxePotentiel): number | null {
+  if (axe === "ombrieres") return l.scoreOmbrieres;
+  if (axe === "bornes") return l.scoreBornes;
+  return l.scoreSolaire;
+}
+
+/** Meilleur des 3 sous-scores (pour le tri/filtre « meilleur potentiel »). */
+function scoreMeilleur(l: SolaireLead): number | null {
+  const xs = [l.scoreSolaire, l.scoreOmbrieres, l.scoreBornes].filter(
+    (x): x is number => typeof x === "number",
+  );
+  return xs.length ? Math.max(...xs) : null;
+}
 
 // Carte (Leaflet → DOM only) chargée côté client, sans SSR.
 const SolaireMap = dynamic(() => import("./run-map"), {
@@ -40,6 +71,8 @@ const SolaireMap = dynamic(() => import("./run-map"), {
 
 type Filtre = "tous" | "fort" | "moyen";
 type Vue = "liste" | "carte";
+// Axe de tri/filtre : un des 3 potentiels, ou « meilleur » (max des 3).
+type AxeTri = AxePotentiel | "meilleur";
 
 type Draft =
   | { leadId: string; loading: true }
@@ -48,6 +81,7 @@ type Draft =
 export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
   const [leads, setLeads] = useState<SolaireLead[]>(initial);
   const [filtre, setFiltre] = useState<Filtre>("tous");
+  const [axe, setAxe] = useState<AxeTri>("solaire");
   const [toitureOnly, setToitureOnly] = useState(false);
   const [ombrieresOnly, setOmbrieresOnly] = useState(false);
   const [q, setQ] = useState("");
@@ -59,21 +93,28 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
   });
   const [draft, setDraft] = useState<Draft | null>(null);
 
+  // Score de l'axe de tri/filtre courant (« meilleur » = max des 3 potentiels).
+  const scoreActif = (l: SolaireLead): number | null =>
+    axe === "meilleur" ? scoreMeilleur(l) : scoreSur(l, axe);
+
   // ── Contexte : agrégats sur les leads analysés ──────────────────────
   const analyses = leads.filter((l) => l.analyse);
-  const fortPotentiel = analyses.filter((l) => (l.scoreSolaire ?? 0) >= 75).length;
+  // Fort potentiel = au moins un des 3 axes ≥ 75 (vue combo solaire+ombrières+bornes).
+  const fortPotentiel = analyses.filter((l) => (scoreMeilleur(l) ?? 0) >= 75).length;
   const kwcCumule = analyses.reduce((s, l) => s + (l.kwc ?? 0), 0);
   const caCumule = analyses.reduce((s, l) => s + (l.caAnnuelEur ?? 0), 0);
   // Cibles d'analyse par lot : localisables et pas encore analysés.
   const aAnalyser = leads.filter((l) => l.canAnalyse && !l.analyse);
 
-  // ── Filtrage + tri (potentiel solaire décroissant) ──────────────────
+  // ── Filtrage + tri (sur l'axe de potentiel sélectionné, décroissant) ──
   const visibles = useMemo(() => {
     const needle = q.trim().toLowerCase();
+    const score = (l: SolaireLead) =>
+      axe === "meilleur" ? scoreMeilleur(l) : scoreSur(l, axe);
     return leads
       .filter((l) => {
-        if (filtre === "fort" && (l.scoreSolaire ?? -1) < 75) return false;
-        if (filtre === "moyen" && (l.scoreSolaire ?? -1) < 50) return false;
+        if (filtre === "fort" && (score(l) ?? -1) < 75) return false;
+        if (filtre === "moyen" && (score(l) ?? -1) < 50) return false;
         if (toitureOnly && !(l.toitureM2 && l.toitureM2 > 0)) return false;
         if (ombrieresOnly && !l.ombrieres) return false;
         if (needle) {
@@ -83,12 +124,12 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
         return true;
       })
       .sort((a, b) => {
-        // Analysés d'abord (par score solaire), puis non analysés.
-        const sa = a.scoreSolaire ?? (a.analyse ? 0 : -1);
-        const sb = b.scoreSolaire ?? (b.analyse ? 0 : -1);
+        // Analysés d'abord (par score de l'axe actif), puis non analysés.
+        const sa = score(a) ?? (a.analyse ? 0 : -1);
+        const sb = score(b) ?? (b.analyse ? 0 : -1);
         return sb - sa;
       });
-  }, [leads, filtre, toitureOnly, ombrieresOnly, q]);
+  }, [leads, filtre, axe, toitureOnly, ombrieresOnly, q]);
 
   const geoloc = visibles.filter(
     (l) => typeof l.latitude === "number" && typeof l.longitude === "number",
@@ -98,15 +139,18 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
   function applyVision(id: string, result: Record<string, unknown>) {
     const surfaces = solaireFromVision(result);
     const estim = surfaces ? estimerSolaire(surfaces) : null;
-    // Score solaire /100, v2-aware (le résultat on-demand est au format v2).
-    const score = solaireScore100(result);
+    // Les 3 sous-scores /100 (le résultat on-demand est au format v2).
+    const pot = potentielsScores(result);
     setLeads((prev) =>
       prev.map((l) =>
         l.id === id
           ? {
               ...l,
               analyse: true,
-              scoreSolaire: score ?? l.scoreSolaire,
+              scoreSolaire: pot.solaire ?? l.scoreSolaire,
+              scoreOmbrieres: pot.ombrieres ?? l.scoreOmbrieres,
+              scoreBornes: pot.bornes ?? l.scoreBornes,
+              meilleur: pot.meilleur ?? l.meilleur,
               toitureM2: surfaces?.toiture_m2 ?? null,
               parkingM2: surfaces?.parking_m2 ?? null,
               ombrieres: surfaces?.ombrieres ?? null,
@@ -220,6 +264,17 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
           className="w-56 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
         />
         <select
+          value={axe}
+          onChange={(e) => setAxe(e.target.value as AxeTri)}
+          title="Axe de potentiel pour le tri et le filtre"
+          className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-sm"
+        >
+          <option value="meilleur">⭐ Meilleur des 3</option>
+          <option value="solaire">☀️ Solaire (toiture)</option>
+          <option value="ombrieres">🅿️ Ombrières</option>
+          <option value="bornes">🔌 Bornes VE</option>
+        </select>
+        <select
           value={filtre}
           onChange={(e) => setFiltre(e.target.value as Filtre)}
           className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-sm"
@@ -268,7 +323,7 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
                 id: l.id,
                 entreprise: l.entreprise,
                 ville: l.ville,
-                score: l.scoreSolaire,
+                score: scoreActif(l),
                 latitude: l.latitude,
                 longitude: l.longitude,
               }))}
@@ -286,7 +341,7 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
             <thead className="bg-slate-50 text-left text-xs text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-2 font-medium">Entreprise</th>
-                <th className="px-4 py-2 font-medium">☀️ Potentiel</th>
+                <th className="px-4 py-2 font-medium">Potentiels ☀️ 🅿️ 🔌</th>
                 <th className="px-4 py-2 font-medium">Puissance</th>
                 <th className="px-4 py-2 font-medium">CA estimé</th>
                 <th className="px-4 py-2 font-medium">Statut</th>
@@ -321,11 +376,17 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
                     </td>
                     <td className="px-4 py-2.5">
                       {l.analyse ? (
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-xs font-semibold ${scoreColor(l.scoreSolaire)}`}
-                        >
-                          {l.scoreSolaire ?? "—"}
-                        </span>
+                        <div className="flex gap-1">
+                          {AXES.map((a) => (
+                            <AxeBadge
+                              key={a.id}
+                              icon={a.icon}
+                              label={a.label}
+                              score={scoreSur(l, a.id)}
+                              meilleur={l.meilleur === a.id}
+                            />
+                          ))}
+                        </div>
                       ) : (
                         <span className="text-xs text-[var(--muted)]">non analysé</span>
                       )}
@@ -456,6 +517,32 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Badge compact d'un axe de potentiel : icône + score /100 coloré. L'axe le plus
+// prometteur du site est cerclé pour repérer l'opportunité d'un coup d'œil.
+function AxeBadge({
+  icon,
+  label,
+  score,
+  meilleur,
+}: {
+  icon: string;
+  label: string;
+  score: number | null;
+  meilleur: boolean;
+}) {
+  return (
+    <span
+      title={`${label} : ${score ?? "—"}/100${meilleur ? " (meilleur axe)" : ""}`}
+      className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-semibold ${scoreColor(score)} ${
+        meilleur ? "ring-2 ring-[var(--brand)] ring-offset-1" : ""
+      }`}
+    >
+      <span aria-hidden>{icon}</span>
+      {score ?? "—"}
+    </span>
   );
 }
 

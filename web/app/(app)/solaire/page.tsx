@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead } from "@/lib/database.types";
 import { solaireFromVision } from "@/lib/outreach";
 import { estimerSolaire } from "@/lib/solaire";
-import { solaireScore100 } from "@/lib/ui";
+import { potentielsScores } from "@/lib/ui";
 import { SolaireWorkspace, type SolaireLead } from "@/components/solaire-workspace";
 
 // Workspace ☀️ Solaire — domaine à part entière (charte agent-first).
@@ -37,8 +37,8 @@ export default async function SolairePage() {
 
   const leads: SolaireLead[] = rows.map((l) => {
     const vision = l.vision_satellite as Record<string, unknown> | null;
-    // Score solaire /100, v2-aware (sous-score `solaire`), repli v1.
-    const scoreSolaire = solaireScore100(vision);
+    // Les 3 sous-scores /100 (solaire toiture / ombrières / bornes) + axe gagnant.
+    const pot = potentielsScores(vision);
     const surfaces = solaireFromVision(vision);
     const estim = surfaces ? estimerSolaire(surfaces) : null;
     // Analysable si on a de quoi localiser (coordonnées, adresse ou ville).
@@ -54,7 +54,10 @@ export default async function SolairePage() {
       codePostal: l.code_postal,
       statut: l.statut,
       scoreCommercial: typeof l.score === "number" ? l.score : null,
-      scoreSolaire,
+      scoreSolaire: pot.solaire,
+      scoreOmbrieres: pot.ombrieres,
+      scoreBornes: pot.bornes,
+      meilleur: pot.meilleur,
       latitude: typeof l.latitude === "number" ? l.latitude : null,
       longitude: typeof l.longitude === "number" ? l.longitude : null,
       analyse: vision != null,
@@ -75,9 +78,9 @@ export default async function SolairePage() {
         <h1 className="text-2xl font-bold">Solaire</h1>
       </div>
       <p className="mb-5 text-sm text-[var(--muted)]">
-        Le potentiel solaire de ton portefeuille : toitures et ombrières détectées
-        par vue aérienne, classées, chiffrées, prêtes à transformer en approche
-        commerciale.
+        Le potentiel de ton portefeuille sur les 3 axes Rossini — ☀️ toiture,
+        🅿️ ombrières, 🔌 bornes VE — détectés par vue aérienne, notés, chiffrés
+        et prêts à transformer en approche commerciale.
       </p>
 
       <SolaireWorkspace leads={leads} />

@@ -99,23 +99,73 @@ export function satelliteScore100(
   return typeof v.score === "number" ? v.score : null;
 }
 
+export type AxePotentiel = "solaire" | "ombrieres" | "bornes";
+
+export type PotentielsScores = {
+  solaire: number | null; // /100
+  ombrieres: number | null; // /100
+  bornes: number | null; // /100
+  meilleur: AxePotentiel | null; // axe au plus fort score (null si rien d'analysé)
+};
+
 /**
- * Potentiel SOLAIRE (toiture) ramené sur /100 — spécifique au workspace Solaire,
- * contrairement à satelliteScore100 qui prend le meilleur des 3 axes.
- * v2 → `solaire.score` ×10 ; v1 → ancien `score` /100. Null si pas d'analyse.
+ * Les 3 sous-scores d'un site (solaire toiture / ombrières parking / bornes VE),
+ * ramenés sur /100, + l'axe le plus prometteur. v2 → chaque potentiel ×10 ;
+ * v1 (ancien score unique) → solaire seul, les deux autres restant inconnus.
  */
-export function solaireScore100(
+export function potentielsScores(
   vision: Record<string, unknown> | null | undefined,
-): number | null {
+): PotentielsScores {
+  const vide: PotentielsScores = {
+    solaire: null,
+    ombrieres: null,
+    bornes: null,
+    meilleur: null,
+  };
   const v = vision as
-    | { version?: number; score?: number; solaire?: { score?: number } }
+    | {
+        version?: number;
+        score?: number;
+        meilleur?: string;
+        solaire?: { score?: number };
+        ombrieres?: { score?: number };
+        bornes?: { score?: number };
+      }
     | null
     | undefined;
-  if (!v) return null;
-  if (v.version === 2) {
-    return typeof v.solaire?.score === "number" ? v.solaire.score * 10 : null;
+  if (!v) return vide;
+
+  if (v.version !== 2) {
+    // v1 : un seul score, assimilé au potentiel solaire (toiture).
+    const s = typeof v.score === "number" ? v.score : null;
+    return { ...vide, solaire: s, meilleur: s != null ? "solaire" : null };
   }
-  return typeof v.score === "number" ? v.score : null;
+
+  const x10 = (n: unknown) => (typeof n === "number" ? n * 10 : null);
+  const scores: PotentielsScores = {
+    solaire: x10(v.solaire?.score),
+    ombrieres: x10(v.ombrieres?.score),
+    bornes: x10(v.bornes?.score),
+    meilleur: null,
+  };
+  // Axe gagnant : le champ `meilleur` du moteur s'il est fiable, sinon l'argmax.
+  const axes: AxePotentiel[] = ["solaire", "ombrieres", "bornes"];
+  const candidat = axes.find((a) => a === v.meilleur);
+  if (candidat && scores[candidat] != null) {
+    scores.meilleur = candidat;
+  } else {
+    let best: AxePotentiel | null = null;
+    let bestVal = -1;
+    for (const a of axes) {
+      const val = scores[a];
+      if (val != null && val > bestVal) {
+        bestVal = val;
+        best = a;
+      }
+    }
+    scores.meilleur = best;
+  }
+  return scores;
 }
 
 export function scoreGlobal(lead: {
