@@ -299,7 +299,14 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
           />
           🅿️ Ombrières
         </label>
-        <div className="ml-auto flex overflow-hidden rounded-lg border border-[var(--border)]">
+        <Link
+          href="/bornes"
+          title="Voir la couverture en bornes VE et les départements sous-équipés"
+          className="ml-auto flex items-center gap-1 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium text-[var(--muted)] hover:bg-slate-50"
+        >
+          🔌 Radar Bornes VE →
+        </Link>
+        <div className="flex overflow-hidden rounded-lg border border-[var(--border)]">
           {(["liste", "carte"] as Vue[]).map((v) => (
             <button
               key={v}

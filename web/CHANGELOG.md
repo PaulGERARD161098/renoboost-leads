@@ -7,6 +7,7 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
+| **1.5.0** | #129 | Interconnexion veille ↔ lead ↔ bornes : un signal VE lié rehausse le potentiel bornes à l'analyse (A) · bloc « Signaux de veille liés » sur la fiche lead (B) · lien croisé /solaire → radar Bornes VE (C) |
 | **1.4.0** | #128 | Workspace /solaire : les **3 sous-scores** (☀️ toiture · 🅿️ ombrières · 🔌 bornes VE) affichés par site, axe le plus prometteur mis en relief + tri/filtre par axe (au lieu du seul score toiture) |
 | **1.3.0** | #127 | Garde-fous au lancement d'une recherche : tranche d'effectif par preset (PME 10–250 par défaut, plafond honoré par le worker) + modale de validation « Voilà ce que tu vas lancer » avec alertes (ciblage ETI/grands groupes, budget) + validation serveur |
 | **1.2.0** | #125 | Mail piloté par les 3 potentiels (meilleur + zone bornes + offre client) · LinkedIn dirigeant/entreprise dans la fiche · bouton « Enrichir le contact » on-demand |

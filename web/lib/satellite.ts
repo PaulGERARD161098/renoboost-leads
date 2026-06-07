@@ -8,6 +8,7 @@ import {
   surfaceBatieM2,
   surfaceExploitableDepuis,
 } from "@/lib/potentiel";
+import { estSignalVE, signauxDuLead } from "@/lib/veille-signaux";
 
 // Analyse "potentiel solaire" d'un lead via vue aérienne IGN + Claude Vision.
 // Partagé entre la route /api/lead/satellite et l'outil Magellan.
@@ -220,7 +221,16 @@ export async function analyseSatellite(
     );
     const comptage = await compterBornes(lat, lon);
     const surSite = Math.max(comptage.sur_site, bornesVues);
-    const bornes = scorerBornes(surSite, comptage.voisinage_1km, comptage.rayon_10km, false, comptage.types);
+    // Interconnexion veille → potentiel bornes : un signal VE (flotte/IRVE/
+    // électrification) rattaché au lead = zone qui s'électrifie → bonus bornes.
+    const signauxVe = (await signauxDuLead(supabase, leadId)).some(estSignalVE);
+    const bornes = scorerBornes(
+      surSite,
+      comptage.voisinage_1km,
+      comptage.rayon_10km,
+      signauxVe,
+      comptage.types,
+    );
 
     const result = assembler(solaire, ombrieres, bornes, imageUrl);
     await supabase.from("leads").update({ vision_satellite: result }).eq("id", leadId);
