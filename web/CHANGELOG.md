@@ -7,6 +7,7 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
+| **1.5.2** | #131 | Nettoyage sécurité : vitest 2 → 4 (élimine la vuln critique + toute la chaîne esbuild/vite, dev-only). Audit 8 → 3 vulnérabilités. Les 3 restantes (next/postcss) préexistent et leur « fix » downgrade Next — laissées en l'état |
 | **1.5.1** | #130 | Solidification : infra de test JS (vitest) + 32 tests unitaires sur les helpers purs (scoring 3 potentiels, garde-fous de ciblage, signaux VE) · nouveau job CI `web` (typecheck + vitest) — l'app Next est désormais vérifiée en CI |
 | **1.5.0** | #129 | Interconnexion veille ↔ lead ↔ bornes : un signal VE lié rehausse le potentiel bornes à l'analyse (A) · bloc « Signaux de veille liés » sur la fiche lead (B) · lien croisé /solaire → radar Bornes VE (C) |
 | **1.4.0** | #128 | Workspace /solaire : les **3 sous-scores** (☀️ toiture · 🅿️ ombrières · 🔌 bornes VE) affichés par site, axe le plus prometteur mis en relief + tri/filtre par axe (au lieu du seul score toiture) |
