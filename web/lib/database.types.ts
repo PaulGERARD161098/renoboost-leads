@@ -74,6 +74,7 @@ export interface Run {
   progress: number;
   counts: Record<string, number>;
   cout_eur: number;
+  cout_detail: Record<string, number>;
   log_url: string | null;
   erreur: string | null;
   is_test: boolean;

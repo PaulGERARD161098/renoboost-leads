@@ -72,12 +72,13 @@ class FakeDB:
         self.leads.extend(rows)
 
     def finalize_run(
-        self, run_id, *, status, counts, cout_eur, erreur=None
+        self, run_id, *, status, counts, cout_eur, cout_detail=None, erreur=None
     ) -> None:
         self.runs[run_id].update(
             status=status,
             counts=counts,
             cout_eur=round(cout_eur, 2),
+            cout_detail=cout_detail or {},
             erreur=erreur,
             progress=100 if status == "termine" else 0,
             etape_courante="Terminé" if status == "termine" else "Échec",
@@ -147,6 +148,64 @@ def test_demo_pipeline_caps_at_50():
     ctx = RunContext(run=_make_run(volume=999), verticale=None, max_leads=500)
     result = DemoPipeline(seed=1).run(ctx, lambda *a: None)
     assert len(result.leads) == 50
+
+
+def test_demo_pipeline_ventile_cout_par_api():
+    """Le coût démo est ventilé par poste et la somme reste = cout_eur."""
+    ctx = RunContext(run=_make_run(volume=10), verticale=None)
+    result = DemoPipeline(seed=42).run(ctx, lambda *a: None)
+    assert set(result.cout_detail) == {"places", "pappers", "dropcontact", "claude"}
+    assert all(v >= 0 for v in result.cout_detail.values())
+    assert sum(result.cout_detail.values()) == pytest.approx(result.cout_eur)
+    # Google Places domine le poste de coût (cohérent avec les ratios réels).
+    assert result.cout_detail["places"] == max(result.cout_detail.values())
+
+
+# --- Ventilation des coûts (cout_detail_depuis_stats) ------------------------
+
+
+def test_cout_detail_depuis_stats_regroupe_par_api():
+    from renoboost_leads.models import StageStats
+    from worker.pipeline import cout_detail_depuis_stats
+
+    def _s(nom: str, cout: float) -> StageStats:
+        return StageStats(
+            nom_etage=nom,
+            duree_secondes=0.0,
+            nb_appels_api=0,
+            nb_succes=0,
+            nb_echecs=0,
+            cout_eur_estime=cout,
+            leads_collectes=0,
+        )
+
+    etages = [
+        _s("stage0_sirene_decouverte", 0.0),  # gratuit, ignoré
+        _s("stage1_decouverte", 5.0),  # places
+        _s("stage2_entreprises", 2.0),  # pappers
+        _s("stage3_contacts", 0.0),  # gratuit, ignoré
+        _s("stage3_5_enrichment", 3.0),  # dropcontact
+        _s("completion", 0.5),  # claude
+        _s("stage4_prospection", 1.5),  # claude
+    ]
+    detail = cout_detail_depuis_stats(etages)
+    assert detail == {
+        "places": 5.0,
+        "pappers": 2.0,
+        "dropcontact": 3.0,
+        "claude": 2.0,
+    }
+
+
+def test_cout_detail_depuis_stats_vide():
+    from worker.pipeline import cout_detail_depuis_stats
+
+    assert cout_detail_depuis_stats([]) == {
+        "places": 0.0,
+        "pappers": 0.0,
+        "dropcontact": 0.0,
+        "claude": 0.0,
+    }
 
 
 def test_build_pipeline_real_returns_realpipeline():

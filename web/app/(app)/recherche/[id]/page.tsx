@@ -5,6 +5,7 @@ import type { Lead, Run, Verticale } from "@/lib/database.types";
 import { RUN_STATUS_LABEL, LEAD_STATUS_LABEL, scoreColor, formatDate } from "@/lib/ui";
 import { RunMapLoader } from "@/components/run-map-loader";
 import { RunReportLauncher } from "@/components/run-report";
+import { CoutDetailBadge } from "@/components/cout-detail";
 import { getRunReport } from "@/lib/run-report";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +89,16 @@ export default async function RechercheDetailPage({
         <Stat label="Résultats" value={leads.length} />
         <Stat label="Volume visé" value={run.volume_cible ?? "—"} />
         <Stat label="Budget" value={run.budget_eur ? `${run.budget_eur} €` : "—"} />
-        <Stat label="Coût réel" value={`${Math.round(Number(run.cout_eur ?? 0))} €`} />
+        <div className="rounded-xl border border-[var(--border)] bg-white p-4">
+          <div className="text-2xl font-bold">
+            <CoutDetailBadge
+              detail={run.cout_detail}
+              total={Number(run.cout_eur ?? 0)}
+              totalLabel="Coût réel"
+            />
+          </div>
+          <div className="text-sm text-[var(--muted)]">Coût réel</div>
+        </div>
       </div>
 
       {showMap && (

@@ -20,6 +20,7 @@ export type RunReport = {
   finishedAt: string | null;
   dureeS: number | null;
   coutTotal: number;
+  coutDetail: Record<string, number>;
   coutParLead: number | null;
   coutParQualifie: number | null;
   perimetre: {
@@ -109,6 +110,10 @@ export async function getRunReport(
   const dureeS = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.round((end - start) / 1000)) : null;
 
   const cout = Number(run.cout_eur) || 0;
+  const coutDetail =
+    run.cout_detail && typeof run.cout_detail === "object"
+      ? (run.cout_detail as Record<string, number>)
+      : {};
   const zone = run.zone as { effectif_min?: number | null } | undefined;
 
   return {
@@ -120,6 +125,7 @@ export async function getRunReport(
     finishedAt: run.status === "termine" || run.status === "echoue" ? run.updated_at : null,
     dureeS,
     coutTotal: cout,
+    coutDetail,
     coutParLead: leads.length > 0 ? Math.round((cout / leads.length) * 100) / 100 : null,
     coutParQualifie: qualifies.length > 0 ? Math.round((cout / qualifies.length) * 100) / 100 : null,
     perimetre: {
