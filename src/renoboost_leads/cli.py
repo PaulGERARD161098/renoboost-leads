@@ -410,6 +410,16 @@ def run(
     stats.duree_totale_secondes = (stats.fin - stats.debut).total_seconds()
     export_run_stats(stats, output_dir / "run_stats.json")
 
+    # Témoin de ciblage : un taux hors-filtre élevé = budget découverte brûlé sur
+    # du hors-cible (signal pour passer la verticale en SIRENE-first).
+    if stats.leads_decouverts:
+        pct = round(stats.taux_hors_filtre * 100)
+        couleur = "yellow" if pct >= 40 else "green"
+        console.print(
+            f"[{couleur}]🎯 Ciblage : {stats.nb_hors_filtre}/{stats.leads_decouverts} "
+            f"hors-filtre ({pct} %)[/{couleur}]"
+        )
+
     # ─── Persistance optionnelle (Supabase Storage) ───
     # Si STORAGE_BACKEND=supabase, on uploade la session au remote pour
     # qu'elle survive aux redéploiements Streamlit Cloud. En mode local

@@ -633,6 +633,13 @@ class RunStats(BaseModel):
     cout_total_eur: float = 0.0
     etages_executes: list[StageStats] = []
     leads_finaux: int = 0
+    # Ciblage : part des leads découverts rejetés au filtre NAF/effectif (étage 2).
+    # `taux_hors_filtre` ∈ [0,1] mesure l'efficacité du ciblage : un taux élevé en
+    # mode Places-first = budget découverte brûlé sur du hors-cible. Sert de
+    # témoin pour confirmer le gain d'un resserrage (SIRENE-first).
+    leads_decouverts: int = 0
+    nb_hors_filtre: int = 0
+    taux_hors_filtre: float = 0.0
     erreurs: list[str] = []
     # Email de l'émetteur (cf. CampaignConfig.emetteur). Persisté ici pour que
     # le staging cold-mail puisse résoudre le from_email « auto depuis la session ».

@@ -61,6 +61,14 @@ class Cibles(BaseModel):
 
     secteurs_places: list[SecteurCible] = Field(min_length=1)
     filtres_entreprise: FiltresEntreprise = Field(default_factory=FiltresEntreprise)
+    # Mode de découverte. False (défaut) = Places-first (les `secteurs_places`
+    # pilotent un Text Search large, puis filtrage NAF/effectif a posteriori —
+    # on paie chaque résultat avant de jeter les hors-cible). True = SIRENE-first
+    # (étage 0) : découverte directe par `filtres_entreprise.naf_inclus` à la
+    # source gratuite recherche-entreprises.api.gouv.fr, Places en simple
+    # enrichissement par nom — quasi-zéro hors-filtre, budget découverte économisé.
+    # À activer quand la liste NAF est fiable (cas Rossini).
+    decouverte_sirene_first: bool = False
 
 
 class Qualification(BaseModel):

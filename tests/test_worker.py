@@ -289,6 +289,43 @@ def test_real_pipeline_maps_leads_and_emits(monkeypatch):
     assert cfg.claude_scoring.scorer_hors_filtre is False
 
 
+def _capture_stages(monkeypatch, slug: str) -> list[float]:
+    """Lance RealPipeline pour `slug` et renvoie les stages demandés à l'orchestrateur."""
+    import renoboost_leads.orchestrateur as orch
+    import renoboost_leads.settings as settings_mod
+    from renoboost_leads.orchestrateur import OrchestrationResult
+
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: _FakeSettings())
+    captured: dict[str, object] = {}
+
+    def fake_executer(cfg, settings, stages, output_dir, stats, **kwargs):
+        captured["stages"] = stages
+        return OrchestrationResult()
+
+    monkeypatch.setattr(orch, "executer_pipeline", fake_executer)
+    ctx = RunContext(
+        run={"id": "r", "verticale_id": "v", "zone": {}, "volume_cible": 5},
+        verticale={"slug": slug},
+    )
+    RealPipeline().run(ctx, lambda *a: None)
+    return captured["stages"]  # type: ignore[return-value]
+
+
+def test_real_pipeline_rossini_sirene_first(monkeypatch):
+    """Verticale rossini (decouverte_sirene_first=true) → découverte SIRENE (stage 0)
+    + Places en enrichissement (stage 1), pas de Places-first large."""
+    stages = _capture_stages(monkeypatch, "rossini")
+    assert 0 in stages  # découverte par NAF natif (gratuit)
+    assert 1 in stages  # Places en simple enrichissement par nom
+
+
+def test_real_pipeline_verticale_fichier_sans_flag_reste_places_first(monkeypatch):
+    """Verticale fichier sans le flag → Places-first historique (pas de stage 0)."""
+    stages = _capture_stages(monkeypatch, "irve-flottes-b2b")
+    assert 0 not in stages
+    assert 1 in stages
+
+
 def test_real_pipeline_base_only_contexte_depuis_config(monkeypatch):
     """Verticale CRM base-only : contexte_client construit depuis le config (pas RénoBoost)."""
     import renoboost_leads.orchestrateur as orch

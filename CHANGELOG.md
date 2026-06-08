@@ -2,6 +2,27 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [Unreleased] — Ciblage Rossini : SIRENE-first + témoin hors-filtre
+
+### Added — moteur
+
+- **Découverte SIRENE-first opt-in par verticale** (`cibles.decouverte_sirene_first`,
+  schéma `verticale/schema.py`). À `true`, le worker découvre par `naf_inclus`
+  **nativement à la source gratuite** (recherche-entreprises.api.gouv.fr, étage 0)
+  et n'utilise plus Places que pour l'enrichissement par nom — au lieu d'un Text
+  Search large payé puis filtré a posteriori. Défaut `false` (Places-first inchangé).
+- **Témoin de ciblage** dans `RunStats` (`leads_decouverts`, `nb_hors_filtre`,
+  `taux_hors_filtre`), calculé en fin de pipeline et persisté dans `run_stats.json`.
+  Surfacé en fin de run CLI (`🎯 Ciblage : N/M hors-filtre (X %)`). Permet de
+  confirmer la baisse du hors-filtre sans run témoin à l'aveugle.
+
+### Changed
+
+- **Verticale Rossini** passée en SIRENE-first (`decouverte_sirene_first: true`) :
+  vise à éliminer le ~72 % de hors-filtre observé en Places-first (requêtes larges
+  « usine » / « siège social » payées puis jetées). Le run témoin réel reste une
+  étape OPS sur le worker (clés Google Places / Anthropic).
+
 ## [1.2.0] — Mail piloté par les potentiels + LinkedIn dans la fiche
 
 ### Added

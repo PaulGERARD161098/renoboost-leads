@@ -396,7 +396,11 @@ class RealPipeline:
             )
             if verticale_fichier.emetteur is not None:
                 cfg.emetteur = verticale_fichier.emetteur
-            sirene_first = False
+            # Découverte : opt-in par verticale. Quand la liste NAF est fiable,
+            # SIRENE-first (étage 0) pré-filtre à la source gratuite et évite de
+            # payer Places sur des leads jetés ensuite (cf. taux_hors_filtre).
+            # Les `secteurs_places` deviennent alors un simple enrichissement par nom.
+            sirene_first = verticale_fichier.cibles.decouverte_sirene_first
         else:
             # Ciblage = config CRM (base) → découverte SIRENE-first par NAF.
             cfg.filtres_entreprise = self._filtres_depuis_config_crm(ctx.verticale, slug)
