@@ -8,6 +8,11 @@ import {
   updateVerticale,
   type VerticaleInput,
 } from "@/lib/actions/verticales";
+import {
+  INTENTIONS,
+  appliquerIntentions,
+  type IntentionId,
+} from "@/lib/intentions";
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
@@ -28,6 +33,11 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
   const [secteurs, setSecteurs] = useState(asStringArray(cfg.secteurs_naf).join(", "));
   const [effectifMin, setEffectifMin] = useState(asNumber(cfg.effectif_min));
   const [signaux, setSignaux] = useState(asStringArray(cfg.signaux).join(", "));
+  const [intentions, setIntentions] = useState<IntentionId[]>(
+    asStringArray(cfg.intentions).filter((id): id is IntentionId =>
+      INTENTIONS.some((i) => i.id === id),
+    ),
+  );
   const [active, setActive] = useState(verticale?.active ?? true);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -37,6 +47,25 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
+  }
+
+  // Cocher une intention compile son proxy (NAF + signaux + effectif suggéré) dans
+  // les champs, de façon additive — l'utilisateur garde la main ensuite. Décocher
+  // retire seulement le marqueur : on ne dévide pas les champs déjà saisis.
+  function toggleIntention(id: IntentionId) {
+    if (intentions.includes(id)) {
+      setIntentions(intentions.filter((x) => x !== id));
+      return;
+    }
+    const next = appliquerIntentions([id], {
+      secteursNaf: parseList(secteurs),
+      signaux: parseList(signaux),
+      effectifMin: effectifMin ? Number(effectifMin) : null,
+    });
+    setSecteurs(next.secteursNaf.join(", "));
+    setSignaux(next.signaux.join(", "));
+    if (next.effectifMin != null) setEffectifMin(String(next.effectifMin));
+    setIntentions([...intentions, id]);
   }
 
   function submit(e: React.FormEvent) {
@@ -49,6 +78,7 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
       secteursNaf: parseList(secteurs),
       effectifMin: effectifMin ? Number(effectifMin) : null,
       signaux: parseList(signaux),
+      intentions,
       active,
     };
     if (!input.nom) {
@@ -105,6 +135,36 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
           placeholder="Ex. Photovoltaïque en autoconsommation"
           className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
         />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium">Intentions visées</label>
+        <div className="flex flex-wrap gap-2">
+          {INTENTIONS.map((it) => {
+            const on = intentions.includes(it.id);
+            return (
+              <button
+                key={it.id}
+                type="button"
+                onClick={() => toggleIntention(it.id)}
+                aria-pressed={on}
+                title={it.description}
+                className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                  on
+                    ? "border-[var(--brand)] bg-[var(--brand)] text-white"
+                    : "border-[var(--border)] bg-white hover:bg-slate-50"
+                }`}
+              >
+                {on ? "✓ " : "+ "}
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          Pré-remplit secteurs NAF + signaux selon l&apos;intention d&apos;achat
+          (proxy sectoriel, ajustable). Reste éditable ci-dessous.
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
