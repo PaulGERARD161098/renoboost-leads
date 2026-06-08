@@ -41,7 +41,15 @@ export function WelcomeModal({ briefing }: { briefing: Briefing }) {
     router.push(href);
   }
 
-  const { prenom, dateLabel, objectif, nouveautes, priorites } = briefing;
+  const { prenom, dateLabel, objectif, nouveautes, priorites, deadlines } = briefing;
+
+  // Échéance en clair : « en retard » / « aujourd'hui » / « demain » / « dans N j ».
+  function echeanceLabel(joursRestants: number): string {
+    if (joursRestants < 0) return `en retard de ${-joursRestants} j`;
+    if (joursRestants === 0) return "aujourd'hui";
+    if (joursRestants === 1) return "demain";
+    return `dans ${joursRestants} j`;
+  }
 
   return (
     <div
@@ -62,6 +70,26 @@ export function WelcomeModal({ briefing }: { briefing: Briefing }) {
                 <span className="text-[var(--muted)]">🎯 Objectif : </span>
                 {objectif}
               </p>
+            )}
+            {deadlines.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="text-sm text-[var(--muted)]">⏳ Échéances :</span>
+                {deadlines.map((d, i) => (
+                  <span
+                    key={i}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      d.enRetard
+                        ? "bg-rose-100 text-rose-800"
+                        : d.joursRestants <= 3
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-slate-100 text-slate-600"
+                    }`}
+                    title={d.date}
+                  >
+                    {d.label} · {echeanceLabel(d.joursRestants)}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
           <button

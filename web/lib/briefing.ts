@@ -6,10 +6,16 @@
 //   - « Quoi de neuf » = le contexte (où on en est, ce qui a bougé).
 //   - « On fait quoi aujourd'hui » = les actions recommandées, cliquables.
 import type { createClient } from "@/lib/supabase/server";
-import type { Lead } from "@/lib/database.types";
+import type { Deadline, Lead } from "@/lib/database.types";
 
 export type Nouveaute = { icon: string; text: string; href: string };
 export type Priorite = { label: string; hint: string; href: string; n: number };
+export type DeadlineAffichee = {
+  label: string;
+  date: string;
+  joursRestants: number;
+  enRetard: boolean;
+};
 
 export type Briefing = {
   shouldShow: boolean;
@@ -20,12 +26,36 @@ export type Briefing = {
   resumeStale: boolean;
   nouveautes: Nouveaute[];
   priorites: Priorite[];
+  deadlines: DeadlineAffichee[];
 };
 
 // Clé de jour en heure de Paris (YYYY-MM-DD) : deux instants le « même jour »
 // ne redéclenchent pas la modale. fr-CA rend un format ISO.
 function dayKey(d: Date): string {
   return new Intl.DateTimeFormat("fr-CA", { timeZone: "Europe/Paris" }).format(d);
+}
+
+/**
+ * Deadlines de la couche contexte annotées pour la reprise au login : jours
+ * restants (en jours calendaires, heure de Paris) et drapeau « en retard ».
+ * Triées du plus urgent (retard inclus) au plus lointain. Pure, testable.
+ */
+export function prochainesDeadlines(
+  deadlines: Deadline[] | null | undefined,
+  now: Date,
+  limit = 4,
+): DeadlineAffichee[] {
+  const [ty, tm, td] = dayKey(now).split("-").map(Number);
+  const aujourdhui = Date.UTC(ty, tm - 1, td);
+  return (deadlines ?? [])
+    .filter((d) => d?.label?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(d?.date ?? ""))
+    .map((d) => {
+      const [y, m, j] = d.date.split("-").map(Number);
+      const joursRestants = Math.round((Date.UTC(y, m - 1, j) - aujourdhui) / 86_400_000);
+      return { label: d.label.trim(), date: d.date, joursRestants, enRetard: joursRestants < 0 };
+    })
+    .sort((a, b) => a.joursRestants - b.joursRestants)
+    .slice(0, limit);
 }
 
 function prenomFrom(nom: string | null, email: string | null): string {
@@ -71,6 +101,7 @@ export async function getSessionBriefing(
       resumeStale: false,
       nouveautes: [],
       priorites: [],
+      deadlines: [],
     };
   }
 
@@ -83,7 +114,7 @@ export async function getSessionBriefing(
     await Promise.all([
       supabase
         .from("app_context")
-        .select("objectif_final, resume_session, resume_genere_le")
+        .select("objectif_final, resume_session, resume_genere_le, deadlines")
         .eq("id", "main")
         .maybeSingle(),
       supabase
@@ -208,5 +239,6 @@ export async function getSessionBriefing(
     resumeStale,
     nouveautes,
     priorites,
+    deadlines: prochainesDeadlines((ctx?.deadlines as Deadline[] | null) ?? [], now),
   };
 }
