@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createRun } from "@/lib/actions/runs";
 import { createZoneCible, deleteZoneCible } from "@/lib/actions/zones";
 import type { Verticale, ZoneCible } from "@/lib/database.types";
-import { estimerCoutRun, formatEur } from "@/lib/costs";
+import { estimerCoutDetail, estimerCoutRun, formatEur } from "@/lib/costs";
 import { intentionsDeConfig } from "@/lib/intentions";
 import {
   EFFECTIF_DEFAUT,
@@ -77,6 +77,7 @@ export function RechercheForm({
   const [budget, setBudget] = useState(initial?.budget ?? "50");
   const [isTest, setIsTest] = useState(initial?.isTest ?? false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [coutDetailOuvert, setCoutDetailOuvert] = useState(false);
 
   // Tranche d'effectif effective (preset, ou min/max libres si « Personnalisé »).
   const preset = presetParId(effectifPreset);
@@ -467,26 +468,56 @@ export function RechercheForm({
           className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
         />
         {!isTest && volumeNum > 0 && (
-          <p
+          <div
             className={`mt-1 text-xs ${
               budgetInsuffisant ? "text-amber-700" : "text-[var(--muted)]"
             }`}
           >
-            Coût estimé pour {volumeNum} leads :{" "}
-            <span className="font-medium">
-              {formatEur(estimation.bas)}–{formatEur(estimation.haut)}
-            </span>{" "}
-            <span className="text-[var(--muted)]">
-              (Places + Claude ; haut = avec enrichissement Dropcontact)
-            </span>
-            {budgetInsuffisant && (
-              <>
-                {" "}
-                — ⚠️ budget plafond ({formatEur(budgetNum)}) sous l&apos;estimé
-                basse : le run pourrait s&apos;arrêter avant le volume visé.
-              </>
+            <p>
+              Coût estimé pour {volumeNum} leads :{" "}
+              <span className="font-medium">
+                {formatEur(estimation.bas)}–{formatEur(estimation.haut)}
+              </span>{" "}
+              <button
+                type="button"
+                onClick={() => setCoutDetailOuvert((v) => !v)}
+                className="text-[var(--muted)] underline-offset-2 hover:text-[var(--brand)] hover:underline"
+                aria-expanded={coutDetailOuvert}
+              >
+                {coutDetailOuvert ? "▾ détail par API" : "▸ détail par API"}
+              </button>
+              {budgetInsuffisant && (
+                <>
+                  {" "}
+                  — ⚠️ budget plafond ({formatEur(budgetNum)}) sous l&apos;estimé
+                  basse : le run pourrait s&apos;arrêter avant le volume visé.
+                </>
+              )}
+            </p>
+            {coutDetailOuvert && (
+              <dl className="mt-1.5 space-y-0.5 rounded-lg border border-[var(--border)] bg-slate-50 px-3 py-2">
+                {estimerCoutDetail(volumeNum).map((l) => (
+                  <div key={l.cle} className="flex items-center justify-between gap-3">
+                    <dt className="flex items-center gap-1.5">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${l.couleur}`} />
+                      {l.label}
+                      <span className="text-[10px] text-[var(--muted)]">{l.detail}</span>
+                    </dt>
+                    <dd className="font-medium tabular-nums">
+                      {l.bas === l.haut
+                        ? formatEur(l.bas)
+                        : `${formatEur(l.bas)}–${formatEur(l.haut)}`}
+                    </dd>
+                  </div>
+                ))}
+                <p className="pt-1 text-[10px] text-[var(--muted)]">
+                  Pappers et Dropcontact ne sont facturés que si leur clé API est
+                  configurée (sinon 0 €). Bas = Claude Haiku sans enrichissement ;
+                  haut = Claude Sonnet + Pappers + Dropcontact.
+                </p>
+              </dl>
             )}
-          </p>
+          </div>
         )}
       </div>
 

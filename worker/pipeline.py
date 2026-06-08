@@ -68,6 +68,41 @@ class RunResult:
     leads: list[dict[str, Any]] = field(default_factory=list)
     counts: dict[str, int] = field(default_factory=dict)
     cout_eur: float = 0.0
+    # Ventilation du coût réel par API : {places, pappers, dropcontact, claude} en €.
+    # Persistée dans runs.cout_detail → décompte précis des crédits côté UI.
+    cout_detail: dict[str, float] = field(default_factory=dict)
+
+
+# Postes de coût pilotés côté UI (3 API payantes + Claude). Doit rester aligné
+# avec COUT_CATEGORIES dans web/lib/costs.ts.
+COUT_DETAIL_CLES = ("places", "pappers", "dropcontact", "claude")
+
+# Mapping étage moteur (RunStats.etages_executes[].nom_etage) → poste de coût.
+# Les étages absents (SIRENE, scraping L3) sont gratuits et n'apparaissent pas.
+_ETAGE_VERS_POSTE: dict[str, str] = {
+    "stage0_places_enrichissement": "places",
+    "stage1_decouverte": "places",
+    "stage2_entreprises": "pappers",
+    "stage3_5_enrichment": "dropcontact",
+    "completion": "claude",
+    "stage4_prospection": "claude",
+}
+
+
+def cout_detail_depuis_stats(etages: list[Any]) -> dict[str, float]:
+    """Ventile les coûts par API depuis les StageStats du moteur.
+
+    Chaque `StageStats` porte `nom_etage` + `cout_eur_estime` ; on les regroupe
+    par poste (places / pappers / dropcontact / claude). Les postes à 0 € sont
+    conservés (clé présente) pour un contrat stable côté UI.
+    """
+    detail = {cle: 0.0 for cle in COUT_DETAIL_CLES}
+    for etage in etages:
+        poste = _ETAGE_VERS_POSTE.get(getattr(etage, "nom_etage", "") or "")
+        if poste:
+            montant = float(getattr(etage, "cout_eur_estime", 0.0) or 0.0)
+            detail[poste] = round(detail[poste] + montant, 4)
+    return detail
 
 
 class Pipeline(Protocol):
@@ -188,9 +223,17 @@ class DemoPipeline:
         counts = {"decouverte": n, "qualifies": qualifies, "leads": len(leads)}
         emit("Rédaction des e-mails", 95, counts)
 
-        # Coût simulé : ordre de grandeur réaliste (~4 c€/lead enrichi).
-        cout = round(len(leads) * 0.04, 2)
-        return RunResult(leads=leads, counts=counts, cout_eur=cout)
+        # Coût simulé : ordre de grandeur réaliste (~4 c€/lead enrichi), ventilé
+        # par API pour que le décompte par poste soit visible dès le mode démo.
+        n_leads = len(leads)
+        cout_detail = {
+            "places": round(n_leads * 0.030, 2),
+            "pappers": round(n_leads * 0.003, 2),
+            "dropcontact": round(n_leads * 0.004, 2),
+            "claude": round(n_leads * 0.003, 2),
+        }
+        cout = round(sum(cout_detail.values()), 2)
+        return RunResult(leads=leads, counts=counts, cout_eur=cout, cout_detail=cout_detail)
 
 
 def _slugify(nom: str) -> str:
@@ -293,7 +336,12 @@ class RealPipeline:
             1 for lead in (base or []) if not getattr(lead, "hors_filtre_entreprise", False)
         )
         counts = {"decouverte": decouverte, "qualifies": qualifies, "leads": len(leads)}
-        return RunResult(leads=leads, counts=counts, cout_eur=round(stats.cout_total_eur, 2))
+        return RunResult(
+            leads=leads,
+            counts=counts,
+            cout_eur=round(stats.cout_total_eur, 2),
+            cout_detail=cout_detail_depuis_stats(stats.etages_executes),
+        )
 
     @staticmethod
     def _verifier_cles(settings: Any) -> None:

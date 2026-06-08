@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { AppContext, Lead, Run } from "@/lib/database.types";
 import { RepriseBanner } from "@/components/reprise-banner";
+import { CoutDetailBadge } from "@/components/cout-detail";
+import { cumulerCoutDetail } from "@/lib/costs";
 import { formatDate, satelliteScore100, scoreColor, scoreGlobal } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +39,10 @@ export default async function TableauDeBordPage() {
     )
     .sort((a, b) => (a.relance_at! < b.relance_at! ? -1 : 1));
 
-  const { data: runsData } = await supabase.from("runs").select("status, cout_eur");
-  const runs = (runsData as Pick<Run, "status" | "cout_eur">[]) ?? [];
+  const { data: runsData } = await supabase
+    .from("runs")
+    .select("status, cout_eur, cout_detail");
+  const runs = (runsData as Pick<Run, "status" | "cout_eur" | "cout_detail">[]) ?? [];
 
   const { count: veilleNouveaux } = await supabase
     .from("veille_signaux")
@@ -56,6 +60,7 @@ export default async function TableauDeBordPage() {
   const bounced = leads.filter((l) => l.bounced_at).length;
   const topLeads = leads.filter((l) => (l.score ?? 0) >= 75).length;
   const coutTotal = runs.reduce((s, r) => s + Number(r.cout_eur ?? 0), 0);
+  const coutCumuleDetail = cumulerCoutDetail(runs.map((r) => r.cout_detail));
   const pct = (n: number) => (sent ? Math.round((n / sent) * 100) : 0);
 
   // À traiter en priorité : non contactés, score décroissant.
@@ -147,7 +152,16 @@ export default async function TableauDeBordPage() {
         <Stat label="Top leads (≥75)" value={topLeads} />
         <Stat label="Taux de réponse" value={sent ? `${pct(replied)}%` : "—"} />
         <Stat label="Taux de rebond" value={sent ? `${pct(bounced)}%` : "—"} />
-        <Stat label="Coût cumulé" value={`${Math.round(coutTotal)} €`} />
+        <div className="rounded-xl border border-[var(--border)] bg-white p-4">
+          <div className="text-2xl font-bold">
+            <CoutDetailBadge
+              detail={coutCumuleDetail}
+              total={coutTotal}
+              totalLabel="Coût cumulé"
+            />
+          </div>
+          <div className="text-sm text-[var(--muted)]">Coût cumulé</div>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

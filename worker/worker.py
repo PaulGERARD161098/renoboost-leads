@@ -125,6 +125,7 @@ class Worker:
                 status="termine",
                 counts=result.counts,
                 cout_eur=result.cout_eur,
+                cout_detail=result.cout_detail,
             )
             logger.info(
                 "Run %s : terminé — %d leads, %.2f €",

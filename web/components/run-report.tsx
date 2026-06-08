@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { RunReport } from "@/lib/run-report";
 import { formatDuree } from "@/lib/run-report";
+import { normaliserCoutDetail } from "@/lib/costs";
+import { CoutDetailBadge } from "@/components/cout-detail";
 import { RUN_STATUS_COLOR, RUN_STATUS_LABEL, formatDate } from "@/lib/ui";
 
 /**
@@ -106,6 +108,18 @@ function RunReportModal({ report, onClose }: { report: RunReport; onClose: () =>
             />
             <Kpi label="Score moyen" value={report.scoreMoyen != null ? String(report.scoreMoyen) : "—"} />
           </div>
+
+          {/* Décompte par API (crédits consommés) */}
+          {normaliserCoutDetail(report.coutDetail).length > 0 && (
+            <Section titre="💳 Décompte par API">
+              <CoutDetailBadge
+                detail={report.coutDetail}
+                total={report.coutTotal}
+                totalLabel="Coût total"
+                defaultOpen
+              />
+            </Section>
+          )}
 
           {/* Périmètre */}
           <Section titre="🎯 Périmètre ciblé">

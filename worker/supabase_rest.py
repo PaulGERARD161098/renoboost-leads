@@ -153,12 +153,14 @@ class SupabaseRest:
         status: str,
         counts: dict[str, int],
         cout_eur: float,
+        cout_detail: dict[str, float] | None = None,
         erreur: str | None = None,
     ) -> None:
         patch: dict[str, Any] = {
             "status": status,
             "counts": counts,
             "cout_eur": round(cout_eur, 2),
+            "cout_detail": cout_detail or {},
             "progress": 100 if status == "termine" else 0,
             "etape_courante": "Terminé" if status == "termine" else "Échec",
             "erreur": erreur,
