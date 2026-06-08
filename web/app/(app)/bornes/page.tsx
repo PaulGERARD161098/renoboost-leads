@@ -5,6 +5,7 @@ import { BornesRadar } from "@/components/bornes-radar";
 import { BornesMapLoader } from "@/components/bornes-map-loader";
 import { BornesVeille } from "@/components/bornes-veille";
 import type { VeilleSignal } from "@/lib/database.types";
+import { tallyLeadsParDepartement } from "@/lib/bornes-radar";
 import { formatDate } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,17 @@ export default async function BornesPage() {
 
   const { data: stats } = await supabase.rpc("bornes_stats_departements");
   const depts = (stats as { departement: string; n: number }[] | null) ?? [];
+
+  // Potentiel pipeline par département : nos prospects déjà localisés (croisé
+  // avec le sous-équipement dans le radar). Une seule colonne, requête légère.
+  const { data: leadCps } = await supabase
+    .from("leads")
+    .select("code_postal")
+    .not("code_postal", "is", null)
+    .limit(20000);
+  const leadsParDept = tallyLeadsParDepartement(
+    ((leadCps as { code_postal: string | null }[] | null) ?? []).map((l) => l.code_postal),
+  );
 
   const { data: ops } = await supabase.rpc("bornes_stats_operateurs");
   const operateurs = (ops as { operateur: string; n: number }[] | null) ?? [];
@@ -78,7 +90,7 @@ export default async function BornesPage() {
 
       {depts.length > 0 && (
         <div className="mb-5">
-          <BornesRadar depts={depts} />
+          <BornesRadar depts={depts} leadsParDept={leadsParDept} />
         </div>
       )}
 
