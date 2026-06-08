@@ -11,6 +11,8 @@ export interface VerticaleInput {
   secteursNaf: string[];
   effectifMin: number | null;
   signaux: string[];
+  /** Intentions d'achat cochées (ids) — mémorisées pour l'interconnexion Veille à venir. */
+  intentions: string[];
   active: boolean;
 }
 
@@ -31,6 +33,7 @@ function buildConfig(input: VerticaleInput): Record<string, unknown> {
     secteurs_naf: input.secteursNaf,
     effectif_min: input.effectifMin,
     signaux: input.signaux,
+    intentions: input.intentions,
   };
 }
 
