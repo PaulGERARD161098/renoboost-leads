@@ -98,6 +98,36 @@ export function intentionParId(id: string): Intention | undefined {
   return INTENTIONS.find((i) => i.id === id);
 }
 
+// ── Pont Intentions ⟶ Veille ─────────────────────────────────────────────
+// Chaque intention d'achat se traduit (quand c'est possible) en types de signaux
+// de veille « réels » — ceux qui prouvent l'intention sur le terrain (vs le proxy
+// sectoriel NAF). `fiscal` n'a pas de signal direct : c'est un profil financier,
+// pas un événement détectable en veille.
+export const SIGNAL_TYPES_PAR_INTENTION: Record<IntentionId, string[]> = {
+  flotte_ve: ["ve_flotte", "irve", "electrification"],
+  conso_elec: ["ombrieres", "electrification"],
+  fiscal: [],
+};
+
+/** Union dédupliquée des types de signaux veille couverts par des intentions. */
+export function signalTypesPourIntentions(ids: string[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    for (const t of SIGNAL_TYPES_PAR_INTENTION[id as IntentionId] ?? []) {
+      if (!out.includes(t)) out.push(t);
+    }
+  }
+  return out;
+}
+
+/** Intentions concernées par un type de signal veille (réciproque, pour le tri). */
+export function intentionsConcernantSignal(type: string | null): IntentionId[] {
+  if (!type) return [];
+  return (Object.keys(SIGNAL_TYPES_PAR_INTENTION) as IntentionId[]).filter((id) =>
+    SIGNAL_TYPES_PAR_INTENTION[id].includes(type),
+  );
+}
+
 /** Champs de la Cible impactés par les intentions (forme « brouillon » du formulaire). */
 export interface ChampsCible {
   secteursNaf: string[];
