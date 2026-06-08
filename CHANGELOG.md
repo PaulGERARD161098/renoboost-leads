@@ -2,6 +2,23 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [1.7.0] — Cible par intention d'achat
+
+### Added — CRM
+
+- **Presets d'intention dans le formulaire Cible** (`web/lib/intentions.ts`,
+  `web/components/verticale-form.tsx`) : 3 puces — **Électrifier sa flotte** /
+  **Piloter sa conso élec** / **Réduire sa facture fiscale** — qui compilent
+  l'intention d'achat en filtres de découverte (NAF + effectif suggéré) et en
+  signaux, de façon **additive et dédupliquée**. L'utilisateur garde la main sur
+  les champs. La découverte restant NAF-only, chaque intention mappe son
+  **meilleur proxy sectoriel** (proxy honnête, ajustable en un fichier).
+- **Mémorisation des intentions** dans `verticales.config.intentions` (clé JSONB,
+  sans migration) — socle pour l'interconnexion Veille à venir (cibler les boîtes
+  qui électrifient *réellement* via le flux Triple A Data).
+- Tests `vitest` (`web/lib/intentions.test.ts`) : fusion additive, dédup
+  insensible casse/espaces, idempotence, suggestion d'effectif prudent.
+
 ## [1.6.0] — Ciblage Rossini : SIRENE-first + témoin hors-filtre
 
 ### Added — moteur
