@@ -38,7 +38,13 @@ emetteur:
   nom_entreprise: "Rossini Energy"
 
 cibles:
+  # SIRENE-first : découverte par NAF à la source gratuite (recherche-entreprises),
+  # Places en enrichissement par nom. Évite le ~72 % de hors-filtre observé en
+  # Places-first (requêtes larges « usine »/« siège social » payées puis jetées).
+  decouverte_sirene_first: true
   secteurs_places:
+    # En SIRENE-first ces requêtes ne pilotent plus la découverte (NAF natif) :
+    # conservées pour l'enrichissement Places et le proto CLI Places-first.
     - type: "industrie"
       query: "usine"
     - type: "logistique"

@@ -1012,4 +1012,21 @@ def executer_pipeline(
         _emit("Rédaction des e-mails", 95, res, leads_final=len(res.leads_l4))
 
     res.nb_leads_finaux = len(res.leads_finaux)
+    _mesurer_hors_filtre(res, stats)
     return res
+
+
+def _mesurer_hors_filtre(res: OrchestrationResult, stats: RunStats) -> None:
+    """Renseigne le taux de hors-filtre dans `stats` (témoin de ciblage).
+
+    Dénominateur = leads découverts ayant reçu un verdict de filtre (sortie
+    d'étage 2 / 0). Numérateur = ceux flagués `hors_filtre_entreprise`. Laisse
+    les valeurs à 0 si la découverte n'a pas tourné (ex. run partiel L3/L4 seul).
+    """
+    base = res.leads_l2
+    if not base:
+        return
+    nb_hf = sum(1 for lead in base if getattr(lead, "hors_filtre_entreprise", False))
+    stats.leads_decouverts = len(base)
+    stats.nb_hors_filtre = nb_hf
+    stats.taux_hors_filtre = round(nb_hf / len(base), 4)

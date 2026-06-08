@@ -14,7 +14,11 @@ from renoboost_leads.models import (
     Volume,
     Zone,
 )
-from renoboost_leads.orchestrateur import OrchestrationResult, executer_pipeline
+from renoboost_leads.orchestrateur import (
+    OrchestrationResult,
+    _mesurer_hors_filtre,
+    executer_pipeline,
+)
 from renoboost_leads.settings import get_settings
 
 
@@ -90,3 +94,30 @@ def test_executer_pipeline_emit_optionnel(tmp_path):
         _cfg(volume=3), get_settings(), [1], tmp_path, _stats(), dry_run=True
     )
     assert result.leads_l1 is not None and len(result.leads_l1) == 3
+
+
+def test_mesurer_hors_filtre_calcule_le_taux():
+    """Témoin de ciblage : part des leads découverts rejetés au filtre NAF/effectif."""
+    from types import SimpleNamespace
+
+    res = OrchestrationResult()
+    res.leads_l2 = [
+        SimpleNamespace(hors_filtre_entreprise=True),
+        SimpleNamespace(hors_filtre_entreprise=False),
+        SimpleNamespace(hors_filtre_entreprise=True),
+        SimpleNamespace(hors_filtre_entreprise=True),
+    ]
+    stats = _stats()
+    _mesurer_hors_filtre(res, stats)
+    assert stats.leads_decouverts == 4
+    assert stats.nb_hors_filtre == 3
+    assert stats.taux_hors_filtre == 0.75
+
+
+def test_mesurer_hors_filtre_sans_decouverte_reste_zero():
+    """Run partiel (L3/L4 seul) : pas de découverte → stats à zéro, pas de division."""
+    stats = _stats()
+    _mesurer_hors_filtre(OrchestrationResult(), stats)
+    assert stats.leads_decouverts == 0
+    assert stats.nb_hors_filtre == 0
+    assert stats.taux_hors_filtre == 0.0
