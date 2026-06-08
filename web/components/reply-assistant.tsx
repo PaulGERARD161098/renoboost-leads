@@ -8,7 +8,10 @@ import {
   appliquerTransitionReponse,
   envoyerReponse,
 } from "@/lib/actions/leads";
-import { transitionForCategorie } from "@/lib/reply-actions";
+import {
+  actionRecommandeePourCategorie,
+  transitionForCategorie,
+} from "@/lib/reply-actions";
 
 const CAT: Record<ReplyCategorie, { label: string; tone: string }> = {
   interesse: { label: "🟢 Intéressé / veut un RDV", tone: "bg-emerald-100 text-emerald-800" },
@@ -149,6 +152,13 @@ export function ReplyAssistant({ leadId }: { leadId: string }) {
               </span>
             )}
           </div>
+
+          {/* Action recommandée en clair (pattern Contexte → Action → Données) :
+              le bon prochain geste, même quand il n'y a pas de transition de statut. */}
+          <p className="rounded-lg bg-[var(--brand)]/5 px-3 py-2 text-sm text-slate-700">
+            <span className="font-medium text-[var(--brand)]">→ Action recommandée :</span>{" "}
+            {actionRecommandeePourCategorie(sugg.categorie)}
+          </p>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Objet</label>
