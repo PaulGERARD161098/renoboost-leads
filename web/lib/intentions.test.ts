@@ -5,6 +5,7 @@ import {
   appliquerIntentions,
   intentionParId,
   intentionsConcernantSignal,
+  intentionsDeConfig,
   signalTypesPourIntentions,
   type IntentionId,
 } from "@/lib/intentions";
@@ -115,5 +116,23 @@ describe("pont intentions ⟶ veille", () => {
     ]);
     expect(intentionsConcernantSignal(null)).toEqual([]);
     expect(intentionsConcernantSignal("inexistant")).toEqual([]);
+  });
+});
+
+describe("intentionsDeConfig", () => {
+  it("lit et type les intentions d'une config JSONB", () => {
+    const res = intentionsDeConfig({ intentions: ["flotte_ve", "fiscal"] });
+    expect(res.map((i) => i.id)).toEqual(["flotte_ve", "fiscal"]);
+  });
+
+  it("ignore les ids inconnus et les valeurs non-string", () => {
+    const res = intentionsDeConfig({ intentions: ["flotte_ve", "zzz", 42] });
+    expect(res.map((i) => i.id)).toEqual(["flotte_ve"]);
+  });
+
+  it("renvoie [] si pas d'intentions", () => {
+    expect(intentionsDeConfig(null)).toEqual([]);
+    expect(intentionsDeConfig({})).toEqual([]);
+    expect(intentionsDeConfig({ intentions: "flotte_ve" })).toEqual([]);
   });
 });

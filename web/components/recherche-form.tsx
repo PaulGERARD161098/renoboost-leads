@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createRun } from "@/lib/actions/runs";
 import { createZoneCible, deleteZoneCible } from "@/lib/actions/zones";
 import type { Verticale, ZoneCible } from "@/lib/database.types";
 import { estimerCoutRun, formatEur } from "@/lib/costs";
+import { intentionsDeConfig } from "@/lib/intentions";
 import {
   EFFECTIF_DEFAUT,
   EFFECTIF_PRESETS,
@@ -185,7 +187,9 @@ export function RechercheForm({
     });
   }
 
-  const cibleNom = verticales.find((v) => v.id === verticaleId)?.nom ?? "—";
+  const cibleSelectionnee = verticales.find((v) => v.id === verticaleId);
+  const cibleNom = cibleSelectionnee?.nom ?? "—";
+  const intentions = intentionsDeConfig(cibleSelectionnee?.config);
 
   return (
     <>
@@ -206,6 +210,48 @@ export function RechercheForm({
             </option>
           ))}
         </select>
+        {/* Contexte : les intentions de la Cible pilotent le ciblage (NAF +
+            signaux) de cette recherche. Transparence intentions ⟶ recherche. */}
+        {intentions.length > 0 ? (
+          <div className="mt-2 rounded-lg bg-[var(--brand)]/5 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium text-[var(--muted)]">
+                🎯 Cible l&apos;intention :
+              </span>
+              {intentions.map((i) => (
+                <span
+                  key={i.id}
+                  className="rounded bg-[var(--brand)]/10 px-1.5 py-0.5 text-xs font-medium text-[var(--brand)]"
+                  title={i.description}
+                >
+                  {i.label}
+                </span>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Secteurs NAF et signaux recherchés en découlent.{" "}
+              <Link
+                href={`/cibles/${verticaleId}`}
+                className="text-[var(--brand)] hover:underline"
+              >
+                Ajuster la cible →
+              </Link>
+            </p>
+          </div>
+        ) : (
+          verticaleId && (
+            <p className="mt-2 text-xs text-[var(--muted)]">
+              Aucune intention déclarée sur cette cible.{" "}
+              <Link
+                href={`/cibles/${verticaleId}`}
+                className="text-[var(--brand)] hover:underline"
+              >
+                En ajouter →
+              </Link>{" "}
+              affine le ciblage.
+            </p>
+          )
+        )}
       </div>
 
       {/* Mode de zone */}
