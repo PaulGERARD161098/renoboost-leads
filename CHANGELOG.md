@@ -2,7 +2,7 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
-## [Unreleased] — Ciblage Rossini : SIRENE-first + témoin hors-filtre
+## [1.6.0] — Ciblage Rossini : SIRENE-first + témoin hors-filtre
 
 ### Added — moteur
 
