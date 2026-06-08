@@ -98,6 +98,18 @@ export function intentionParId(id: string): Intention | undefined {
   return INTENTIONS.find((i) => i.id === id);
 }
 
+/** Intentions d'une Cible lues depuis sa `config.intentions` (JSONB), filtrées/typées. */
+export function intentionsDeConfig(
+  config: Record<string, unknown> | null | undefined,
+): Intention[] {
+  const raw = config?.intentions;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((v): v is string => typeof v === "string")
+    .map((id) => intentionParId(id))
+    .filter((i): i is Intention => i !== undefined);
+}
+
 // ── Pont Intentions ⟶ Veille ─────────────────────────────────────────────
 // Chaque intention d'achat se traduit (quand c'est possible) en types de signaux
 // de veille « réels » — ceux qui prouvent l'intention sur le terrain (vs le proxy
