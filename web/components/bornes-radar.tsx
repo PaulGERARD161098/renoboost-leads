@@ -104,6 +104,13 @@ export function BornesRadar({
                   {l.pour100k.toFixed(1)} / 100k hab · {l.n.toLocaleString("fr-FR")} bornes
                 </span>
                 <Link
+                  href={`/bornes?veille=${l.departement}#veille-ve`}
+                  className="rounded-lg border border-[var(--brand)] px-2.5 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--brand)]/5"
+                  title="Chercher la demande VE (flotte, ombrières) sur ce territoire"
+                >
+                  🛰️ Veille VE ici
+                </Link>
+                <Link
                   href={`/recherche?dept=${l.departement}`}
                   className="rounded-lg bg-[var(--brand)] px-2.5 py-1 text-xs font-medium text-white hover:opacity-90"
                 >

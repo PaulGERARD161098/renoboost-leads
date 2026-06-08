@@ -10,7 +10,12 @@ import { formatDate } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function BornesPage() {
+export default async function BornesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ veille?: string }>;
+}) {
+  const { veille } = await searchParams;
   const supabase = await createClient();
 
   const { count: total } = await supabase
@@ -127,7 +132,7 @@ export default async function BornesPage() {
       <BornesAnalytics depts={depts} />
 
       <div className="mt-5">
-        <BornesVeille signaux={signaux} />
+        <BornesVeille signaux={signaux} initialDept={veille ?? ""} />
       </div>
 
       {dernier && (
