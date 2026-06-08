@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   INTENTIONS,
+  SIGNAL_TYPES_PAR_INTENTION,
   appliquerIntentions,
   intentionParId,
+  intentionsConcernantSignal,
+  signalTypesPourIntentions,
   type IntentionId,
 } from "@/lib/intentions";
 
@@ -79,5 +82,38 @@ describe("appliquerIntentions", () => {
   it("ignore silencieusement un id inconnu", () => {
     const res = appliquerIntentions(["zzz" as IntentionId], VIDE);
     expect(res).toEqual(VIDE);
+  });
+});
+
+describe("pont intentions ⟶ veille", () => {
+  it("couvre toutes les intentions du catalogue", () => {
+    for (const i of INTENTIONS) {
+      expect(SIGNAL_TYPES_PAR_INTENTION[i.id]).toBeDefined();
+    }
+    // fiscal n'a pas de signal direct (profil financier, pas un événement).
+    expect(SIGNAL_TYPES_PAR_INTENTION.fiscal).toEqual([]);
+  });
+
+  it("signalTypesPourIntentions fait l'union dédupliquée", () => {
+    const types = signalTypesPourIntentions(["flotte_ve", "conso_elec"]);
+    // electrification est dans les deux → une seule fois.
+    expect(types.filter((t) => t === "electrification")).toHaveLength(1);
+    expect(types).toContain("ve_flotte");
+    expect(types).toContain("ombrieres");
+  });
+
+  it("signalTypesPourIntentions ignore les ids inconnus et le fiscal seul", () => {
+    expect(signalTypesPourIntentions(["fiscal"])).toEqual([]);
+    expect(signalTypesPourIntentions(["zzz"])).toEqual([]);
+  });
+
+  it("intentionsConcernantSignal est la réciproque", () => {
+    expect(intentionsConcernantSignal("ve_flotte")).toEqual(["flotte_ve"]);
+    expect(intentionsConcernantSignal("electrification").sort()).toEqual([
+      "conso_elec",
+      "flotte_ve",
+    ]);
+    expect(intentionsConcernantSignal(null)).toEqual([]);
+    expect(intentionsConcernantSignal("inexistant")).toEqual([]);
   });
 });

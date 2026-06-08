@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Verticale } from "@/lib/database.types";
 import { VerticaleForm } from "@/components/verticale-form";
+import { SignauxIntentionCible } from "@/components/signaux-intention-cible";
+import { signauxPourIntentions } from "@/lib/veille-signaux";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,16 @@ export default async function CibleEditPage({
   if (!data) notFound();
   const verticale = data as Verticale;
 
+  const intentions = Array.isArray(verticale.config?.intentions)
+    ? (verticale.config.intentions as unknown[]).filter(
+        (v): v is string => typeof v === "string",
+      )
+    : [];
+  const signaux =
+    intentions.length > 0
+      ? await signauxPourIntentions(supabase, intentions)
+      : [];
+
   return (
     <div>
       <Link href="/cibles" className="text-sm text-[var(--muted)] hover:underline">
@@ -32,6 +44,7 @@ export default async function CibleEditPage({
         Modifier le profil de cette cible.
       </p>
       <VerticaleForm verticale={verticale} />
+      {intentions.length > 0 && <SignauxIntentionCible signaux={signaux} />}
     </div>
   );
 }
