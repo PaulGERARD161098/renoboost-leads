@@ -72,10 +72,12 @@ export async function POST(req: NextRequest) {
 
   const { data: ctx } = await supabase
     .from("app_context")
-    .select("calendly_url")
+    .select("calendly_url, telephone")
     .eq("id", "main")
     .maybeSingle();
-  const calendlyUrl = (ctx as { calendly_url: string | null } | null)?.calendly_url ?? null;
+  const appCtx = ctx as { calendly_url: string | null; telephone: string | null } | null;
+  const calendlyUrl = appCtx?.calendly_url ?? null;
+  const telephone = appCtx?.telephone ?? null;
 
   let done = 0;
   let failed = 0;
@@ -101,6 +103,7 @@ export async function POST(req: NextRequest) {
       offre,
       calendlyUrl,
       client,
+      telephone,
     );
     if (!draft.ok) {
       failed++;

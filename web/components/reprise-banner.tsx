@@ -35,6 +35,7 @@ export function RepriseBanner({
 
   const [objectif, setObjectif] = useState(context.objectif_final ?? "");
   const [client, setClient] = useState(context.client_actif ?? "");
+  const [telephone, setTelephone] = useState(context.telephone ?? "");
   const [resume, setResume] = useState(context.resume_session ?? "");
   const [deadlines, setDeadlines] = useState<Deadline[]>(context.deadlines ?? []);
 
@@ -48,6 +49,7 @@ export function RepriseBanner({
         client_actif: client,
         resume_session: resume,
         deadlines,
+        telephone,
       });
       setEditing(false);
       router.refresh();
@@ -180,6 +182,17 @@ export function RepriseBanner({
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
                 placeholder="Rossini Energy"
+                className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
+                📞 Téléphone (signature des emails)
+              </label>
+              <input
+                value={telephone}
+                onChange={(e) => setTelephone(e.target.value)}
+                placeholder="03 20 00 00 00"
                 className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
               />
             </div>

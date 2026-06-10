@@ -2,6 +2,57 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/) — versionning [SemVer](https://semver.org/).
 
+## [1.9.0] — Draine les retours d'Henry : mails fidèles à l'analyse + vue élargie + téléphone
+
+### Fixed
+
+- **Cohérence mail ↔ analyse v2** (`web/lib/outreach.ts`) : retour terrain — un
+  mail vantait les ombrières d'un site noté 0/10 en ombrières. Le prompt interdit
+  désormais **explicitement** les axes faibles (<4/10) nommés un à un, et fait
+  primer les potentiels du site sur l'« angle d'accroche détecté » (L4) en cas de
+  contradiction.
+- **Vue satellite élargie pour les grands sites** (`web/lib/satellite.ts` +
+  `worker/satellite.py`, miroir) : si la vue standard (~260 m) ne montre ni
+  toiture ni parking — géocodage souvent posé sur l'entrée d'une usine — une
+  2ᵉ passe à ~640 m est tentée et retenue si elle révèle le site (1 appel Vision
+  supplémentaire uniquement dans ce cas).
+
+### Added
+
+- **Angle du brouillon affiché** : `/api/lead/outreach-draft` renvoie l'angle
+  retenu ; la fiche lead affiche « piloté par l'analyse du site — angle : X
+  (n/10) » ou alerte « sans analyse du site » avec l'action de déblocage
+  (lancer l'analyse satellite).
+- **Téléphone dans les emails** (migration `0037`) : `app_context.telephone`,
+  éditable dans le bandeau Reprise du tableau de bord, ajouté sous la signature
+  des brouillons d'approche, de relance et de réponse.
+- Tests : +3 pytest (vue élargie worker) ; +9 vitest (`web/lib/outreach.test.ts`).
+
+### Notes retours (sans code)
+
+- « Client trop gros pour Rossini » : couvert depuis #127 (tranche d'effectif
+  PME 10-250 par défaut au lancement d'une recherche) ; pour un lead existant,
+  l'action reste le bouton « Écarter » de la fiche.
+
+## [1.8.0] — Décompte du coût par API (#132) — *rattrapage de journal*
+
+- Ventilation du coût d'un run par poste (Google Places / Pappers / Dropcontact /
+  Claude) : `runs.cout_detail` (migration `0036`), badge dépliable sur le rapport
+  de fin, la page recherche et le tableau de bord ; estimation avant lancement
+  détaillée par poste. *(Entrée ajoutée a posteriori : la PR avait bumpé la
+  version sans entrée de journal.)*
+
+## [1.7.x] — Interconnexions agent-first (#135→#140) — *rattrapage de journal*
+
+Livrées sans bump de version ni entrée de journal — consignées ici :
+
+- #135 Intentions ⟶ Veille : la Cible remonte l'intention réelle.
+- #136 Bornes : croisement radar sous-équipement × potentiel pipeline.
+- #137 Intentions ⟶ Recherche : intention ciblée surfacée sur le formulaire.
+- #138 Veille ⟶ Bornes : lancer une veille VE depuis une opportunité du radar.
+- #139 Reply ⟶ action : action recommandée par catégorie + RDV pris pour les chauds.
+- #140 Reprise au login : deadlines de la couche contexte affichées.
+
 ## [1.7.0] — Cible par intention d'achat
 
 ### Added — CRM

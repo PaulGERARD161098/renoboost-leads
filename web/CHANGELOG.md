@@ -7,7 +7,16 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
-| **1.6.0** | — | Décompte du coût **par API** (Google Places · Pappers · Dropcontact · Claude). La donnée par étage du moteur (`RunStats`) est ventilée par le worker dans `runs.cout_detail` (migration `0036`) puis affichée — *progressive disclosure* — sur le **rapport de fin**, la **page recherche** et le **tableau de bord** (cumul tous runs). L'**estimation** avant lancement est aussi détaillée par poste. Décompte précis des crédits pour piloter le budget |
+| **1.9.0** | — | **Draine les retours d'Henry** : le prompt des mails interdit explicitement les axes faibles (<4/10) et fait primer l'analyse du site sur l'angle L4 (fini le mail « ombrières » sur un site 0/10) · angle du brouillon affiché sur la fiche (ou alerte « sans analyse ») · **vue satellite élargie** (~640 m) en 2ᵉ passe pour les grands sites invisibles à 260 m (web + worker) · **téléphone** sous la signature des emails (`app_context.telephone`, migration `0037`, éditable au bandeau Reprise) |
+| **1.8.0** | #132 | Décompte du coût **par API** (Google Places · Pappers · Dropcontact · Claude). La donnée par étage du moteur (`RunStats`) est ventilée par le worker dans `runs.cout_detail` (migration `0036`) puis affichée — *progressive disclosure* — sur le **rapport de fin**, la **page recherche** et le **tableau de bord** (cumul tous runs). L'**estimation** avant lancement est aussi détaillée par poste. *(Ligne corrigée : étiquetée 1.6.0 par erreur à la livraison.)* |
+| — | #140 | Reprise au login : deadlines de la couche contexte affichées *(livrée sans bump)* |
+| — | #139 | Reply ⟶ action : action recommandée par catégorie + RDV pris pour les chauds *(livrée sans bump)* |
+| — | #138 | Veille ⟶ Bornes : lancer une veille VE depuis une opportunité du radar *(livrée sans bump)* |
+| — | #137 | Intentions ⟶ Recherche : intention ciblée surfacée sur le formulaire *(livrée sans bump)* |
+| — | #136 | Bornes : croisement radar sous-équipement × potentiel pipeline *(livrée sans bump)* |
+| — | #135 | Intentions ⟶ Veille : la Cible remonte l'intention réelle *(livrée sans bump)* |
+| **1.7.0** | #134 | Cible par intention d'achat : presets flotte VE / conso élec / fiscal compilés en filtres + signaux, mémorisés dans `verticales.config.intentions` |
+| **1.6.0** | #133 | Ciblage Rossini : découverte **SIRENE-first** opt-in (`decouverte_sirene_first`) + témoin hors-filtre dans `RunStats` |
 | **1.5.2** | #131 | Nettoyage sécurité : vitest 2 → 4 (élimine la vuln critique + toute la chaîne esbuild/vite, dev-only). Audit 8 → 3 vulnérabilités. Les 3 restantes (next/postcss) préexistent et leur « fix » downgrade Next — laissées en l'état |
 | **1.5.1** | #130 | Solidification : infra de test JS (vitest) + 32 tests unitaires sur les helpers purs (scoring 3 potentiels, garde-fous de ciblage, signaux VE) · nouveau job CI `web` (typecheck + vitest) — l'app Next est désormais vérifiée en CI |
 | **1.5.0** | #129 | Interconnexion veille ↔ lead ↔ bornes : un signal VE lié rehausse le potentiel bornes à l'analyse (A) · bloc « Signaux de veille liés » sur la fiche lead (B) · lien croisé /solaire → radar Bornes VE (C) |

@@ -116,6 +116,7 @@ export default async function TableauDeBordPage() {
     resume_session: null,
     resume_genere_le: null,
     calendly_url: null,
+    telephone: null,
     updated_by: null,
     updated_at: new Date().toISOString(),
   };

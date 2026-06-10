@@ -16,6 +16,10 @@ import { estSignalVE, signauxDuLead } from "@/lib/veille-signaux";
 const MODEL = "claude-haiku-4-5";
 const R = 6378137; // rayon terrestre (Web Mercator)
 const DEMI_COTE_M = 130; // demi-côté de la vue (~260 m de large)
+// Vue de repli pour les grands sites (usines, plateformes) : si rien n'est
+// détecté à 260 m — géocodage souvent posé sur l'entrée, toits/parkings hors
+// cadre — on retente une fois avec ~640 m de large.
+const DEMI_COTE_LARGE_M = 320;
 
 function toMercator(lon: number, lat: number): [number, number] {
   const x = (R * (lon * Math.PI)) / 180;
@@ -23,9 +27,9 @@ function toMercator(lon: number, lat: number): [number, number] {
   return [x, y];
 }
 
-export function ignUrl(lat: number, lon: number): string {
+export function ignUrl(lat: number, lon: number, demiCoteM: number = DEMI_COTE_M): string {
   const [x, y] = toMercator(lon, lat);
-  const bbox = [x - DEMI_COTE_M, y - DEMI_COTE_M, x + DEMI_COTE_M, y + DEMI_COTE_M].join(",");
+  const bbox = [x - demiCoteM, y - demiCoteM, x + demiCoteM, y + demiCoteM].join(",");
   const params = new URLSearchParams({
     SERVICE: "WMS",
     VERSION: "1.3.0",
@@ -70,6 +74,90 @@ type AnalyseError = { error: string; action: string; retry: boolean };
 type AnalyseResult =
   | AnalyseError
   | { ok: true; result: Record<string, unknown> };
+
+// Vrai si la vue n'a révélé ni toiture ni parking — déclenche la 2ᵉ passe élargie.
+function siteInvisible(obs: Record<string, unknown>): boolean {
+  const toit = (obs.toiture ?? {}) as { presente?: boolean };
+  const park = (obs.parking ?? {}) as { present?: boolean };
+  return !toit.presente && !park.present;
+}
+
+// Télécharge l'orthophoto puis fait observer Claude Vision. Une vue = un appel.
+async function observerVue(
+  apiKey: string,
+  imageUrl: string,
+): Promise<AnalyseError | { observations: Record<string, unknown> }> {
+  let b64: string;
+  try {
+    const img = await fetch(imageUrl);
+    if (!img.ok) throw new Error(`IGN ${img.status}`);
+    const buf = Buffer.from(await img.arrayBuffer());
+    if (buf.length < 1000) throw new Error("image vide");
+    b64 = buf.toString("base64");
+  } catch (e) {
+    console.error("IGN fetch", e);
+    return {
+      error: "Image aérienne IGN indisponible sur ce point.",
+      action: "Souvent temporaire : réessayer dans un instant.",
+      retry: true,
+    };
+  }
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 700,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: { type: "base64", media_type: "image/jpeg", data: b64 },
+              },
+              { type: "text", text: PROMPT },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("Anthropic vision", res.status, await res.text());
+      return {
+        error: "Service d'analyse IA momentanément indisponible.",
+        action: "Réessayer dans un instant.",
+        retry: true,
+      };
+    }
+    const data = await res.json();
+    const text = (data.content ?? [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("\n");
+    const parsed = parseJson(text);
+    if (!parsed)
+      return {
+        error: "Réponse de l'IA illisible.",
+        action: "Réessayer.",
+        retry: true,
+      };
+    return { observations: parsed };
+  } catch (e) {
+    console.error("vision error", e);
+    return {
+      error: "Erreur inattendue pendant l'analyse.",
+      action: "Réessayer.",
+      retry: true,
+    };
+  }
+}
 
 export async function analyseSatellite(
   supabase: SupabaseClient,
@@ -126,72 +214,24 @@ export async function analyseSatellite(
     await supabase.from("leads").update({ latitude: lat, longitude: lon }).eq("id", leadId);
   }
 
-  const imageUrl = ignUrl(lat, lon);
+  // 2+3) Image IGN → Claude Vision (vue standard, puis vue élargie si le site
+  // semble invisible — retour terrain : grands sites notés 0 partout parce que
+  // le cadrage 260 m ne couvrait pas les bâtiments).
+  let imageUrl = ignUrl(lat, lon);
+  const premiere = await observerVue(apiKey, imageUrl);
+  if ("error" in premiere) return premiere;
+  let parsed = premiere.observations;
 
-  // 2) Image IGN → base64.
-  let b64: string;
-  try {
-    const img = await fetch(imageUrl);
-    if (!img.ok) throw new Error(`IGN ${img.status}`);
-    const buf = Buffer.from(await img.arrayBuffer());
-    if (buf.length < 1000) throw new Error("image vide");
-    b64 = buf.toString("base64");
-  } catch (e) {
-    console.error("IGN fetch", e);
-    return {
-      error: "Image aérienne IGN indisponible sur ce point.",
-      action: "Souvent temporaire : réessayer dans un instant.",
-      retry: true,
-    };
+  if (siteInvisible(parsed)) {
+    const urlLarge = ignUrl(lat, lon, DEMI_COTE_LARGE_M);
+    const seconde = await observerVue(apiKey, urlLarge);
+    if (!("error" in seconde) && !siteInvisible(seconde.observations)) {
+      parsed = seconde.observations;
+      imageUrl = urlLarge;
+    }
   }
 
-  // 3) Claude Vision.
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 700,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: "image/jpeg", data: b64 },
-              },
-              { type: "text", text: PROMPT },
-            ],
-          },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      console.error("Anthropic vision", res.status, await res.text());
-      return {
-        error: "Service d'analyse IA momentanément indisponible.",
-        action: "Réessayer dans un instant.",
-        retry: true,
-      };
-    }
-    const data = await res.json();
-    const text = (data.content ?? [])
-      .filter((b: { type: string }) => b.type === "text")
-      .map((b: { text: string }) => b.text)
-      .join("\n");
-    const parsed = parseJson(text);
-    if (!parsed)
-      return {
-        error: "Réponse de l'IA illisible.",
-        action: "Réessayer.",
-        retry: true,
-      };
-
     // Observations Vision → 3 potentiels /10 (format v2, comme le worker).
     const toit = (parsed.toiture ?? {}) as {
       presente?: boolean;

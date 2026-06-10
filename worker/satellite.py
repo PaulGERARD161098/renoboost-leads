@@ -22,6 +22,10 @@ log = logging.getLogger("renoboost.worker.satellite")
 _WMS = "https://data.geopf.fr/wms-r/wms"
 _R = 6378137.0
 _DEMI_COTE_M = 130.0
+# Vue de repli pour les grands sites (usines, plateformes) : si rien n'est
+# détecté à 260 m — géocodage souvent posé sur l'entrée, toits/parkings hors
+# cadre — on retente une fois avec ~640 m de large.
+_DEMI_COTE_LARGE_M = 320.0
 _MODEL = os.environ.get("WORKER_SATELLITE_MODEL", "claude-haiku-4-5")
 
 _PROMPT = (
@@ -42,10 +46,10 @@ _PROMPT = (
 )
 
 
-def _ign_url(lat: float, lon: float) -> str:
+def _ign_url(lat: float, lon: float, demi_cote_m: float = _DEMI_COTE_M) -> str:
     x = _R * math.radians(lon)
     y = _R * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
-    bbox = f"{x - _DEMI_COTE_M},{y - _DEMI_COTE_M},{x + _DEMI_COTE_M},{y + _DEMI_COTE_M}"
+    bbox = f"{x - demi_cote_m},{y - demi_cote_m},{x + demi_cote_m},{y + demi_cote_m}"
     params = {
         "SERVICE": "WMS",
         "VERSION": "1.3.0",
@@ -75,11 +79,22 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         return None
 
 
+def _site_invisible(vision: dict[str, Any]) -> bool:
+    """Vrai si la vue n'a révélé ni toiture ni parking → 2ᵉ passe élargie."""
+    toiture = vision.get("toiture") or {}
+    parking = vision.get("parking") or {}
+    return not toiture.get("presente") and not parking.get("present")
+
+
 def _vision_observations(
-    lat: float, lon: float, api_key: str, timeout: float
+    lat: float,
+    lon: float,
+    api_key: str,
+    timeout: float,
+    demi_cote_m: float = _DEMI_COTE_M,
 ) -> tuple[dict[str, Any], str] | None:
     """Appelle Claude Vision sur l'orthophoto → (observations, image_url)."""
-    url = _ign_url(lat, lon)
+    url = _ign_url(lat, lon, demi_cote_m)
     img = requests.get(url, timeout=timeout)
     if img.status_code != 200 or len(img.content) < 1000:
         return None
@@ -149,6 +164,14 @@ def analyser_potentiel(
         if obs is None:
             return None
         vision, url = obs
+        # Grands sites : si la vue standard ne montre ni toit ni parking, on
+        # retente une fois en vue élargie et on la garde si elle révèle le site.
+        if _site_invisible(vision):
+            obs_large = _vision_observations(
+                lat, lon, api_key, timeout, demi_cote_m=_DEMI_COTE_LARGE_M
+            )
+            if obs_large is not None and not _site_invisible(obs_large[0]):
+                vision, url = obs_large
         # Surface toiture : Google Solar API si dispo (précis), sinon emprise IGN.
         solar = surfaces_solar_api(lat, lon)
         if solar is not None:

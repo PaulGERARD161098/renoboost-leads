@@ -36,7 +36,17 @@ export function LeadEditor({ lead }: { lead: Lead }) {
       } else {
         if (data.sujet) setSujet(data.sujet);
         if (data.corps) setCorps(data.corps);
-        setMsg("✨ Brouillon généré — relis et enregistre ou envoie.");
+        // Transparence : sur quoi le mail s'appuie-t-il ? (retours terrain : un
+        // mail contredisait l'analyse — l'utilisateur doit voir l'angle retenu).
+        const angle = data.angle as
+          | { pilote: true; label: string; score: number }
+          | { pilote: false }
+          | undefined;
+        setMsg(
+          angle?.pilote
+            ? `✨ Brouillon piloté par l'analyse du site — angle : ${angle.label} (${angle.score}/10). Relis et enregistre ou envoie.`
+            : "✨ Brouillon généré — ⚠️ sans analyse du site (lance l'analyse satellite de la fiche pour un mail piloté par le terrain). Relis et enregistre ou envoie.",
+        );
       }
     } catch {
       setMsg("❌ Erreur réseau.");

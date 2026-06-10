@@ -141,6 +141,20 @@ function potentielsV2(
   return { liste, meilleur };
 }
 
+// Angle retenu pour piloter le mail — renvoyé à l'UI pour que l'utilisateur
+// sache si le brouillon s'appuie sur l'analyse du site (et sur quel axe) ou non.
+export type AngleOutreach =
+  | { pilote: true; label: string; score: number }
+  | { pilote: false };
+
+export function angleOutreach(
+  vision: Record<string, unknown> | null | undefined,
+): AngleOutreach {
+  const p = potentielsV2(vision);
+  if (!p) return { pilote: false };
+  return { pilote: true, label: p.meilleur.label, score: p.meilleur.score };
+}
+
 // Construit le bloc « potentiels détectés » + la consigne d'angle pour le prompt.
 function blocsPotentiels(
   vision: Record<string, unknown> | null | undefined,
@@ -154,10 +168,22 @@ function blocsPotentiels(
     `\n\nPotentiels du site détectés par analyse de vue aérienne (ESTIMATION — ` +
     `ordres de grandeur, jamais des mesures certifiées) :\n${lignes}\n` +
     `Potentiel à mettre en avant en priorité : ${p.meilleur.label} (${p.meilleur.score}/10).`;
+  // Retour terrain (Henry) : un mail vantait les ombrières d'un site noté 0/10 en
+  // ombrières. On verrouille : interdiction explicite des axes faibles, et les
+  // potentiels (analyse la plus récente du site) priment sur l'angle d'accroche.
+  const faibles = p.liste.filter((x) => x.score < 4 && x.cle !== p.meilleur.cle);
+  const interdit = faibles.length
+    ? ` INTERDIT de mettre en avant : ${faibles
+        .map((x) => `${x.label} (${x.score}/10)`)
+        .join(", ")} — n'en parle pas, même si l'offre ou l'angle d'accroche les évoque.`
+    : "";
   const consigne =
     ` Construis l'accroche autour du potentiel le plus fort ci-dessus et relie-le ` +
     `concrètement à l'offre. N'évoque les autres potentiels que s'ils sont eux aussi ` +
-    `élevés (≥6/10) ET cohérents avec l'offre ; ignore les potentiels à faible score. ` +
+    `élevés (≥6/10) ET cohérents avec l'offre ; ignore les potentiels à faible score.` +
+    interdit +
+    ` Si l'« angle d'accroche détecté » contredit ces potentiels, ce sont les ` +
+    `potentiels ci-dessus (analyse la plus récente du site) qui priment. ` +
     `Pour le potentiel « bornes de recharge », appuie-toi sur la dynamique ` +
     `d'électrification de la zone (présence/absence de bornes alentour) telle qu'indiquée. ` +
     `Formule toute surface ou quantité en ordre de grandeur prudent (« de l'ordre de », ` +
@@ -171,11 +197,14 @@ export function buildOutreachPrompt(
   offre: string | null,
   calendlyUrl: string | null,
   client: string | null = null,
+  telephone: string | null = null,
 ): string {
   // Quand la campagne est affectée à un client, l'email est rédigé et signé en
   // son nom (RénoBoost reste l'outil, le client est l'émetteur visible).
   const marque = client?.trim() || "RénoBoost";
-  const signature = `Signe « L'équipe ${marque} ».`;
+  const signature = telephone?.trim()
+    ? `Signe « L'équipe ${marque} » et ajoute ce numéro de téléphone tel quel sous la signature : ${telephone.trim()}.`
+    : `Signe « L'équipe ${marque} ».`;
   const fiche = [
     `Entreprise : ${lead.entreprise}`,
     lead.secteur ? `Secteur : ${lead.secteur}` : null,
@@ -261,6 +290,7 @@ export async function generateOutreachDraft(
   offre: string | null,
   calendlyUrl: string | null,
   client: string | null = null,
+  telephone: string | null = null,
 ): Promise<DraftResult> {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -274,7 +304,10 @@ export async function generateOutreachDraft(
         model: OUTREACH_MODEL,
         max_tokens: MAX_TOKENS,
         messages: [
-          { role: "user", content: buildOutreachPrompt(mode, lead, offre, calendlyUrl, client) },
+          {
+            role: "user",
+            content: buildOutreachPrompt(mode, lead, offre, calendlyUrl, client, telephone),
+          },
         ],
       }),
     });

@@ -26,6 +26,7 @@ function buildPrompt(
   thread: LeadMessage[],
   calendlyUrl: string | null,
   client: string | null,
+  telephone: string | null,
 ): string {
   // Si la campagne du lead est affectée à un client, la réponse est signée en
   // son nom (cohérence avec l'email d'approche émis au nom du client).
@@ -63,7 +64,11 @@ Tâche :
 2. RÉDIGE un brouillon de réponse en français, professionnel, chaleureux et CONCIS
    (4-8 lignes), adapté à la catégorie : oriente vers la prochaine étape concrète si
    intérêt (proposer un échange court), réponds à la question si info, reste courtois
-   et bref si refus. Signe « L'équipe ${marque} ». N'invente aucun chiffre ni engagement.${consigneRdv}
+   et bref si refus. Signe « L'équipe ${marque} »${
+    telephone?.trim()
+      ? ` et ajoute ce numéro de téléphone tel quel sous la signature : ${telephone.trim()}`
+      : ""
+  }. N'invente aucun chiffre ni engagement.${consigneRdv}
 
 Réponds UNIQUEMENT par un objet JSON valide, sans texte autour :
 {"categorie":"<une des clés ci-dessus>","confiance":<0-100>,"sujet":"<objet de la réponse>","brouillon":"<le texte de la réponse>"}`;
@@ -150,13 +155,16 @@ export async function POST(req: NextRequest) {
     ? campaignRaw[0]?.client_nom ?? null
     : campaignRaw?.client_nom ?? null;
 
-  // Lien de réservation Calendly (oriente les « intéressés » vers la prise de RDV).
+  // Lien de réservation Calendly (oriente les « intéressés » vers la prise de RDV)
+  // + téléphone de signature.
   const { data: ctx } = await supabase
     .from("app_context")
-    .select("calendly_url")
+    .select("calendly_url, telephone")
     .eq("id", "main")
     .maybeSingle();
-  const calendlyUrl = (ctx as { calendly_url: string | null } | null)?.calendly_url ?? null;
+  const appCtx = ctx as { calendly_url: string | null; telephone: string | null } | null;
+  const calendlyUrl = appCtx?.calendly_url ?? null;
+  const telephone = appCtx?.telephone ?? null;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -179,6 +187,7 @@ export async function POST(req: NextRequest) {
               thread,
               calendlyUrl,
               client,
+              telephone,
             ),
           },
         ],
