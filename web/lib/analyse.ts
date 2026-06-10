@@ -6,6 +6,17 @@
 // Format de sortie volontairement structuré pour pouvoir être rendu sans
 // retraitement côté UI (et plus tard pour alimenter veille → lead).
 
+import {
+  assembler,
+  niveauPourScore,
+  scorerBornes,
+  scorerOmbrieres,
+  scorerSolaire,
+  surfaceExploitableDepuis,
+  type AnalysePotentiels,
+  type ComptageBornes,
+} from "@/lib/potentiel";
+
 export const ANALYSE_MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 1500;
 
@@ -73,6 +84,70 @@ Contraintes :
 - Liste entreprises VIDE si tu ne lis rien d'identifiable sur l'image (ne pas inventer).
 - Estimations en m² toujours en ordre de grandeur (arrondi au 100 m² près).
 - Si l'image n'est pas une vue aérienne (intérieur, photo de produit, etc.) : remplis resume avec ce constat et laisse les autres champs vides/null.`;
+}
+
+// --- Analyse d'image → potentiels v2 ---------------------------------------
+// Convertit le `terrain` lu sur l'image en AnalysePotentiels (même format que
+// l'analyse satellite), via les mêmes scorers. Le lead créé depuis /analyse
+// arrive ainsi pré-scoré et le pipeline mail (outreach) reste cohérent.
+
+/** Vocabulaire du prompt vision ("plate|inclinée|métallique|tuile|inconnu") → clés des scorers. */
+function normaliserTypeToiture(brut: string | null | undefined): string {
+  const t = (brut ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (t.startsWith("plate") || t.startsWith("plat")) return "plate";
+  if (t.startsWith("incline")) return "inclinee";
+  return "inconnue";
+}
+
+export function potentielsDepuisAnalyse(
+  terrain: AnalyseResult["terrain"] | undefined,
+  bornes: ComptageBornes,
+): AnalysePotentiels {
+  const t = terrain ?? {};
+
+  const typeToiture = normaliserTypeToiture(t.toiture?.type);
+  const surfaceToiture = t.toiture?.surface_m2_estimee ?? null;
+  const solaire = scorerSolaire(
+    surfaceExploitableDepuis(surfaceToiture, typeToiture, null),
+    surfaceToiture,
+    typeToiture === "inconnue" ? (t.toiture?.type ?? null) : typeToiture,
+  );
+
+  const parkingPresent =
+    (t.parking?.surface_m2_estimee ?? 0) > 0 || (t.parking?.nb_places_estimee ?? 0) > 0;
+  let ombrieres = scorerOmbrieres(
+    parkingPresent,
+    t.parking?.nb_places_estimee ?? null,
+    t.parking?.surface_m2_estimee ?? null,
+    null,
+    null,
+  );
+  if (t.parking?.ombrieres_existantes === true && ombrieres.score > 1) {
+    ombrieres = {
+      ...ombrieres,
+      score: 1,
+      niveau: niveauPourScore(1),
+      justification: `${ombrieres.justification} Ombrières déjà présentes — opportunité résiduelle.`,
+    };
+  }
+
+  const surSiteVision =
+    t.bornes_ve?.presentes === true ? Math.max(1, t.bornes_ve?.nb_estime ?? 1) : 0;
+  const potBornes = scorerBornes(
+    Math.max(bornes.sur_site, surSiteVision),
+    bornes.voisinage_1km,
+    bornes.rayon_10km,
+    false,
+    bornes.types,
+  );
+
+  const pots = assembler(solaire, ombrieres, potBornes, "");
+  delete pots.image_url;
+  pots.synthese += " Dérivé d'une analyse d'image Magellan — lance l'analyse satellite pour affiner.";
+  return pots;
 }
 
 function parseJson(text: string): Record<string, unknown> | null {
