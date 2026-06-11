@@ -32,7 +32,7 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
   const [offre, setOffre] = useState((cfg.offre as string) ?? "");
   const [secteurs, setSecteurs] = useState(asStringArray(cfg.secteurs_naf).join(", "));
   const [effectifMin, setEffectifMin] = useState(asNumber(cfg.effectif_min));
-  const [signaux, setSignaux] = useState(asStringArray(cfg.signaux).join(", "));
+  const [signaux, setSignaux] = useState(asStringArray(cfg.signaux).join("\n"));
   const [intentions, setIntentions] = useState<IntentionId[]>(
     asStringArray(cfg.intentions).filter((id): id is IntentionId =>
       INTENTIONS.some((i) => i.id === id),
@@ -49,6 +49,15 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
       .filter(Boolean);
   }
 
+  // Les signaux sont des phrases libres (qui peuvent contenir des virgules) :
+  // un signal par ligne, jamais de découpage sur la virgule.
+  function parseSignaux(raw: string): string[] {
+    return raw
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
   // Cocher une intention compile son proxy (NAF + signaux + effectif suggéré) dans
   // les champs, de façon additive — l'utilisateur garde la main ensuite. Décocher
   // retire seulement le marqueur : on ne dévide pas les champs déjà saisis.
@@ -59,11 +68,11 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
     }
     const next = appliquerIntentions([id], {
       secteursNaf: parseList(secteurs),
-      signaux: parseList(signaux),
+      signaux: parseSignaux(signaux),
       effectifMin: effectifMin ? Number(effectifMin) : null,
     });
     setSecteurs(next.secteursNaf.join(", "));
-    setSignaux(next.signaux.join(", "));
+    setSignaux(next.signaux.join("\n"));
     if (next.effectifMin != null) setEffectifMin(String(next.effectifMin));
     setIntentions([...intentions, id]);
   }
@@ -77,7 +86,7 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
       offre: offre.trim(),
       secteursNaf: parseList(secteurs),
       effectifMin: effectifMin ? Number(effectifMin) : null,
-      signaux: parseList(signaux),
+      signaux: parseSignaux(signaux),
       intentions,
       active,
     };
@@ -198,14 +207,15 @@ export function VerticaleForm({ verticale }: { verticale?: Verticale }) {
         <label className="mb-1 block text-sm font-medium">
           Signaux recherchés
         </label>
-        <input
+        <textarea
           value={signaux}
           onChange={(e) => setSignaux(e.target.value)}
-          placeholder="grande toiture, entrepôt, site logistique"
+          rows={5}
+          placeholder={"Grande toiture exploitable\nParking extérieur > 1500 m² (loi APER)\nPropriétaire du site"}
           className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
         />
         <p className="mt-1 text-xs text-[var(--muted)]">
-          Mots-clés qui qualifient un bon prospect, séparés par des virgules.
+          Un signal par ligne — phrase libre, les virgules sont permises.
         </p>
       </div>
 
