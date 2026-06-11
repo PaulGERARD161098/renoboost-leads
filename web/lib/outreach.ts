@@ -21,6 +21,8 @@ export type LeadFiche = {
   secteur: string | null;
   effectif: string | null;
   contact_nom: string | null;
+  /** Rôle du contact principal (dg | daf | energie | autre) — adapte le ton du mail. */
+  contact_role?: string | null;
   score_raison: string | null;
   // Analyse `vision_satellite` brute (3 potentiels /10 en v2). L'outreach en
   // dérive l'angle terrain ; null/absent → mail strictement comme avant.
@@ -205,6 +207,24 @@ export function angleOutreach(
   return { pilote: true, cle: p.meilleur.cle, label: p.meilleur.label, score: p.meilleur.score };
 }
 
+/**
+ * Consigne de ton selon le rôle du destinataire : au DAF on parle ROI et
+ * fiscalité, au DG stratégie/image/obligations, au responsable énergie ou
+ * maintenance exploitation et technique. Null → pas de consigne.
+ */
+export function consigneRole(role: string | null | undefined): string | null {
+  switch ((role ?? "").trim().toLowerCase()) {
+    case "daf":
+      return "Le destinataire est DAF/finance : mets en avant le retour sur investissement, les économies d'énergie chiffrables prudemment et les dispositifs d'aide ou d'amortissement — pas de lyrisme technique.";
+    case "dg":
+      return "Le destinataire est dirigeant : angle stratégique et court — image de l'entreprise, conformité aux obligations (loi APER le cas échéant), valeur patrimoniale du site. Va droit au but.";
+    case "energie":
+      return "Le destinataire est responsable énergie/maintenance/technique : sois concret sur l'exploitation (installation, supervision, entretien, impact sur le site) sans jargon commercial.";
+    default:
+      return null;
+  }
+}
+
 // Construit le bloc « potentiels détectés » + la consigne d'angle pour le prompt.
 function blocsPotentiels(
   vision: Record<string, unknown> | null | undefined,
@@ -298,6 +318,10 @@ Cite-la en UNE phrase comme preuve locale (« nous avons équipé… ») si elle
     ? ` Termine en proposant un échange court et insère ce lien de réservation tel quel : ${calendlyUrl}.`
     : " Termine en proposant un échange court de 15 minutes.";
 
+  // Ton adapté au rôle du destinataire (DAF → ROI, DG → stratégie, énergie → technique).
+  const role = consigneRole(lead.contact_role);
+  const consigneTon = role ? ` ${role}` : "";
+
   if (mode === "relance") {
     return `Tu es l'assistant commercial de ${marque}${
       offre ? ` (offre : ${offre})` : ""
@@ -305,7 +329,7 @@ Cite-la en UNE phrase comme preuve locale (« nous avons équipé… ») si elle
 
 ${fiche}${blocTerrain}${blocReference}
 
-Contraintes : français, ton professionnel et chaleureux, TRÈS concis (3-5 lignes), rappelle l'objet en une phrase, apporte une raison de répondre, sans culpabiliser.${consigneTerrain}${consigneRdv} ${signature} N'invente aucun chiffre.
+Contraintes : français, ton professionnel et chaleureux, TRÈS concis (3-5 lignes), rappelle l'objet en une phrase, apporte une raison de répondre, sans culpabiliser.${consigneTerrain}${consigneTon}${consigneRdv} ${signature} N'invente aucun chiffre.
 
 Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le texte>"}`;
   }
@@ -316,7 +340,7 @@ Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le t
 
 ${fiche}${blocTerrain}${blocReference}
 
-Contraintes : français, ton professionnel et chaleureux, concis (6-10 lignes), personnalise avec le secteur/angle d'accroche, va à l'essentiel sur la valeur concrète.${consigneTerrain}${consigneRdv} ${signature} N'invente aucun chiffre ni engagement.
+Contraintes : français, ton professionnel et chaleureux, concis (6-10 lignes), personnalise avec le secteur/angle d'accroche, va à l'essentiel sur la valeur concrète.${consigneTerrain}${consigneTon}${consigneRdv} ${signature} N'invente aucun chiffre ni engagement.
 
 Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le texte>"}`;
 }

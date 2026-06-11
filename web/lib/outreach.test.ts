@@ -3,6 +3,7 @@ import {
   angleOutreach,
   buildOutreachPrompt,
   choisirReference,
+  consigneRole,
   solaireFromVision,
   type ReferenceChantier,
 } from "./outreach";
@@ -125,5 +126,37 @@ describe("choisirReference — preuve sociale géolocalisée", () => {
 
   it("liste vide → null", () => {
     expect(choisirReference([], lead, "bornes")).toBeNull();
+  });
+});
+
+describe("consigneRole — ton adapté au destinataire", () => {
+  it("DAF → ROI, DG → stratégie, énergie → technique", () => {
+    expect(consigneRole("daf")).toContain("retour sur investissement");
+    expect(consigneRole("DG")).toContain("stratégique");
+    expect(consigneRole("energie")).toContain("exploitation");
+  });
+
+  it("rôle inconnu ou absent → pas de consigne", () => {
+    expect(consigneRole("autre")).toBeNull();
+    expect(consigneRole(null)).toBeNull();
+  });
+
+  it("la consigne entre dans le prompt quand le rôle est connu", () => {
+    const prompt = buildOutreachPrompt(
+      "approche",
+      {
+        entreprise: "ACME",
+        ville: null,
+        secteur: null,
+        effectif: null,
+        contact_nom: "Jean",
+        contact_role: "daf",
+        score_raison: null,
+        vision: null,
+      },
+      null,
+      null,
+    );
+    expect(prompt).toContain("retour sur investissement");
   });
 });

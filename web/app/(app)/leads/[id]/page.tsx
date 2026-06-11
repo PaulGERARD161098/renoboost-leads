@@ -13,6 +13,7 @@ import { ColdCallPanel } from "@/components/cold-call-panel";
 import { BornesLinks } from "@/components/bornes-links";
 import { SignauxVeLies } from "@/components/signaux-ve-lies";
 import { ContactCard } from "@/components/contact-card";
+import { LeadContacts, type LeadContactRow } from "@/components/lead-contacts";
 import { bornesProximite } from "@/lib/bornes";
 import { signauxDuLead } from "@/lib/veille-signaux";
 import { twilioConfigure } from "@/lib/twilio";
@@ -98,6 +99,14 @@ export default async function LeadPage({
 
   // Signaux de veille rattachés à ce lead (interconnexion veille → lead).
   const signauxVeille = await signauxDuLead(supabase, l.id);
+
+  const { data: contactsData } = await supabase
+    .from("lead_contacts")
+    .select("id, nom, role, email, tel, principal")
+    .eq("lead_id", l.id)
+    .order("principal", { ascending: false })
+    .order("created_at");
+  const contacts = (contactsData as LeadContactRow[] | null) ?? [];
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
@@ -253,6 +262,8 @@ export default async function LeadPage({
               site_web: l.site_web,
             }}
           />
+
+          <LeadContacts leadId={l.id} contacts={contacts} />
 
           <div className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
