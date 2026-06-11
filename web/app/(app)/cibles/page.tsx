@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Verticale } from "@/lib/database.types";
 import { formatDate } from "@/lib/ui";
+import { ReferencesChantiers, type ReferenceRow } from "@/components/references-chantiers";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,12 @@ export default async function CiblesPage() {
     .order("nom");
 
   const verticales = (data as Verticale[] | null) ?? [];
+
+  const { data: refsData } = await supabase
+    .from("references_chantiers")
+    .select("id, nom, ville, lat, axe, description, actif")
+    .order("created_at", { ascending: false });
+  const refs = (refsData as ReferenceRow[] | null) ?? [];
 
   return (
     <div>
@@ -71,6 +78,8 @@ export default async function CiblesPage() {
           ))}
         </div>
       )}
+
+      <ReferencesChantiers refs={refs} />
     </div>
   );
 }

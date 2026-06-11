@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { angleOutreach, buildOutreachPrompt, solaireFromVision } from "./outreach";
+import {
+  angleOutreach,
+  buildOutreachPrompt,
+  choisirReference,
+  solaireFromVision,
+  type ReferenceChantier,
+} from "./outreach";
 
 // Cas réel (retour Henry #45cee641) : site avec bornes 10/10 mais solaire et
 // ombrières à 0/10 — le mail ne doit JAMAIS être piloté par les axes à 0.
@@ -88,5 +94,36 @@ describe("angleOutreach — transparence du pilotage", () => {
 describe("solaireFromVision — rétro-compatibilité", () => {
   it("v2 sans surface ni parking exploitables → null (mail générique)", () => {
     expect(solaireFromVision(visionBornesSeules as Record<string, unknown>)).toBeNull();
+  });
+});
+
+describe("choisirReference — preuve sociale géolocalisée", () => {
+  const refs: ReferenceChantier[] = [
+    { nom: "A", ville: "Lille", lat: 50.63, lng: 3.06, axe: "ombrieres", description: null },
+    { nom: "B", ville: "Douai", lat: 50.37, lng: 3.08, axe: "ombrieres", description: "40 places" },
+    { nom: "C", ville: "Arras", lat: 50.29, lng: 2.78, axe: "bornes", description: null },
+  ];
+  // Prospect à Cuincy (à côté de Douai).
+  const lead = { latitude: 50.37, longitude: 3.05 };
+
+  it("prend la plus proche sur le même axe", () => {
+    const r = choisirReference(refs, lead, "ombrieres");
+    expect(r?.nom).toBe("B");
+    expect(r?.distance_km).toBeLessThan(10);
+  });
+
+  it("retombe sur les autres axes si aucun ne correspond", () => {
+    const r = choisirReference(refs, lead, "solaire");
+    expect(r?.nom).toBe("B"); // plus proche toutes refs confondues
+  });
+
+  it("sans coordonnées du lead : première du bon axe, sans distance", () => {
+    const r = choisirReference(refs, {}, "bornes");
+    expect(r?.nom).toBe("C");
+    expect(r?.distance_km).toBeNull();
+  });
+
+  it("liste vide → null", () => {
+    expect(choisirReference([], lead, "bornes")).toBeNull();
   });
 });

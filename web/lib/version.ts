@@ -2,7 +2,7 @@
 // Convention : on incrémente le MINEUR (1.x.0) à chaque PR livrée — la version
 // affichée progresse donc V1.0 → V1.1 → V1.2 … (cf. web/CHANGELOG.md).
 // Le SHA du build est injecté par Vercel (cf. next.config.ts → NEXT_PUBLIC_BUILD_SHA).
-export const APP_VERSION = "1.12.0";
+export const APP_VERSION = "1.13.0";
 
 const sha = (process.env.NEXT_PUBLIC_BUILD_SHA ?? "").slice(0, 7);
 export const BUILD_SHA: string | null = sha || null;

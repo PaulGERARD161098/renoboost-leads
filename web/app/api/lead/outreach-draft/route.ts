@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { angleOutreach, generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
+import {
+  angleOutreach,
+  choisirReference,
+  generateOutreachDraft,
+  type OutreachMode,
+  type ReferenceChantier,
+} from "@/lib/outreach";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +38,7 @@ export async function POST(req: NextRequest) {
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, verticale:verticales(nom), campaign:campaigns(client_nom)",
+      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, latitude, longitude, verticale:verticales(nom), campaign:campaigns(client_nom)",
     )
     .eq("id", leadId)
     .maybeSingle();
@@ -48,6 +54,8 @@ export async function POST(req: NextRequest) {
     naf: string | null;
     score_raison: string | null;
     vision_satellite: Record<string, unknown> | null;
+    latitude: number | null;
+    longitude: number | null;
     verticale?: { nom?: string } | { nom?: string }[];
     campaign?: { client_nom?: string | null } | { client_nom?: string | null }[];
   };
@@ -67,6 +75,18 @@ export async function POST(req: NextRequest) {
   const calendlyUrl = appCtx?.calendly_url ?? null;
   const telephone = appCtx?.telephone ?? null;
 
+  // Preuve sociale : la référence chantier la plus proche, sur l'axe du mail.
+  const angle = angleOutreach(ld.vision_satellite);
+  const { data: refsData } = await supabase
+    .from("references_chantiers")
+    .select("nom, ville, lat, lng, axe, description")
+    .eq("actif", true);
+  const reference = choisirReference(
+    (refsData as ReferenceChantier[] | null) ?? [],
+    ld,
+    angle.pilote ? angle.cle : null,
+  );
+
   const draft = await generateOutreachDraft(
     apiKey,
     mode,
@@ -83,6 +103,7 @@ export async function POST(req: NextRequest) {
     calendlyUrl,
     client,
     telephone,
+    reference,
   );
   if (!draft.ok) {
     return NextResponse.json({ error: draft.error }, { status: draft.status });
@@ -90,7 +111,6 @@ export async function POST(req: NextRequest) {
   // `angle` : dit à l'UI si le brouillon est piloté par l'analyse du site
   // (et sur quel axe) — transparence demandée par les retours terrain. L'axe
   // est aussi persisté sur le lead (mail_angle) pour les stats par angle.
-  const angle = angleOutreach(ld.vision_satellite);
   await supabase
     .from("leads")
     .update({ mail_angle: angle.pilote ? angle.cle : null })
