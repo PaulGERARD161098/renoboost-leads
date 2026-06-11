@@ -57,6 +57,8 @@ export default async function TableauDeBordPage() {
     ["ouvert", "repondu"].includes(l.statut ?? ""),
   ).length;
   const replied = leads.filter((l) => l.statut === "repondu").length;
+  const gagnes = leads.filter((l) => l.statut === "gagne").length;
+  const perdus = leads.filter((l) => l.statut === "perdu").length;
   const bounced = leads.filter((l) => l.bounced_at).length;
   const topLeads = leads.filter((l) => (l.score ?? 0) >= 75).length;
   const coutTotal = runs.reduce((s, r) => s + Number(r.cout_eur ?? 0), 0);
@@ -153,6 +155,7 @@ export default async function TableauDeBordPage() {
         <Stat label="Top leads (≥75)" value={topLeads} />
         <Stat label="Taux de réponse" value={sent ? `${pct(replied)}%` : "—"} />
         <Stat label="Taux de rebond" value={sent ? `${pct(bounced)}%` : "—"} />
+        <Stat label="Gagnés / Perdus" value={gagnes || perdus ? `${gagnes} 🏆 / ${perdus}` : "—"} />
         <div className="rounded-xl border border-[var(--border)] bg-white p-4">
           <div className="text-2xl font-bold">
             <CoutDetailBadge

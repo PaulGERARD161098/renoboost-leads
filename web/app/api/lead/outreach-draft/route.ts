@@ -88,10 +88,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: draft.error }, { status: draft.status });
   }
   // `angle` : dit à l'UI si le brouillon est piloté par l'analyse du site
-  // (et sur quel axe) — transparence demandée par les retours terrain.
+  // (et sur quel axe) — transparence demandée par les retours terrain. L'axe
+  // est aussi persisté sur le lead (mail_angle) pour les stats par angle.
+  const angle = angleOutreach(ld.vision_satellite);
+  await supabase
+    .from("leads")
+    .update({ mail_angle: angle.pilote ? angle.cle : null })
+    .eq("id", leadId);
   return NextResponse.json({
     sujet: draft.sujet,
     corps: draft.corps,
-    angle: angleOutreach(ld.vision_satellite),
+    angle,
   });
 }

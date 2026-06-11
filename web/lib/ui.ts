@@ -9,6 +9,8 @@ export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
   repondu: "Répondu",
   a_relancer: "À relancer",
   rdv_pris: "RDV pris",
+  gagne: "Gagné 🏆",
+  perdu: "Perdu",
   ecarte: "Écarté",
 };
 
@@ -21,6 +23,8 @@ export const LEAD_STATUS_COLOR: Record<LeadStatus, string> = {
   repondu: "bg-emerald-100 text-emerald-800",
   a_relancer: "bg-orange-100 text-orange-800",
   rdv_pris: "bg-teal-100 text-teal-800",
+  gagne: "bg-emerald-200 text-emerald-900",
+  perdu: "bg-rose-100 text-rose-700",
   ecarte: "bg-slate-200 text-slate-500",
 };
 
@@ -187,8 +191,12 @@ export function nextAction(lead: {
   contact_email: string | null;
 }): string {
   switch (lead.statut) {
+    case "gagne":
+      return "Gagné 🏆 — affaire conclue, plus rien à faire ici.";
+    case "perdu":
+      return "Perdu — la raison saisie nourrit le calibrage du ciblage.";
     case "rdv_pris":
-      return "RDV pris 🎉 — prépare le rendez-vous (besoins, devis, proposition).";
+      return "RDV pris 🎉 — prépare le rendez-vous, puis conclus (gagné/perdu).";
     case "repondu":
       return "A répondu — enchaîne le suivi commercial (RDV, devis).";
     case "ouvert":

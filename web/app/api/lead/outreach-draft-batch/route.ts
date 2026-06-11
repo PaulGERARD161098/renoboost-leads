@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
+import { angleOutreach, generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,9 +109,14 @@ export async function POST(req: NextRequest) {
       failed++;
       continue;
     }
+    const angle = angleOutreach(ld.vision_satellite);
     const { error: upErr } = await supabase
       .from("leads")
-      .update({ mail_sujet: draft.sujet, mail_corps: draft.corps })
+      .update({
+        mail_sujet: draft.sujet,
+        mail_corps: draft.corps,
+        mail_angle: angle.pilote ? angle.cle : null,
+      })
       .eq("id", ld.id);
     if (upErr) {
       failed++;

@@ -73,6 +73,7 @@ describe("angleOutreach — transparence du pilotage", () => {
   it("renvoie l'axe pilote en v2", () => {
     expect(angleOutreach(visionBornesSeules as Record<string, unknown>)).toEqual({
       pilote: true,
+      cle: "bornes",
       label: "🔌 Bornes de recharge VE",
       score: 10,
     });
