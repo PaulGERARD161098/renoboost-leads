@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { angleOutreach, generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
+import {
+  angleOutreach,
+  choisirReference,
+  generateOutreachDraft,
+  type OutreachMode,
+  type ReferenceChantier,
+} from "@/lib/outreach";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +55,7 @@ export async function POST(req: NextRequest) {
   const { data: leadsData } = await supabase
     .from("leads")
     .select(
-      "id, entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, verticale:verticales(nom), campaign:campaigns(client_nom)",
+      "id, entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, latitude, longitude, verticale:verticales(nom), campaign:campaigns(client_nom)",
     )
     .in("id", leadIds);
   type Row = {
@@ -62,6 +68,8 @@ export async function POST(req: NextRequest) {
     naf: string | null;
     score_raison: string | null;
     vision_satellite: Record<string, unknown> | null;
+    latitude: number | null;
+    longitude: number | null;
     verticale?: { nom?: string } | { nom?: string }[];
     campaign?: { client_nom?: string | null } | { client_nom?: string | null }[];
   };
@@ -79,6 +87,13 @@ export async function POST(req: NextRequest) {
   const calendlyUrl = appCtx?.calendly_url ?? null;
   const telephone = appCtx?.telephone ?? null;
 
+  // Références chantiers : chargées une fois pour tout le lot.
+  const { data: refsData } = await supabase
+    .from("references_chantiers")
+    .select("nom, ville, lat, lng, axe, description")
+    .eq("actif", true);
+  const refs = (refsData as ReferenceChantier[] | null) ?? [];
+
   let done = 0;
   let failed = 0;
   for (const ld of leads) {
@@ -88,6 +103,8 @@ export async function POST(req: NextRequest) {
     const client = Array.isArray(ld.campaign)
       ? ld.campaign[0]?.client_nom ?? null
       : ld.campaign?.client_nom ?? null;
+    const angle = angleOutreach(ld.vision_satellite);
+    const reference = choisirReference(refs, ld, angle.pilote ? angle.cle : null);
     const draft = await generateOutreachDraft(
       apiKey,
       mode,
@@ -104,12 +121,12 @@ export async function POST(req: NextRequest) {
       calendlyUrl,
       client,
       telephone,
+      reference,
     );
     if (!draft.ok) {
       failed++;
       continue;
     }
-    const angle = angleOutreach(ld.vision_satellite);
     const { error: upErr } = await supabase
       .from("leads")
       .update({

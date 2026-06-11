@@ -143,6 +143,56 @@ function potentielsV2(
 
 // Angle retenu pour piloter le mail — renvoyé à l'UI pour que l'utilisateur
 // sache si le brouillon s'appuie sur l'analyse du site (et sur quel axe) ou non.
+import { haversineKm } from "@/lib/potentiel";
+
+// --- Références chantiers (preuve sociale géolocalisée) ---------------------
+
+export type ReferenceChantier = {
+  nom: string;
+  ville: string | null;
+  lat: number | null;
+  lng: number | null;
+  axe: "solaire" | "ombrieres" | "bornes";
+  description: string | null;
+};
+export type ReferenceCitable = ReferenceChantier & { distance_km: number | null };
+
+/**
+ * Choisit LA référence à citer dans le brouillon : même axe que l'angle du
+ * mail en priorité, puis la plus proche du prospect (haversine) ; sans
+ * coordonnées, la première du bon axe. Null si rien d'utilisable.
+ */
+export function choisirReference(
+  refs: ReferenceChantier[],
+  lead: { latitude?: number | null; longitude?: number | null },
+  angleCle: "solaire" | "ombrieres" | "bornes" | null,
+): ReferenceCitable | null {
+  if (!refs.length) return null;
+  const candidates = angleCle
+    ? refs.filter((r) => r.axe === angleCle).length
+      ? refs.filter((r) => r.axe === angleCle)
+      : refs
+    : refs;
+
+  const lat = lead.latitude ?? null;
+  const lng = lead.longitude ?? null;
+  let best: ReferenceCitable | null = null;
+  for (const r of candidates) {
+    const d =
+      lat != null && lng != null && r.lat != null && r.lng != null
+        ? Math.round(haversineKm(lat, lng, r.lat, r.lng))
+        : null;
+    const cand: ReferenceCitable = { ...r, distance_km: d };
+    if (!best) {
+      best = cand;
+      continue;
+    }
+    // Une distance connue bat l'inconnue ; sinon la plus courte gagne.
+    if (d != null && (best.distance_km == null || d < best.distance_km)) best = cand;
+  }
+  return best;
+}
+
 export type AngleOutreach =
   | { pilote: true; cle: "solaire" | "ombrieres" | "bornes"; label: string; score: number }
   | { pilote: false };
@@ -198,6 +248,7 @@ export function buildOutreachPrompt(
   calendlyUrl: string | null,
   client: string | null = null,
   telephone: string | null = null,
+  reference: ReferenceCitable | null = null,
 ): string {
   // Quand la campagne est affectée à un client, l'email est rédigé et signé en
   // son nom (RénoBoost reste l'outil, le client est l'émetteur visible).
@@ -233,6 +284,16 @@ export function buildOutreachPrompt(
     }
   }
 
+  // Preuve sociale : UNE référence locale, citable sobrement, jamais inventée.
+  const blocReference = reference
+    ? `\n\nRéférence locale (chantier déjà réalisé par ${marque}) : ${reference.nom}${
+        reference.ville ? ` à ${reference.ville}` : ""
+      }${
+        reference.distance_km != null ? ` (~${reference.distance_km} km du prospect)` : ""
+      }${reference.description ? ` — ${reference.description}` : ""}.
+Cite-la en UNE phrase comme preuve locale (« nous avons équipé… ») si elle est cohérente avec l'angle du mail ; sinon ne la mentionne pas. N'invente JAMAIS d'autre référence.`
+    : "";
+
   const consigneRdv = calendlyUrl
     ? ` Termine en proposant un échange court et insère ce lien de réservation tel quel : ${calendlyUrl}.`
     : " Termine en proposant un échange court de 15 minutes.";
@@ -242,7 +303,7 @@ export function buildOutreachPrompt(
       offre ? ` (offre : ${offre})` : ""
     }. Rédige une RELANCE courte et non insistante à un premier email resté sans réponse, pour ce prospect B2B :
 
-${fiche}${blocTerrain}
+${fiche}${blocTerrain}${blocReference}
 
 Contraintes : français, ton professionnel et chaleureux, TRÈS concis (3-5 lignes), rappelle l'objet en une phrase, apporte une raison de répondre, sans culpabiliser.${consigneTerrain}${consigneRdv} ${signature} N'invente aucun chiffre.
 
@@ -253,7 +314,7 @@ Réponds UNIQUEMENT par un objet JSON valide : {"sujet":"<objet>","corps":"<le t
     offre ? ` (offre : ${offre})` : ""
   }. Rédige un premier email d'APPROCHE (cold email) personnalisé pour ce prospect B2B :
 
-${fiche}${blocTerrain}
+${fiche}${blocTerrain}${blocReference}
 
 Contraintes : français, ton professionnel et chaleureux, concis (6-10 lignes), personnalise avec le secteur/angle d'accroche, va à l'essentiel sur la valeur concrète.${consigneTerrain}${consigneRdv} ${signature} N'invente aucun chiffre ni engagement.
 
@@ -291,6 +352,7 @@ export async function generateOutreachDraft(
   calendlyUrl: string | null,
   client: string | null = null,
   telephone: string | null = null,
+  reference: ReferenceCitable | null = null,
 ): Promise<DraftResult> {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -306,7 +368,7 @@ export async function generateOutreachDraft(
         messages: [
           {
             role: "user",
-            content: buildOutreachPrompt(mode, lead, offre, calendlyUrl, client, telephone),
+            content: buildOutreachPrompt(mode, lead, offre, calendlyUrl, client, telephone, reference),
           },
         ],
       }),
