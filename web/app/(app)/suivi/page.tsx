@@ -3,6 +3,7 @@ import type { Lead, LeadStatus } from "@/lib/database.types";
 import { KanbanCard } from "@/components/kanban-card";
 import { ActionsBand } from "@/components/actions-band";
 import { rankBandActions } from "@/lib/suggestions";
+import { statsParAngle } from "@/lib/stats-angles";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,9 @@ export default async function SuiviPage() {
   ];
   const rankedActions = await rankBandActions(supabase, "suivi", suiviActions);
 
+  // Quel discours convertit ? Tunnel par angle de mail (se remplit au fil des envois).
+  const angles = statsParAngle(leads);
+
   return (
     <div>
       <h1 className="mb-1 text-2xl font-bold">Suivi</h1>
@@ -118,6 +122,48 @@ export default async function SuiviPage() {
           value={sent ? `${bounced} (${Math.round((bounced / sent) * 100)}%)` : bounced}
         />
       </div>
+
+      {angles.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-[var(--border)] bg-white p-4">
+          <h2 className="mb-1 text-sm font-semibold">📊 Quel discours convertit ?</h2>
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            Tunnel par angle du mail (l&apos;angle est mémorisé à la génération du
+            brouillon) — la boucle d&apos;apprentissage du ciblage.
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-[var(--muted)]">
+                <th className="py-1.5 font-medium">Angle</th>
+                <th className="py-1.5 font-medium">Envoyés</th>
+                <th className="py-1.5 font-medium">Réponses</th>
+                <th className="py-1.5 font-medium">Gagnés</th>
+              </tr>
+            </thead>
+            <tbody>
+              {angles.map((a) => (
+                <tr key={a.angle} className="border-t border-[var(--border)]">
+                  <td className="py-1.5 font-medium">
+                    {{
+                      solaire: "🔆 Solaire toiture",
+                      ombrieres: "🅿️ Ombrières",
+                      bornes: "🔌 Bornes VE",
+                      sans_angle: "Sans angle (anciens envois)",
+                    }[a.angle]}
+                  </td>
+                  <td className="py-1.5">{a.envoyes}</td>
+                  <td className="py-1.5">
+                    {a.repondus}
+                    {a.tauxReponse != null && (
+                      <span className="ml-1 text-xs text-[var(--muted)]">({a.tauxReponse}%)</span>
+                    )}
+                  </td>
+                  <td className="py-1.5">{a.gagnes > 0 ? `${a.gagnes} 🏆` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-7">
         {COLUMNS.map((col) => {
