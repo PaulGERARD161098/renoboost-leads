@@ -7,6 +7,7 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
+| **1.14.0** | #146 | **File d'appels du jour** : l'accueil ouvre sur « qui j'appelle ce matin, et pourquoi » — top 10 priorisé (réponses chaudes > bascule téléphone > relances dues > top leads jamais contactés), angle d'attaque en une phrase, téléphone cliquable (`tel:`) ou accès fiche pour enrichir |
 | **1.13.0** | #145 | **Références chantiers — preuve sociale géolocalisée** : table `references_chantiers` (migration `0040`) gérée depuis /cibles (ville géocodée via la BAN) ; le brouillon cite automatiquement la référence la plus proche du prospect sur l'axe du mail (« nous avons équipé X à N km ») — jamais de référence inventée |
 | **1.12.0** | #144 | **Issue de RDV — boucle d'apprentissage** : statuts `gagne`/`perdu` + raison de clôture (boutons 🏆/✖️ sur la fiche après réponse ou RDV), colonne « Gagnés » au kanban /suivi, compteurs Gagnés/Perdus (/suivi + tableau de bord) · l'**angle du brouillon** est persisté (`leads.mail_angle`) pour les futures stats par angle. Migration `0039` |
 | **1.11.0** | #143 | **Calibrage de la fiche Cible** : le champ « Signaux recherchés » devient un textarea **un signal par ligne** (fini le découpage sur les virgules qui cassait les phrases — la fiche Rossini avait 2 signaux coupés en 4, réparés en base) |

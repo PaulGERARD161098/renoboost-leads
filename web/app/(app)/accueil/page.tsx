@@ -5,6 +5,8 @@ import { HomeCommand } from "@/components/home-command";
 import { HomeModes } from "@/components/home-modes";
 import { WelcomeGreeting } from "@/components/welcome-greeting";
 import { WorkerStatus } from "@/components/worker-status";
+import { AppelsDuJour } from "@/components/appels-du-jour";
+import { fileAppelsDuJour, type LeadAppel } from "@/lib/appels-du-jour";
 
 // Poste de pilotage (charte agent-first) : l'arrivée n'est plus l'inbox brute mais
 // une macro-page qui ORIENTE — synthèse Magellan en tête, 4 grands blocs d'entrée,
@@ -78,6 +80,17 @@ export default async function AccueilPage() {
   ).length;
 
   const alertes = repondus + (veilleNouveaux ?? 0) + relancesDues;
+
+  // ── File d'appels du jour : qui appeler ce matin, et pourquoi ────────
+  const { data: appelsData } = await supabase
+    .from("leads")
+    .select(
+      "id, entreprise, ville, statut, score, contact_nom, contact_tel, relance_at, call_statut, score_raison, vision_satellite",
+    )
+    .in("statut", ["repondu", "a_relancer", "envoye", "ouvert", "valide", "nouveau", "a_valider"])
+    .order("score", { ascending: false, nullsFirst: false })
+    .limit(400);
+  const fileAppels = fileAppelsDuJour((appelsData as LeadAppel[] | null) ?? []);
 
   // ── Prochaine action prioritaire (la synthèse pointe vers UNE chose) ──
   const prochaines = [
@@ -170,6 +183,9 @@ export default async function AccueilPage() {
       <div className="mb-5">
         <WorkerStatus />
       </div>
+
+      {/* ── La liste du matin : appels prioritaires (agent-first) ── */}
+      <AppelsDuJour file={fileAppels} />
 
       {/* ── Accès rapides : mode déplacement (vocal) + visite guidée ── */}
       <HomeModes />
