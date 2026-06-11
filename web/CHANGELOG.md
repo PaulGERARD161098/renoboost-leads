@@ -7,6 +7,7 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
+| **1.10.0** | #142 | **Analyse d'image → prospect** : chaque entreprise identifiée sur une capture GMaps se convertit en 1 clic en lead « à valider » — pré-scoré (terrain de l'image → potentiels v2 via les mêmes scorers, croisé avec le comptage IRVE), accroche Magellan en brouillon de mail, dédoublonnage par nom (« déjà en pipeline → fiche »). Migration `0038` (`image_analyses.leads`) |
 | **1.9.0** | #141 | **Draine les retours d'Henry** : le prompt des mails interdit explicitement les axes faibles (<4/10) et fait primer l'analyse du site sur l'angle L4 (fini le mail « ombrières » sur un site 0/10) · angle du brouillon affiché sur la fiche (ou alerte « sans analyse ») · **vue satellite élargie** (~640 m) en 2ᵉ passe pour les grands sites invisibles à 260 m (web + worker) · **téléphone** sous la signature des emails (`app_context.telephone`, migration `0037`, éditable au bandeau Reprise) |
 | **1.8.0** | #132 | Décompte du coût **par API** (Google Places · Pappers · Dropcontact · Claude). La donnée par étage du moteur (`RunStats`) est ventilée par le worker dans `runs.cout_detail` (migration `0036`) puis affichée — *progressive disclosure* — sur le **rapport de fin**, la **page recherche** et le **tableau de bord** (cumul tous runs). L'**estimation** avant lancement est aussi détaillée par poste. *(Ligne corrigée : étiquetée 1.6.0 par erreur à la livraison.)* |
 | — | #140 | Reprise au login : deadlines de la couche contexte affichées *(livrée sans bump)* |

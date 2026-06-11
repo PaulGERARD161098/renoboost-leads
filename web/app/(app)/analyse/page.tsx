@@ -41,13 +41,14 @@ export default async function AnalysePage({
     zoom: number | null;
     image_url: string | null;
     result: Record<string, unknown>;
+    leads: Record<string, string>;
     created_at: string;
   } | null = null;
 
   if (id) {
     const { data } = await supabase
       .from("image_analyses")
-      .select("id, source, label, address, lat, lng, zoom, image_path, result, created_at")
+      .select("id, source, label, address, lat, lng, zoom, image_path, result, leads, created_at")
       .eq("id", id)
       .maybeSingle();
     if (data) {
@@ -61,6 +62,7 @@ export default async function AnalysePage({
         zoom: number | null;
         image_path: string;
         result: Record<string, unknown>;
+        leads: Record<string, string> | null;
         created_at: string;
       };
       const signed = await supabase.storage
@@ -76,6 +78,7 @@ export default async function AnalysePage({
         zoom: d.zoom,
         image_url: signed.data?.signedUrl ?? null,
         result: d.result ?? {},
+        leads: d.leads ?? {},
         created_at: d.created_at,
       };
     }

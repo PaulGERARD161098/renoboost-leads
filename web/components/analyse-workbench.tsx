@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AnalyseResult } from "@/lib/analyse";
+import { retenirEntreprise } from "@/lib/actions/analyse";
 
 // Workbench de la page /analyse :
 //  • Si aucune analyse n'est ouverte → zone d'upload (drag & drop ou bouton).
 //  • Si une analyse est ouverte → image + résultat structuré (entreprises,
-//    terrain, opportunités, accroche prête à copier).
+//    terrain, opportunités, accroche prête à copier) + conversion en prospect.
 export function AnalyseWorkbench({
   current,
 }: {
@@ -21,6 +23,7 @@ export function AnalyseWorkbench({
     zoom: number | null;
     image_url: string | null;
     result: Record<string, unknown>;
+    leads: Record<string, string>;
     created_at: string;
   } | null;
 }) {
@@ -240,15 +243,13 @@ function AnalyseDetail({
               <h3 className="mb-2 text-sm font-semibold">Entreprises identifiées</h3>
               <ul className="space-y-2">
                 {r.entreprises.map((e, i) => (
-                  <li key={i} className="text-sm">
-                    <span className="font-medium">{e.nom}</span>
-                    {e.secteur && (
-                      <span className="text-[var(--muted)]"> · {e.secteur}</span>
-                    )}
-                    {e.indices && (
-                      <p className="text-xs italic text-[var(--muted)]">{e.indices}</p>
-                    )}
-                  </li>
+                  <EntrepriseRow
+                    key={i}
+                    analyseId={current.id}
+                    index={i}
+                    entreprise={e}
+                    leadId={current.leads[String(i)] ?? null}
+                  />
                 ))}
               </ul>
             </div>
@@ -361,6 +362,72 @@ function AnalyseDetail({
         </div>
       )}
     </div>
+  );
+}
+
+// Ligne entreprise + conversion en prospect (interconnexion analyse → pipeline).
+// Le lead arrive pré-scoré (terrain → potentiels v2) avec l'accroche en brouillon ;
+// s'il existe déjà (doublon ou déjà retenu), on pointe simplement la fiche.
+function EntrepriseRow({
+  analyseId,
+  index,
+  entreprise,
+  leadId,
+}: {
+  analyseId: string;
+  index: number;
+  entreprise: { nom: string; secteur?: string | null; indices?: string | null };
+  leadId: string | null;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [lid, setLid] = useState<string | null>(leadId);
+  const [deja, setDeja] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function retenir() {
+    setBusy(true);
+    setError(null);
+    const res = await retenirEntreprise(analyseId, index);
+    setBusy(false);
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    setLid(res.leadId ?? null);
+    setDeja(!!res.deja);
+    router.refresh();
+  }
+
+  return (
+    <li className="flex items-start justify-between gap-3 text-sm">
+      <div className="min-w-0">
+        <span className="font-medium">{entreprise.nom}</span>
+        {entreprise.secteur && (
+          <span className="text-[var(--muted)]"> · {entreprise.secteur}</span>
+        )}
+        {entreprise.indices && (
+          <p className="text-xs italic text-[var(--muted)]">{entreprise.indices}</p>
+        )}
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </div>
+      {lid ? (
+        <Link
+          href={`/leads/${lid}`}
+          className="shrink-0 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+        >
+          {deja ? "Déjà en pipeline →" : "✓ Voir la fiche →"}
+        </Link>
+      ) : (
+        <button
+          onClick={retenir}
+          disabled={busy}
+          className="shrink-0 rounded-md border border-[var(--brand)]/40 px-2 py-1 text-xs font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/5 disabled:opacity-40"
+        >
+          {busy ? "Création…" : "➕ Retenir comme prospect"}
+        </button>
+      )}
+    </li>
   );
 }
 
