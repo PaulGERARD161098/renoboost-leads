@@ -11,6 +11,7 @@ export async function updateAppContext(input: {
   client_actif: string | null;
   resume_session: string | null;
   deadlines: Deadline[];
+  telephone?: string | null;
 }) {
   const supabase = await createClient();
   const {
@@ -28,6 +29,7 @@ export async function updateAppContext(input: {
       objectif_final: input.objectif_final?.trim() || null,
       client_actif: input.client_actif?.trim() || null,
       resume_session: input.resume_session?.trim() || null,
+      telephone: input.telephone?.trim() || null,
       deadlines,
       updated_by: user.id,
       updated_at: new Date().toISOString(),

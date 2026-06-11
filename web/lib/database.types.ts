@@ -299,6 +299,7 @@ export interface AppContext {
   resume_session: string | null;
   resume_genere_le: string | null;
   calendly_url: string | null;
+  telephone: string | null;
   updated_by: string | null;
   updated_at: string;
 }

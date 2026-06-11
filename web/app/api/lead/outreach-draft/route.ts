@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
+import { angleOutreach, generateOutreachDraft, type OutreachMode } from "@/lib/outreach";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,10 +60,12 @@ export async function POST(req: NextRequest) {
 
   const { data: ctx } = await supabase
     .from("app_context")
-    .select("calendly_url")
+    .select("calendly_url, telephone")
     .eq("id", "main")
     .maybeSingle();
-  const calendlyUrl = (ctx as { calendly_url: string | null } | null)?.calendly_url ?? null;
+  const appCtx = ctx as { calendly_url: string | null; telephone: string | null } | null;
+  const calendlyUrl = appCtx?.calendly_url ?? null;
+  const telephone = appCtx?.telephone ?? null;
 
   const draft = await generateOutreachDraft(
     apiKey,
@@ -80,9 +82,16 @@ export async function POST(req: NextRequest) {
     offre,
     calendlyUrl,
     client,
+    telephone,
   );
   if (!draft.ok) {
     return NextResponse.json({ error: draft.error }, { status: draft.status });
   }
-  return NextResponse.json({ sujet: draft.sujet, corps: draft.corps });
+  // `angle` : dit à l'UI si le brouillon est piloté par l'analyse du site
+  // (et sur quel axe) — transparence demandée par les retours terrain.
+  return NextResponse.json({
+    sujet: draft.sujet,
+    corps: draft.corps,
+    angle: angleOutreach(ld.vision_satellite),
+  });
 }
