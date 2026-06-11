@@ -182,6 +182,36 @@ export async function marquerRdvPris(leadId: string) {
 }
 
 /**
+ * Clot un lead après le RDV (boucle d'apprentissage) : statut gagne/perdu +
+ * raison + horodatage. La raison nourrira le calibrage du ciblage et les stats
+ * par angle. Tracé dans l'historique.
+ */
+export async function cloreLead(
+  leadId: string,
+  issue: "gagne" | "perdu",
+  raison: string,
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      statut: issue,
+      issue_raison: raison.trim() || null,
+      issue_at: new Date().toISOString(),
+      relance_at: null,
+      call_statut: null,
+    })
+    .eq("id", leadId);
+  if (error) return { error: error.message };
+  await logEvent(leadId, "note", { action: "cloture", issue, raison: raison.trim() || null });
+  revalidatePath("/suivi");
+  revalidatePath("/inbox");
+  revalidatePath("/tableau-de-bord");
+  revalidatePath(`/leads/${leadId}`);
+  return { ok: true };
+}
+
+/**
  * Applique la transition de statut déduite de la catégorie de réponse (incrément
  * C). Utilisé pour les actions PROPOSÉES en 1 clic (écarter…) et, côté route,
  * pour l'application auto des transitions sûres. Tracé. Idempotent.

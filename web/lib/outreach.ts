@@ -144,7 +144,7 @@ function potentielsV2(
 // Angle retenu pour piloter le mail — renvoyé à l'UI pour que l'utilisateur
 // sache si le brouillon s'appuie sur l'analyse du site (et sur quel axe) ou non.
 export type AngleOutreach =
-  | { pilote: true; label: string; score: number }
+  | { pilote: true; cle: "solaire" | "ombrieres" | "bornes"; label: string; score: number }
   | { pilote: false };
 
 export function angleOutreach(
@@ -152,7 +152,7 @@ export function angleOutreach(
 ): AngleOutreach {
   const p = potentielsV2(vision);
   if (!p) return { pilote: false };
-  return { pilote: true, label: p.meilleur.label, score: p.meilleur.score };
+  return { pilote: true, cle: p.meilleur.cle, label: p.meilleur.label, score: p.meilleur.score };
 }
 
 // Construit le bloc « potentiels détectés » + la consigne d'angle pour le prompt.

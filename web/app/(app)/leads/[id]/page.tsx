@@ -118,11 +118,18 @@ export default async function LeadPage({
             {l.code_postal ? ` (${l.code_postal})` : ""}
           </p>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-3 py-1 text-sm font-medium ${LEAD_STATUS_COLOR[l.statut]}`}
-        >
-          {LEAD_STATUS_LABEL[l.statut]}
-        </span>
+        <div className="shrink-0 text-right">
+          <span
+            className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${LEAD_STATUS_COLOR[l.statut]}`}
+          >
+            {LEAD_STATUS_LABEL[l.statut]}
+          </span>
+          {(l.statut === "gagne" || l.statut === "perdu") && l.issue_raison && (
+            <p className="mt-1 max-w-[18rem] text-xs italic text-[var(--muted)]">
+              {l.issue_raison}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Bloc score "hero" */}

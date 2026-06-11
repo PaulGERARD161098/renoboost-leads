@@ -46,6 +46,8 @@ export function KanbanCard({ lead }: { lead: Lead }) {
     repondu: [rdv, ecarter],
     a_relancer: [envoyer, rdv, ecarter],
     rdv_pris: [],
+    gagne: [],
+    perdu: [],
     ecarte: [],
   };
 

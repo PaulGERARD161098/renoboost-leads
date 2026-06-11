@@ -13,6 +13,7 @@ const COLUMNS: { statut: LeadStatus; label: string }[] = [
   { statut: "repondu", label: "Répondus" },
   { statut: "a_relancer", label: "À relancer" },
   { statut: "rdv_pris", label: "RDV pris" },
+  { statut: "gagne", label: "Gagnés 🏆" },
 ];
 
 export default async function SuiviPage() {
@@ -35,10 +36,15 @@ export default async function SuiviPage() {
   const replied = byStatus("repondu").length;
   const bounced = leads.filter((l) => l.bounced_at).length;
   const aRelancer = byStatus("a_relancer").length;
-  const rdvPris = byStatus("rdv_pris").length;
+  // Le tunnel RDV inclut les leads déjà conclus (ils sont passés par le RDV).
+  const gagnes = byStatus("gagne").length;
+  const perdus = byStatus("perdu").length;
+  const rdvPris = byStatus("rdv_pris").length + gagnes + perdus;
   // Base « contactés » = tout ce qui a quitté le stade « validé » (RDV inclus).
   const contactes = leads.filter((l) =>
-    ["envoye", "ouvert", "repondu", "a_relancer", "rdv_pris"].includes(l.statut),
+    ["envoye", "ouvert", "repondu", "a_relancer", "rdv_pris", "gagne", "perdu"].includes(
+      l.statut,
+    ),
   ).length;
 
   // Contexte → Actions (pattern agent-first) : prochaines actions du pipeline.
@@ -87,7 +93,7 @@ export default async function SuiviPage() {
 
       <ActionsBand source="suivi" actions={rankedActions} />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
         <Stat label="Envoyés" value={sent} />
         <Stat
           label="Taux d'ouverture"
@@ -104,12 +110,16 @@ export default async function SuiviPage() {
           value={contactes ? `${Math.round((rdvPris / contactes) * 100)}%` : "—"}
         />
         <Stat
+          label="Gagnés / Perdus"
+          value={gagnes || perdus ? `${gagnes} 🏆 / ${perdus}` : "—"}
+        />
+        <Stat
           label="Rebonds"
           value={sent ? `${bounced} (${Math.round((bounced / sent) * 100)}%)` : bounced}
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-7">
         {COLUMNS.map((col) => {
           const items = byStatus(col.statut);
           return (

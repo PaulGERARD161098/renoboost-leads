@@ -12,6 +12,8 @@ export type LeadStatus =
   | "repondu"
   | "a_relancer"
   | "rdv_pris"
+  | "gagne"
+  | "perdu"
   | "ecarte";
 export type LeadEventType =
   | "cree"
@@ -123,6 +125,9 @@ export interface Lead {
   bounced_at: string | null;
   relance_at: string | null;
   rdv_at: string | null;
+  issue_raison: string | null;
+  issue_at: string | null;
+  mail_angle: "solaire" | "ombrieres" | "bornes" | null;
   campaign_id: string | null;
   call_statut: CallStatut | null;
   owner: string | null;
