@@ -19,6 +19,15 @@ export type AngleStat = {
   gagnes: number;
 };
 
+export type Angle = "solaire" | "ombrieres" | "bornes";
+
+/** Libellés partagés (table /suivi, reco par cible, nudge fiche). */
+export const ANGLE_LABEL: Record<Angle, string> = {
+  solaire: "🔆 Solaire toiture",
+  ombrieres: "🅿️ Ombrières",
+  bornes: "🔌 Bornes VE",
+};
+
 const CONTACTES: LeadStatus[] = [
   "envoye",
   "ouvert",
@@ -63,4 +72,72 @@ export function statsParAngle(leads: LeadStat[]): AngleStat[] {
     return (b.tauxReponse ?? 0) - (a.tauxReponse ?? 0);
   });
   return rows;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Angle gagnant PAR CIBLE — fermer la boucle d'apprentissage (charte agent-first)
+// On ne se contente plus d'AFFICHER « quel discours convertit ? » globalement :
+// par verticale (cible), on PROPOSE l'angle qui convertit le mieux, pour piloter
+// les prochains brouillons. Propose → l'utilisateur valide en générant le mail.
+// ──────────────────────────────────────────────────────────────────────────
+
+export type LeadStatCible = LeadStat & { verticale_id: string | null };
+
+export type AngleReco = {
+  verticaleId: string;
+  angle: Angle;
+  envoyes: number;
+  repondus: number;
+  tauxReponse: number;
+  gagnes: number;
+  // Avance (points de %) sur le 2ᵉ meilleur angle de la cible — null si seul angle
+  // ayant assez d'envois. Sert à doser la confiance de la reco.
+  avance: number | null;
+};
+
+// Sous ce seuil d'envois, pas assez de signal pour recommander honnêtement un angle.
+export const MIN_ENVOYES_RECO = 4;
+
+/**
+ * Pour chaque cible (verticale), l'angle qui convertit le mieux parmi ceux ayant
+ * au moins `minEnvoyes` envois. Trié taux ↓, puis gagnés ↓, puis envoyés ↓.
+ * Helper pur : la jointure id → nom de cible est faite côté page.
+ */
+export function angleGagnantParCible(
+  leads: LeadStatCible[],
+  minEnvoyes: number = MIN_ENVOYES_RECO,
+): AngleReco[] {
+  const groupes = new Map<string, LeadStatCible[]>();
+  for (const l of leads) {
+    if (!l.verticale_id) continue;
+    const arr = groupes.get(l.verticale_id);
+    if (arr) arr.push(l);
+    else groupes.set(l.verticale_id, [l]);
+  }
+
+  const recos: AngleReco[] = [];
+  for (const [verticaleId, groupe] of groupes) {
+    const candidats = statsParAngle(groupe)
+      .filter((s) => s.angle !== "sans_angle" && s.envoyes >= minEnvoyes)
+      .sort(
+        (a, b) =>
+          (b.tauxReponse ?? 0) - (a.tauxReponse ?? 0) ||
+          b.gagnes - a.gagnes ||
+          b.envoyes - a.envoyes,
+      );
+    if (candidats.length === 0) continue;
+    const gagnant = candidats[0];
+    const second = candidats[1];
+    recos.push({
+      verticaleId,
+      angle: gagnant.angle as Angle,
+      envoyes: gagnant.envoyes,
+      repondus: gagnant.repondus,
+      tauxReponse: gagnant.tauxReponse ?? 0,
+      gagnes: gagnant.gagnes,
+      avance:
+        second != null ? (gagnant.tauxReponse ?? 0) - (second.tauxReponse ?? 0) : null,
+    });
+  }
+  return recos;
 }

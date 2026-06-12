@@ -16,6 +16,11 @@ import { ContactCard } from "@/components/contact-card";
 import { LeadContacts, type LeadContactRow } from "@/components/lead-contacts";
 import { bornesProximite } from "@/lib/bornes";
 import { signauxDuLead } from "@/lib/veille-signaux";
+import {
+  angleGagnantParCible,
+  ANGLE_LABEL,
+  type LeadStatCible,
+} from "@/lib/stats-angles";
 import { twilioConfigure } from "@/lib/twilio";
 import {
   LEAD_STATUS_COLOR,
@@ -107,6 +112,22 @@ export default async function LeadPage({
     .order("principal", { ascending: false })
     .order("created_at");
   const contacts = (contactsData as LeadContactRow[] | null) ?? [];
+
+  // Boucle d'apprentissage : sur la cible de ce lead, quel angle convertit le mieux ?
+  // On le PROPOSE au moment de générer le brouillon (l'utilisateur valide en l'écrivant).
+  let angleRecommande: string | null = null;
+  if (l.verticale_id) {
+    const { data: cibleLeads } = await supabase
+      .from("leads")
+      .select("verticale_id, statut, mail_angle, sent_at, replied_at")
+      .eq("verticale_id", l.verticale_id);
+    const reco = angleGagnantParCible(
+      (cibleLeads as LeadStatCible[] | null) ?? [],
+    )[0];
+    if (reco) {
+      angleRecommande = `Sur cette cible, l'angle ${ANGLE_LABEL[reco.angle]} convertit le mieux (${reco.tauxReponse}% de réponse sur ${reco.envoyes} envois) — privilégie-le.`;
+    }
+  }
 
   const verdict = scoreVerdict(l.score);
   const action = nextAction(l);
@@ -235,7 +256,7 @@ export default async function LeadPage({
             hasPhone={Boolean(l.contact_tel)}
           />
 
-          <LeadEditor lead={l} />
+          <LeadEditor lead={l} angleRecommande={angleRecommande} />
         </div>
 
         <div className="space-y-5">

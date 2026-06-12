@@ -236,6 +236,8 @@ export interface AgentConfig {
   relance_auto: boolean;
   relance_delai_jours: number;
   relance_max: number;
+  relance_auto_max_jour: number;
+  relance_predraft: boolean;
   reponse_statut_auto: boolean;
   veille_auto_lead: boolean;
   veille_auto_seuil: number;

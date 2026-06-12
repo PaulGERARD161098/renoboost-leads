@@ -18,6 +18,8 @@ export async function updateAgentConfig(input: {
   relance_auto: boolean;
   relance_delai_jours: number;
   relance_max: number;
+  relance_auto_max_jour: number;
+  relance_predraft: boolean;
   reponse_statut_auto: boolean;
   veille_auto_lead: boolean;
   veille_auto_seuil: number;
@@ -43,6 +45,8 @@ export async function updateAgentConfig(input: {
       relance_auto: input.relance_auto,
       relance_delai_jours: input.relance_delai_jours,
       relance_max: input.relance_max,
+      relance_auto_max_jour: input.relance_auto_max_jour,
+      relance_predraft: input.relance_predraft,
       reponse_statut_auto: input.reponse_statut_auto,
       veille_auto_lead: input.veille_auto_lead,
       veille_auto_seuil: input.veille_auto_seuil,
