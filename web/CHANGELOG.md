@@ -7,7 +7,7 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
-| **1.16.0** | — | **Quel discours convertit ?** : tableau /suivi du tunnel **par angle de mail** (envoyés · réponses + taux · gagnés), à partir de `leads.mail_angle` (1.12) — les anciens envois sans angle sont comptés à part. La boucle d'apprentissage du ciblage se referme |
+| **1.16.0** | #148 | **Quel discours convertit ?** : tableau /suivi du tunnel **par angle de mail** (envoyés · réponses + taux · gagnés), à partir de `leads.mail_angle` (1.12) — les anciens envois sans angle sont comptés à part. La boucle d'apprentissage du ciblage se referme |
 | **1.15.0** | #147 | **Multi-contacts par rôle** : table `lead_contacts` (migration `0041`) + bloc « Interlocuteurs » sur la fiche (ajout, ★ principal, suppression). Le principal est recopié dans `leads.contact_*` (compat pipeline) et son **rôle adapte le ton du brouillon** : DAF → ROI/aides, DG → stratégie/APER, énergie → exploitation/technique |
 | **1.14.0** | #146 | **File d'appels du jour** : l'accueil ouvre sur « qui j'appelle ce matin, et pourquoi » — top 10 priorisé (réponses chaudes > bascule téléphone > relances dues > top leads jamais contactés), angle d'attaque en une phrase, téléphone cliquable (`tel:`) ou accès fiche pour enrichir |
 | **1.13.0** | #145 | **Références chantiers — preuve sociale géolocalisée** : table `references_chantiers` (migration `0040`) gérée depuis /cibles (ville géocodée via la BAN) ; le brouillon cite automatiquement la référence la plus proche du prospect sur l'axe du mail (« nous avons équipé X à N km ») — jamais de référence inventée |
