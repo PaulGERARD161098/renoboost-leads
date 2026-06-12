@@ -3,7 +3,7 @@ import type { Lead, LeadStatus } from "@/lib/database.types";
 import { KanbanCard } from "@/components/kanban-card";
 import { ActionsBand } from "@/components/actions-band";
 import { rankBandActions } from "@/lib/suggestions";
-import { statsParAngle } from "@/lib/stats-angles";
+import { statsParAngle, angleGagnantParCible, ANGLE_LABEL } from "@/lib/stats-angles";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +88,16 @@ export default async function SuiviPage() {
   // Quel discours convertit ? Tunnel par angle de mail (se remplit au fil des envois).
   const angles = statsParAngle(leads);
 
+  // Boucle d'apprentissage : par cible, l'angle qui convertit le mieux → l'agent
+  // PROPOSE de le privilégier (validé au moment de générer le brouillon sur la fiche).
+  const recos = angleGagnantParCible(leads);
+  const { data: vData } = recos.length
+    ? await supabase.from("verticales").select("id, nom")
+    : { data: null };
+  const cibleNom = new Map(
+    ((vData as { id: string; nom: string }[] | null) ?? []).map((v) => [v.id, v.nom]),
+  );
+
   return (
     <div>
       <h1 className="mb-1 text-2xl font-bold">Suivi</h1>
@@ -123,6 +133,39 @@ export default async function SuiviPage() {
         />
       </div>
 
+      {recos.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-[var(--brand)]/30 bg-gradient-to-br from-[var(--brand)]/5 to-transparent p-4">
+          <h2 className="mb-1 text-sm font-semibold">
+            💡 Angle recommandé par cible
+          </h2>
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            Ce qui convertit le mieux sur le terrain — l&apos;agent propose, tu valides
+            en générant le brouillon. La reco s&apos;affine à chaque envoi.
+          </p>
+          <ul className="space-y-2 text-sm">
+            {recos.map((r) => (
+              <li
+                key={r.verticaleId}
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-[var(--border)] bg-white px-3 py-2"
+              >
+                <span className="font-medium">
+                  {cibleNom.get(r.verticaleId) ?? "Cible"}
+                </span>
+                <span className="text-[var(--muted)]">→ privilégie</span>
+                <span className="font-semibold">{ANGLE_LABEL[r.angle]}</span>
+                <span className="text-xs text-[var(--muted)]">
+                  {r.tauxReponse}% de réponse sur {r.envoyes} envois
+                  {r.gagnes > 0 ? ` · ${r.gagnes} 🏆` : ""}
+                  {r.avance != null && r.avance > 0
+                    ? ` · +${r.avance} pts vs 2ᵉ angle`
+                    : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {angles.length > 0 && (
         <div className="mb-6 rounded-2xl border border-[var(--border)] bg-white p-4">
           <h2 className="mb-1 text-sm font-semibold">📊 Quel discours convertit ?</h2>
@@ -143,12 +186,9 @@ export default async function SuiviPage() {
               {angles.map((a) => (
                 <tr key={a.angle} className="border-t border-[var(--border)]">
                   <td className="py-1.5 font-medium">
-                    {{
-                      solaire: "🔆 Solaire toiture",
-                      ombrieres: "🅿️ Ombrières",
-                      bornes: "🔌 Bornes VE",
-                      sans_angle: "Sans angle (anciens envois)",
-                    }[a.angle]}
+                    {a.angle === "sans_angle"
+                      ? "Sans angle (anciens envois)"
+                      : ANGLE_LABEL[a.angle]}
                   </td>
                   <td className="py-1.5">{a.envoyes}</td>
                   <td className="py-1.5">

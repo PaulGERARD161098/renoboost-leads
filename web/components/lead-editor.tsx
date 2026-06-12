@@ -10,7 +10,14 @@ import {
   updateLeadEmail,
 } from "@/lib/actions/leads";
 
-export function LeadEditor({ lead }: { lead: Lead }) {
+export function LeadEditor({
+  lead,
+  angleRecommande,
+}: {
+  lead: Lead;
+  // Reco apprise sur la cible (« privilégie l'angle X ») — propose, non bloquant.
+  angleRecommande?: string | null;
+}) {
   const router = useRouter();
   const [sujet, setSujet] = useState(lead.mail_sujet ?? "");
   const [corps, setCorps] = useState(lead.mail_corps ?? "");
@@ -93,6 +100,11 @@ export function LeadEditor({ lead }: { lead: Lead }) {
             </button>
           </div>
         </div>
+        {angleRecommande && (
+          <p className="mb-3 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/5 px-3 py-2 text-xs text-[var(--text)]">
+            💡 {angleRecommande}
+          </p>
+        )}
         <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
           Objet
         </label>
