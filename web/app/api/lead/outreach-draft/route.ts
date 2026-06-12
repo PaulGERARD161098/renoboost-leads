@@ -75,6 +75,15 @@ export async function POST(req: NextRequest) {
   const calendlyUrl = appCtx?.calendly_url ?? null;
   const telephone = appCtx?.telephone ?? null;
 
+  // Rôle du contact principal (adapte le ton : DAF → ROI, DG → stratégie…).
+  const { data: principal } = await supabase
+    .from("lead_contacts")
+    .select("role")
+    .eq("lead_id", leadId)
+    .eq("principal", true)
+    .maybeSingle();
+  const contactRole = (principal as { role: string | null } | null)?.role ?? null;
+
   // Preuve sociale : la référence chantier la plus proche, sur l'axe du mail.
   const angle = angleOutreach(ld.vision_satellite);
   const { data: refsData } = await supabase
@@ -96,6 +105,7 @@ export async function POST(req: NextRequest) {
       secteur: ld.libelle_naf ?? ld.naf,
       effectif: ld.effectif,
       contact_nom: ld.contact_nom,
+      contact_role: contactRole,
       score_raison: ld.score_raison,
       vision: ld.vision_satellite,
     },

@@ -87,6 +87,18 @@ export async function POST(req: NextRequest) {
   const calendlyUrl = appCtx?.calendly_url ?? null;
   const telephone = appCtx?.telephone ?? null;
 
+  // Rôles des contacts principaux (adaptent le ton), chargés en une requête.
+  const { data: principauxData } = await supabase
+    .from("lead_contacts")
+    .select("lead_id, role")
+    .eq("principal", true)
+    .in("lead_id", leadIds);
+  const rolePrincipal = new Map(
+    ((principauxData as { lead_id: string; role: string | null }[] | null) ?? []).map(
+      (c) => [c.lead_id, c.role],
+    ),
+  );
+
   // Références chantiers : chargées une fois pour tout le lot.
   const { data: refsData } = await supabase
     .from("references_chantiers")
@@ -114,6 +126,7 @@ export async function POST(req: NextRequest) {
         secteur: ld.libelle_naf ?? ld.naf,
         effectif: ld.effectif,
         contact_nom: ld.contact_nom,
+        contact_role: rolePrincipal.get(ld.id) ?? null,
         score_raison: ld.score_raison,
         vision: ld.vision_satellite,
       },
