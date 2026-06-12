@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/accueil", label: "Accueil", icon: "🧭" },
   { href: "/inbox", label: "Prospects", icon: "👥" },
   { href: "/suivi", label: "Suivi", icon: "📊" },
+  { href: "/tournees", label: "Tournées", icon: "🗺️" },
   { href: "/campagnes", label: "Campagnes", icon: "✉️" },
   { href: "/bornes", label: "Bornes VE", icon: "🔌" },
   { href: "/solaire", label: "Solaire", icon: "☀️" },

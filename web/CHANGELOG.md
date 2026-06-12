@@ -7,6 +7,7 @@ complétée par le SHA du build Vercel.
 
 | Version | PR | Contenu |
 |---|---|---|
+| **1.17.0** | #149 | **Carte des tournées** : nouvel onglet 🗺️ qui place RDV (📅), prospects chauds (🔥) et leads à relancer (🟠) géolocalisés sur une carte Leaflet (auto-recadrée), avec des **opportunités groupées** — « profite de ton RDV à X pour voir les N prospects à moins de 20 km ». Helpers purs `pointsTournee`/`opportunitesAutourDesRdv` testés. Boucle la roadmap agent-first 1.12 → 1.17 |
 | **1.16.0** | #148 | **Quel discours convertit ?** : tableau /suivi du tunnel **par angle de mail** (envoyés · réponses + taux · gagnés), à partir de `leads.mail_angle` (1.12) — les anciens envois sans angle sont comptés à part. La boucle d'apprentissage du ciblage se referme |
 | **1.15.0** | #147 | **Multi-contacts par rôle** : table `lead_contacts` (migration `0041`) + bloc « Interlocuteurs » sur la fiche (ajout, ★ principal, suppression). Le principal est recopié dans `leads.contact_*` (compat pipeline) et son **rôle adapte le ton du brouillon** : DAF → ROI/aides, DG → stratégie/APER, énergie → exploitation/technique |
 | **1.14.0** | #146 | **File d'appels du jour** : l'accueil ouvre sur « qui j'appelle ce matin, et pourquoi » — top 10 priorisé (réponses chaudes > bascule téléphone > relances dues > top leads jamais contactés), angle d'attaque en une phrase, téléphone cliquable (`tel:`) ou accès fiche pour enrichir |
