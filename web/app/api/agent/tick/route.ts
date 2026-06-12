@@ -72,72 +72,152 @@ async function handle(req: NextRequest) {
   // (« À relancer », « À appeler ») ; l'humain valide, envoie et appelle.
   // Indépendant du budget des runs (coût nul).
   if (cfg.relance_auto) {
-    const seuilISO = new Date(
-      Date.now() - cfg.relance_delai_jours * 86_400_000,
-    ).toISOString();
-    const { data: candidats } = await admin
-      .from("leads")
-      .select("id, contact_tel, call_statut")
-      .in("statut", ["envoye", "ouvert"])
-      .is("relance_at", null)
-      .is("bounced_at", null)
-      .not("sent_at", "is", null)
-      .lt("sent_at", seuilISO)
-      .order("score", { ascending: false, nullsFirst: false })
-      .limit(RELANCES_PAR_TICK);
+    // Budget journalier (garde-fou « auto sous limites ») : on ne planifie pas
+    // plus de relances que le quota du jour, tous leads et tous ticks confondus.
+    const sodRelance = new Date();
+    sodRelance.setHours(0, 0, 0, 0);
+    const { count: dejaAuj } = await admin
+      .from("lead_events")
+      .select("id", { count: "exact", head: true })
+      .eq("type", "relance")
+      .eq("payload->>auto", "true")
+      .gte("at", sodRelance.toISOString());
+    const budgetRestant = Math.max(0, cfg.relance_auto_max_jour - (dejaAuj ?? 0));
 
-    let relancesPlanifiees = 0;
-    let escaladesAppel = 0;
-    type Cand = { id: string; contact_tel: string | null; call_statut: string | null };
-    for (const l of (candidats as Cand[]) ?? []) {
-      // Garde-fou anti-harcèlement : on compte les relances déjà tracées.
-      const { count } = await admin
-        .from("lead_events")
-        .select("id", { count: "exact", head: true })
-        .eq("lead_id", l.id)
-        .eq("type", "relance");
-      if ((count ?? 0) >= cfg.relance_max) {
-        // Canal mail épuisé → escalade téléphone (sans appeler), une seule fois.
-        if (l.contact_tel && !l.call_statut) {
-          const { error: callErr } = await admin
-            .from("leads")
-            .update({ call_statut: "a_appeler" })
-            .eq("id", l.id);
-          if (!callErr) {
-            await admin.from("lead_events").insert({
-              lead_id: l.id,
-              type: "note",
-              payload: { action: "escalade_appel", auto: true },
-            });
-            escaladesAppel++;
-          }
-        }
-        continue;
+    if (budgetRestant === 0) {
+      await admin.from("agent_journal").insert({
+        type: "skip_relance_budget",
+        message: `Budget de relances du jour atteint (${cfg.relance_auto_max_jour}/j).`,
+      });
+    } else {
+      const seuilISO = new Date(
+        Date.now() - cfg.relance_delai_jours * 86_400_000,
+      ).toISOString();
+      const aTraiter = Math.min(RELANCES_PAR_TICK, budgetRestant);
+      const { data: candidats } = await admin
+        .from("leads")
+        .select(
+          "id, contact_tel, call_statut, entreprise, ville, libelle_naf, effectif, contact_nom, score_raison, vision_satellite",
+        )
+        .in("statut", ["envoye", "ouvert"])
+        .is("relance_at", null)
+        .is("bounced_at", null)
+        .not("sent_at", "is", null)
+        .lt("sent_at", seuilISO)
+        .order("score", { ascending: false, nullsFirst: false })
+        .limit(aTraiter);
+
+      // Pré-rédaction (autonomie sous budget) : on prépare le brouillon de relance,
+      // jamais envoyé. Désactivable, et sans clé IA on se contente de planifier.
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      const predraft = cfg.relance_predraft && Boolean(apiKey);
+      let calendlyUrl: string | null = null;
+      if (predraft) {
+        const { data: ctx } = await admin
+          .from("app_context")
+          .select("calendly_url")
+          .eq("id", "main")
+          .maybeSingle();
+        calendlyUrl = (ctx as { calendly_url: string | null } | null)?.calendly_url ?? null;
       }
 
-      const { error: upErr } = await admin
-        .from("leads")
-        .update({ statut: "a_relancer", relance_at: new Date().toISOString() })
-        .eq("id", l.id);
-      if (upErr) continue;
-      await admin.from("lead_events").insert({
-        lead_id: l.id,
-        type: "relance",
-        payload: { auto: true },
-      });
-      relancesPlanifiees++;
-    }
-    if (relancesPlanifiees > 0) {
-      await admin.from("agent_journal").insert({
-        type: "relance_auto",
-        message: `Relances planifiées automatiquement : ${relancesPlanifiees} lead(s) sans réponse depuis ${cfg.relance_delai_jours} j. (à valider et envoyer)`,
-      });
-    }
-    if (escaladesAppel > 0) {
-      await admin.from("agent_journal").insert({
-        type: "escalade_appel",
-        message: `Canal mail épuisé : ${escaladesAppel} lead(s) basculé(s) « à appeler » (relances mail au plafond). À appeler depuis l'inbox.`,
-      });
+      let relancesPlanifiees = 0;
+      let relancesRedigees = 0;
+      let escaladesAppel = 0;
+      type Cand = {
+        id: string;
+        contact_tel: string | null;
+        call_statut: string | null;
+        entreprise: string;
+        ville: string | null;
+        libelle_naf: string | null;
+        effectif: string | null;
+        contact_nom: string | null;
+        score_raison: string | null;
+        vision_satellite: Record<string, unknown> | null;
+      };
+      for (const l of (candidats as Cand[]) ?? []) {
+        // Garde-fou anti-harcèlement : on compte les relances déjà tracées.
+        const { count } = await admin
+          .from("lead_events")
+          .select("id", { count: "exact", head: true })
+          .eq("lead_id", l.id)
+          .eq("type", "relance");
+        if ((count ?? 0) >= cfg.relance_max) {
+          // Canal mail épuisé → escalade téléphone (sans appeler), une seule fois.
+          if (l.contact_tel && !l.call_statut) {
+            const { error: callErr } = await admin
+              .from("leads")
+              .update({ call_statut: "a_appeler" })
+              .eq("id", l.id);
+            if (!callErr) {
+              await admin.from("lead_events").insert({
+                lead_id: l.id,
+                type: "note",
+                payload: { action: "escalade_appel", auto: true },
+              });
+              escaladesAppel++;
+            }
+          }
+          continue;
+        }
+
+        const { error: upErr } = await admin
+          .from("leads")
+          .update({ statut: "a_relancer", relance_at: new Date().toISOString() })
+          .eq("id", l.id);
+        if (upErr) continue;
+
+        // Brouillon de relance prêt à valider (jamais envoyé).
+        let redige = false;
+        if (predraft) {
+          const draft = await generateOutreachDraft(
+            apiKey!,
+            "relance",
+            {
+              entreprise: l.entreprise,
+              ville: l.ville,
+              secteur: l.libelle_naf,
+              effectif: l.effectif,
+              contact_nom: l.contact_nom,
+              score_raison: l.score_raison,
+              vision: l.vision_satellite,
+            },
+            null,
+            calendlyUrl,
+          );
+          if (draft.ok) {
+            await admin
+              .from("leads")
+              .update({ mail_sujet: draft.sujet, mail_corps: draft.corps })
+              .eq("id", l.id);
+            redige = true;
+            relancesRedigees++;
+          }
+        }
+
+        await admin.from("lead_events").insert({
+          lead_id: l.id,
+          type: "relance",
+          payload: { auto: true, predraft: redige },
+        });
+        relancesPlanifiees++;
+      }
+      if (relancesPlanifiees > 0) {
+        const suffixe = relancesRedigees
+          ? ` dont ${relancesRedigees} avec brouillon de relance prêt`
+          : "";
+        await admin.from("agent_journal").insert({
+          type: "relance_auto",
+          message: `Relances planifiées : ${relancesPlanifiees} lead(s) sans réponse depuis ${cfg.relance_delai_jours} j.${suffixe} (à valider et envoyer · budget ${cfg.relance_auto_max_jour}/j).`,
+        });
+      }
+      if (escaladesAppel > 0) {
+        await admin.from("agent_journal").insert({
+          type: "escalade_appel",
+          message: `Canal mail épuisé : ${escaladesAppel} lead(s) basculé(s) « à appeler » (relances mail au plafond). À appeler depuis l'inbox.`,
+        });
+      }
     }
   }
 

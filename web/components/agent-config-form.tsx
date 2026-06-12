@@ -32,6 +32,10 @@ export function AgentConfigForm({
     String(config.relance_delai_jours),
   );
   const [relanceMax, setRelanceMax] = useState(String(config.relance_max));
+  const [relanceMaxJour, setRelanceMaxJour] = useState(
+    String(config.relance_auto_max_jour),
+  );
+  const [relancePredraft, setRelancePredraft] = useState(config.relance_predraft);
   const [reponseStatutAuto, setReponseStatutAuto] = useState(
     config.reponse_statut_auto,
   );
@@ -67,6 +71,8 @@ export function AgentConfigForm({
       relance_auto: relanceAuto,
       relance_delai_jours: Number(relanceDelai) || 0,
       relance_max: Number(relanceMax) || 0,
+      relance_auto_max_jour: Number(relanceMaxJour) || 0,
+      relance_predraft: relancePredraft,
       reponse_statut_auto: reponseStatutAuto,
       veille_auto_lead: veilleAutoLead,
       veille_auto_seuil: Number(veilleAutoSeuil) || 0,
@@ -157,18 +163,41 @@ export function AgentConfigForm({
           </button>
         </div>
         {relanceAuto && (
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <Field
-              label="Délai sans réponse avant relance (jours)"
-              value={relanceDelai}
-              onChange={setRelanceDelai}
-            />
-            <Field
-              label="Relances max. par lead"
-              value={relanceMax}
-              onChange={setRelanceMax}
-            />
-          </div>
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+              <Field
+                label="Délai sans réponse avant relance (jours)"
+                value={relanceDelai}
+                onChange={setRelanceDelai}
+              />
+              <Field
+                label="Relances max. par lead"
+                value={relanceMax}
+                onChange={setRelanceMax}
+              />
+              <Field
+                label="Budget : relances / jour (max)"
+                value={relanceMaxJour}
+                onChange={setRelanceMaxJour}
+              />
+            </div>
+            <label className="mt-4 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={relancePredraft}
+                onChange={(e) => setRelancePredraft(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[var(--brand)]"
+              />
+              <span>
+                <span className="font-medium">Pré-rédiger le brouillon de relance</span>{" "}
+                <span className="text-[var(--muted)]">
+                  — l&apos;agent écrit la relance (jamais envoyée) sous le budget
+                  ci-dessus : tu n&apos;as plus qu&apos;à valider et envoyer. Décocher
+                  économise des appels IA (l&apos;agent se contente de planifier).
+                </span>
+              </span>
+            </label>
+          </>
         )}
       </div>
 
