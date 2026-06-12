@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { TourneeMapLoader } from "@/components/tournee-map-loader";
+import { TourneeBoard } from "@/components/tournee-board";
 import {
   CATEGORIE_META,
   opportunitesAutourDesRdv,
@@ -90,8 +90,8 @@ export default async function TourneesPage() {
             </div>
           )}
 
-          {/* ── Données : la carte ── */}
-          <TourneeMapLoader points={points} />
+          {/* ── Données + itinéraire : la carte et l'ordre des visites ── */}
+          <TourneeBoard points={points} />
 
           <p className="mt-3 text-xs text-[var(--muted)]">
             Astuce : un prospect n&apos;apparaît que s&apos;il a été géolocalisé

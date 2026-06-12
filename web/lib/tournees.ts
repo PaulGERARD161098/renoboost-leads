@@ -84,7 +84,7 @@ export function pointsTournee(leads: LeadCarto[]): PointTournee[] {
 }
 
 const R_TERRE_KM = 6371;
-function haversineKm(la1: number, lo1: number, la2: number, lo2: number): number {
+export function haversineKm(la1: number, lo1: number, la2: number, lo2: number): number {
   const p1 = (la1 * Math.PI) / 180;
   const p2 = (la2 * Math.PI) / 180;
   const dphi = ((la2 - la1) * Math.PI) / 180;
