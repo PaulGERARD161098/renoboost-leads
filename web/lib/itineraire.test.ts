@@ -73,6 +73,54 @@ describe("planifierItineraire", () => {
   });
 });
 
+describe("planifierItineraire — fenêtres horaires (RDV)", () => {
+  const rdv = (id: string, lat: number, rdvISO: string): PointTournee => ({
+    categorie: "rdv",
+    lat,
+    lng: 3.0,
+    lead: {
+      id,
+      entreprise: `RDV ${id}`,
+      ville: id.toUpperCase(),
+      statut: "rdv_pris",
+      score: 80,
+      latitude: lat,
+      longitude: 3.0,
+      rdv_at: rdvISO,
+      contact_tel: null,
+    },
+  });
+
+  // R1 (sud, 9h) et R2 (nord, 11h), un prospect libre L au milieu — entrée mélangée.
+  const R1 = rdv("r1", 50.0, "2026-06-15T07:00:00Z");
+  const R2 = rdv("r2", 50.3, "2026-06-15T07:10:00Z");
+  const L = pt("l", 50.15);
+
+  it("honore les RDV dans l'ordre chronologique, insère le libre au milieu", () => {
+    const it = planifierItineraire([R2, L, R1]);
+    expect(it.etapes.map((e) => e.point.lead.id)).toEqual(["r1", "l", "r2"]);
+    expect(it.depart.label).toBe("RDV r1"); // l'ancre est le 1er RDV
+  });
+
+  it("calcule l'ETA et signale le risque de retard sur un RDV trop tôt", () => {
+    const it = planifierItineraire([R2, L, R1], null, {
+      departISO: "2026-06-15T07:00:00Z",
+      dwellMin: 30,
+    });
+    const eR1 = it.etapes.find((e) => e.point.lead.id === "r1")!;
+    const eR2 = it.etapes.find((e) => e.point.lead.id === "r2")!;
+    expect(eR1.etaMin).toBe(0);
+    expect(eR1.retardRdv).toBe(false); // arrivée 07:00 = heure du RDV
+    expect(eR2.etaMin).toBeGreaterThan(eR1.etaMin);
+    expect(eR2.retardRdv).toBe(true); // RDV à 07:10 mais arrivée bien plus tard
+  });
+
+  it("sans heure de départ : pas de calcul de retard", () => {
+    const it = planifierItineraire([R1, R2]);
+    expect(it.etapes.every((e) => e.retardRdv === false)).toBe(true);
+  });
+});
+
 describe("lienGoogleMaps", () => {
   it("sans origine : la 1ʳᵉ visite est l'origine, pas un waypoint dupliqué", () => {
     const it = planifierItineraire([A, B, C, D]);
