@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  chargerReferencesExemples,
   creerReference,
   supprimerReference,
   toggleReference,
@@ -134,10 +135,29 @@ export function ReferencesChantiers({ refs }: { refs: ReferenceRow[] }) {
       )}
 
       {refs.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--border)] bg-white p-4 text-sm text-[var(--muted)]">
-          Aucune référence pour l&apos;instant — ajoute tes premiers chantiers
-          livrés : ils renforceront chaque mail envoyé dans leur zone.
-        </p>
+        <div className="rounded-xl border border-dashed border-[var(--border)] bg-white p-4 text-sm text-[var(--muted)]">
+          <p className="mb-3">
+            Aucune référence pour l&apos;instant — ajoute tes premiers chantiers
+            livrés : ils renforceront chaque mail envoyé dans leur zone. Pas encore
+            de chantier à saisir ? Charge des exemples pour voir l&apos;effet tout de
+            suite (supprimables à tout moment).
+          </p>
+          <button
+            onClick={() =>
+              go(async () => {
+                const res = await chargerReferencesExemples();
+                if (!res.error)
+                  setMsg(`✅ ${res.ajoutes} exemple(s) ajouté(s) — à adapter ou remplacer.`);
+                return res;
+              })
+            }
+            disabled={pending}
+            className="rounded-lg border border-[var(--brand)]/40 bg-[var(--brand)]/5 px-3 py-1.5 text-sm font-medium text-[var(--brand)] hover:bg-[var(--brand)]/10 disabled:opacity-40"
+          >
+            {pending ? "Chargement…" : "✨ Charger 4 exemples (Hauts-de-France)"}
+          </button>
+          {msg && <span className="ml-3 text-xs">{msg}</span>}
+        </div>
       ) : (
         <ul className="grid gap-2 md:grid-cols-2">
           {refs.map((r) => (
