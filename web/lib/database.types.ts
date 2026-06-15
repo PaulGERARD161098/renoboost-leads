@@ -128,6 +128,7 @@ export interface Lead {
   issue_raison: string | null;
   issue_at: string | null;
   mail_angle: "solaire" | "ombrieres" | "bornes" | null;
+  mail_angle_source: "terrain" | "appris" | null;
   campaign_id: string | null;
   call_statut: CallStatut | null;
   owner: string | null;

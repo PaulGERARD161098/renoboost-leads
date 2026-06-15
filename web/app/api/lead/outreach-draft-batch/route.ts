@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
       ? { cle: reco.angle, label: ANGLE_LABEL[reco.angle] }
       : null;
     const axe = angle.pilote ? angle.cle : angleApplique?.cle ?? null;
+    const axeSource = angle.pilote ? "terrain" : angleApplique ? "appris" : null;
     const reference = choisirReference(refs, ld, axe);
     const draft = await generateOutreachDraft(
       apiKey,
@@ -164,6 +165,7 @@ export async function POST(req: NextRequest) {
         mail_sujet: draft.sujet,
         mail_corps: draft.corps,
         mail_angle: axe,
+        mail_angle_source: axeSource,
       })
       .eq("id", ld.id);
     if (upErr) {
