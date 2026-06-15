@@ -141,3 +141,52 @@ export function angleGagnantParCible(
   }
   return recos;
 }
+
+export type LiftAngleAppris = {
+  aligne: { envoyes: number; repondus: number; taux: number };
+  autre: { envoyes: number; repondus: number; taux: number };
+  lift: number; // écart de taux de réponse (points de %), aligné − autre
+};
+
+/**
+ * Mesure de la valeur (charte) : sur les cibles qui ont un angle gagnant fiable,
+ * compare le taux de réponse des leads dont l'angle envoyé COÏNCIDE avec l'angle
+ * appris vs les autres. Renvoie null tant qu'on n'a pas les deux côtés (pas de
+ * comparant honnête). Helper pur, rendu sur /suivi.
+ */
+export function liftAngleAppris(
+  leads: LeadStatCible[],
+  minEnvoyes: number = MIN_ENVOYES_RECO,
+): LiftAngleAppris | null {
+  const best = new Map(
+    angleGagnantParCible(leads, minEnvoyes).map((r) => [r.verticaleId, r.angle]),
+  );
+  if (best.size === 0) return null;
+
+  let aE = 0,
+    aR = 0,
+    oE = 0,
+    oR = 0;
+  for (const l of leads) {
+    if (!l.verticale_id || l.mail_angle == null) continue;
+    const b = best.get(l.verticale_id);
+    if (!b) continue; // cible sans angle gagnant fiable : hors mesure
+    const envoye = l.sent_at != null || CONTACTES.includes(l.statut);
+    if (!envoye) continue;
+    const repondu = l.replied_at != null || A_REPONDU.includes(l.statut);
+    if (l.mail_angle === b) {
+      aE++;
+      if (repondu) aR++;
+    } else {
+      oE++;
+      if (repondu) oR++;
+    }
+  }
+  if (aE === 0 || oE === 0) return null;
+  const taux = (r: number, e: number) => Math.round((r / e) * 100);
+  return {
+    aligne: { envoyes: aE, repondus: aR, taux: taux(aR, aE) },
+    autre: { envoyes: oE, repondus: oR, taux: taux(oR, oE) },
+    lift: taux(aR, aE) - taux(oR, oE),
+  };
+}

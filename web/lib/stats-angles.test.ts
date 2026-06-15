@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   statsParAngle,
   angleGagnantParCible,
+  liftAngleAppris,
   type LeadStat,
   type LeadStatCible,
 } from "@/lib/stats-angles";
@@ -114,5 +115,44 @@ describe("angleGagnantParCible", () => {
       2,
     );
     expect(recos[0]).toMatchObject({ angle: "bornes", envoyes: 2 });
+  });
+});
+
+describe("liftAngleAppris", () => {
+  // Cible A : bornes gagne (6 envois, 4 réponses = 67%) vs solaire (4, 0 = 0%).
+  const dataset = [
+    leadC("A", "repondu", "bornes"),
+    leadC("A", "repondu", "bornes"),
+    leadC("A", "repondu", "bornes"),
+    leadC("A", "rdv_pris", "bornes"),
+    leadC("A", "envoye", "bornes"),
+    leadC("A", "envoye", "bornes"),
+    leadC("A", "envoye", "solaire"),
+    leadC("A", "envoye", "solaire"),
+    leadC("A", "envoye", "solaire"),
+    leadC("A", "envoye", "solaire"),
+  ];
+
+  it("mesure le lift : aligné sur l'angle appris vs autre", () => {
+    const lift = liftAngleAppris(dataset)!;
+    expect(lift.aligne).toMatchObject({ envoyes: 6, repondus: 4, taux: 67 });
+    expect(lift.autre).toMatchObject({ envoyes: 4, repondus: 0, taux: 0 });
+    expect(lift.lift).toBe(67);
+  });
+
+  it("null sans angle gagnant fiable (pas assez d'envois)", () => {
+    expect(liftAngleAppris([leadC("A", "repondu", "bornes")])).toBeNull();
+  });
+
+  it("null s'il manque un côté du comparant (tout aligné)", () => {
+    // bornes gagne et tous les leads sont en bornes → pas de groupe « autre ».
+    expect(
+      liftAngleAppris([
+        leadC("A", "repondu", "bornes"),
+        leadC("A", "repondu", "bornes"),
+        leadC("A", "envoye", "bornes"),
+        leadC("A", "envoye", "bornes"),
+      ]),
+    ).toBeNull();
   });
 });

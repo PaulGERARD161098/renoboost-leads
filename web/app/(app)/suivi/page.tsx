@@ -3,7 +3,12 @@ import type { Lead, LeadStatus } from "@/lib/database.types";
 import { KanbanCard } from "@/components/kanban-card";
 import { ActionsBand } from "@/components/actions-band";
 import { rankBandActions } from "@/lib/suggestions";
-import { statsParAngle, angleGagnantParCible, ANGLE_LABEL } from "@/lib/stats-angles";
+import {
+  statsParAngle,
+  angleGagnantParCible,
+  liftAngleAppris,
+  ANGLE_LABEL,
+} from "@/lib/stats-angles";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +96,8 @@ export default async function SuiviPage() {
   // Boucle d'apprentissage : par cible, l'angle qui convertit le mieux → l'agent
   // PROPOSE de le privilégier (validé au moment de générer le brouillon sur la fiche).
   const recos = angleGagnantParCible(leads);
+  // Mesure de la valeur : l'angle appris fait-il vraiment mieux ? (taux aligné vs autre)
+  const lift = liftAngleAppris(leads);
   const { data: vData } = recos.length
     ? await supabase.from("verticales").select("id, nom")
     : { data: null };
@@ -142,6 +149,22 @@ export default async function SuiviPage() {
             Ce qui convertit le mieux sur le terrain — l&apos;agent propose, tu valides
             en générant le brouillon. La reco s&apos;affine à chaque envoi.
           </p>
+          {lift && (
+            <div className="mb-3 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm">
+              <span className="font-semibold">
+                📈 Lift de l&apos;angle appris :{" "}
+                <span className={lift.lift >= 0 ? "text-emerald-600" : "text-red-600"}>
+                  {lift.lift >= 0 ? "+" : ""}
+                  {lift.lift} pts
+                </span>
+              </span>
+              <span className="ml-1 text-xs text-[var(--muted)]">
+                — {lift.aligne.taux}% de réponse quand l&apos;angle envoyé suit la reco
+                ({lift.aligne.envoyes} envois) vs {lift.autre.taux}% sinon (
+                {lift.autre.envoyes}). La preuve que la boucle paie.
+              </span>
+            </div>
+          )}
           <ul className="space-y-2 text-sm">
             {recos.map((r) => (
               <li

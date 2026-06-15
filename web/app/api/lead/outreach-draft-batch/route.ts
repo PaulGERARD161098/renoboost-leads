@@ -7,6 +7,8 @@ import {
   type OutreachMode,
   type ReferenceChantier,
 } from "@/lib/outreach";
+import { recoAngleCible } from "@/lib/angle-reco";
+import { ANGLE_LABEL, type AngleReco } from "@/lib/stats-angles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
   const { data: leadsData } = await supabase
     .from("leads")
     .select(
-      "id, entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, latitude, longitude, verticale:verticales(nom), campaign:campaigns(client_nom)",
+      "id, entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, latitude, longitude, verticale_id, verticale:verticales(nom), campaign:campaigns(client_nom)",
     )
     .in("id", leadIds);
   type Row = {
@@ -70,6 +72,7 @@ export async function POST(req: NextRequest) {
     vision_satellite: Record<string, unknown> | null;
     latitude: number | null;
     longitude: number | null;
+    verticale_id: string | null;
     verticale?: { nom?: string } | { nom?: string }[];
     campaign?: { client_nom?: string | null } | { client_nom?: string | null }[];
   };
@@ -106,6 +109,14 @@ export async function POST(req: NextRequest) {
     .eq("actif", true);
   const refs = (refsData as ReferenceChantier[] | null) ?? [];
 
+  // Angle gagnant appris par cible, calculé au plus une fois par verticale.
+  const recoCache = new Map<string, AngleReco | null>();
+  const recoFor = async (vid: string | null): Promise<AngleReco | null> => {
+    if (!vid) return null;
+    if (!recoCache.has(vid)) recoCache.set(vid, await recoAngleCible(supabase, vid));
+    return recoCache.get(vid) ?? null;
+  };
+
   let done = 0;
   let failed = 0;
   for (const ld of leads) {
@@ -116,7 +127,13 @@ export async function POST(req: NextRequest) {
       ? ld.campaign[0]?.client_nom ?? null
       : ld.campaign?.client_nom ?? null;
     const angle = angleOutreach(ld.vision_satellite);
-    const reference = choisirReference(refs, ld, angle.pilote ? angle.cle : null);
+    // Terrain muet → angle appris sur la cible (le terrain prime quand il parle).
+    const reco = angle.pilote ? null : await recoFor(ld.verticale_id);
+    const angleApplique = reco
+      ? { cle: reco.angle, label: ANGLE_LABEL[reco.angle] }
+      : null;
+    const axe = angle.pilote ? angle.cle : angleApplique?.cle ?? null;
+    const reference = choisirReference(refs, ld, axe);
     const draft = await generateOutreachDraft(
       apiKey,
       mode,
@@ -135,6 +152,7 @@ export async function POST(req: NextRequest) {
       client,
       telephone,
       reference,
+      angleApplique,
     );
     if (!draft.ok) {
       failed++;
@@ -145,7 +163,7 @@ export async function POST(req: NextRequest) {
       .update({
         mail_sujet: draft.sujet,
         mail_corps: draft.corps,
-        mail_angle: angle.pilote ? angle.cle : null,
+        mail_angle: axe,
       })
       .eq("id", ld.id);
     if (upErr) {
