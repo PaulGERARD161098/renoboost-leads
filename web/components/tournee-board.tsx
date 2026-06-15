@@ -23,12 +23,33 @@ type Origin = { lat: number; lng: number; label: string } | null;
 export function TourneeBoard({ points }: { points: PointTournee[] }) {
   const [origin, setOrigin] = useState<Origin>(null);
   const [geoState, setGeoState] = useState<"idle" | "pending" | "error">("idle");
+  const [departHHMM, setDepartHHMM] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
+
+  const departISO = useMemo(() => {
+    const [h, m] = departHHMM.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  }, [departHHMM]);
 
   const itineraire = useMemo(
-    () => planifierItineraire(points, origin),
-    [points, origin],
+    () => planifierItineraire(points, origin, { departISO }),
+    [points, origin, departISO],
   );
   const lien = lienGoogleMaps(itineraire);
+
+  const fmtHeure = (iso: string | null) => {
+    const t = iso ? Date.parse(iso) : NaN;
+    return Number.isNaN(t)
+      ? null
+      : new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  };
+  const etaHeure = (etaMin: number) =>
+    departISO ? fmtHeure(new Date(Date.parse(departISO) + etaMin * 60_000).toISOString()) : null;
 
   function partirDeMaPosition() {
     if (!navigator.geolocation) {
@@ -86,7 +107,16 @@ export function TourneeBoard({ points }: { points: PointTournee[] }) {
           <span className="font-medium">{itineraire.depart.label}</span>.
         </p>
 
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs">
+            <span className="text-[var(--muted)]">🕗 Départ</span>
+            <input
+              type="time"
+              value={departHHMM}
+              onChange={(e) => setDepartHHMM(e.target.value)}
+              className="bg-transparent font-medium outline-none"
+            />
+          </label>
           <button
             onClick={partirDeMaPosition}
             disabled={geoState === "pending"}
@@ -127,7 +157,18 @@ export function TourneeBoard({ points }: { points: PointTournee[] }) {
                   <span className="block text-xs text-[var(--muted)]">
                     {meta.emoji} {e.point.lead.ville ?? "—"}
                     {e.legKm > 0 ? ` · +${e.legKm} km` : " · départ"}
+                    {etaHeure(e.etaMin) ? ` · arrivée ~${etaHeure(e.etaMin)}` : ""}
                   </span>
+                  {e.point.categorie === "rdv" && e.point.lead.rdv_at && (
+                    <span
+                      className={`block text-xs font-medium ${
+                        e.retardRdv ? "text-red-600" : "text-[var(--brand)]"
+                      }`}
+                    >
+                      📅 RDV {fmtHeure(e.point.lead.rdv_at)}
+                      {e.retardRdv ? " · ⚠ arrivée estimée en retard" : ""}
+                    </span>
+                  )}
                 </span>
               </li>
             );

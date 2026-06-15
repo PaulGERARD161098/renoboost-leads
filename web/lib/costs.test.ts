@@ -2,13 +2,36 @@ import { describe, expect, it } from "vitest";
 import {
   COUT_CLAUDE_HAIKU_PAR_LEAD,
   COUT_PLACES_PAR_LEAD,
+  COUT_RELANCE_PREDRAFT_EUR,
+  coutRelances,
   cumulerCoutDetail,
   estimerCoutDetail,
   estimerCoutRun,
   formatEur,
   normaliserCoutDetail,
+  predraftsRestantsSousBudget,
   sommeCoutDetail,
 } from "@/lib/costs";
+
+describe("budget IA des relances", () => {
+  it("coutRelances = nb × coût unitaire (jamais négatif)", () => {
+    expect(coutRelances(5)).toBeCloseTo(5 * COUT_RELANCE_PREDRAFT_EUR);
+    expect(coutRelances(0)).toBe(0);
+    expect(coutRelances(-3)).toBe(0);
+  });
+
+  it("plafond ≤ 0 → pas de limite (Infinity)", () => {
+    expect(predraftsRestantsSousBudget(0, 10)).toBe(Infinity);
+    expect(predraftsRestantsSousBudget(-1, 0)).toBe(Infinity);
+  });
+
+  it("respecte le budget restant et le borne à 0", () => {
+    // 0,20 € / 0,02 € = 10 pré-rédactions/jour ; 4 déjà faites → 6 restantes.
+    expect(predraftsRestantsSousBudget(0.2, 4)).toBe(6);
+    expect(predraftsRestantsSousBudget(0.2, 10)).toBe(0);
+    expect(predraftsRestantsSousBudget(0.2, 99)).toBe(0);
+  });
+});
 
 describe("estimerCoutDetail", () => {
   it("ventile par API avec une fourchette bas/haut", () => {

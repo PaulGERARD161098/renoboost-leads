@@ -36,6 +36,9 @@ export function AgentConfigForm({
     String(config.relance_auto_max_jour),
   );
   const [relancePredraft, setRelancePredraft] = useState(config.relance_predraft);
+  const [relanceCoutMaxJour, setRelanceCoutMaxJour] = useState(
+    String(config.relance_cout_max_jour),
+  );
   const [reponseStatutAuto, setReponseStatutAuto] = useState(
     config.reponse_statut_auto,
   );
@@ -73,6 +76,7 @@ export function AgentConfigForm({
       relance_max: Number(relanceMax) || 0,
       relance_auto_max_jour: Number(relanceMaxJour) || 0,
       relance_predraft: relancePredraft,
+      relance_cout_max_jour: Number(relanceCoutMaxJour) || 0,
       reponse_statut_auto: reponseStatutAuto,
       veille_auto_lead: veilleAutoLead,
       veille_auto_seuil: Number(veilleAutoSeuil) || 0,
@@ -179,6 +183,11 @@ export function AgentConfigForm({
                 label="Budget : relances / jour (max)"
                 value={relanceMaxJour}
                 onChange={setRelanceMaxJour}
+              />
+              <Field
+                label="Plafond € IA / jour (0 = aucun)"
+                value={relanceCoutMaxJour}
+                onChange={setRelanceCoutMaxJour}
               />
             </div>
             <label className="mt-4 flex items-start gap-2 text-sm">

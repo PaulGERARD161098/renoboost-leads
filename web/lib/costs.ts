@@ -18,6 +18,28 @@ export const COUT_DROPCONTACT_PAR_LEAD = 0.1;
 export const COUT_CLAUDE_HAIKU_PAR_LEAD = 0.005;
 export const COUT_CLAUDE_SONNET_PAR_LEAD = 0.02;
 
+// Une pré-rédaction de relance = une génération Claude Sonnet (~700 tokens),
+// du même ordre qu'un pitch d'étage 4. Sert à chiffrer le coût IA des relances.
+export const COUT_RELANCE_PREDRAFT_EUR = COUT_CLAUDE_SONNET_PAR_LEAD;
+
+/** Coût IA estimé de `nb` pré-rédactions de relance. */
+export function coutRelances(nb: number): number {
+  return Math.max(0, nb) * COUT_RELANCE_PREDRAFT_EUR;
+}
+
+/**
+ * Nombre de pré-rédactions encore permises sous le plafond de coût du jour
+ * (garde-fou budget). `coutMaxJour` ≤ 0 → pas de plafond (Infinity).
+ */
+export function predraftsRestantsSousBudget(
+  coutMaxJour: number,
+  dejaRedigeesAujourdhui: number,
+): number {
+  if (!(coutMaxJour > 0)) return Infinity;
+  const restantEur = coutMaxJour - coutRelances(dejaRedigeesAujourdhui);
+  return Math.max(0, Math.floor(restantEur / COUT_RELANCE_PREDRAFT_EUR));
+}
+
 /** Les 4 postes de coût pilotés (les 3 API payantes + Claude). */
 export type CoutCategorie = "places" | "pappers" | "dropcontact" | "claude";
 

@@ -15,6 +15,8 @@ export type EtapeItineraire = {
   ordre: number; // 1-based
   legKm: number; // distance depuis l'étape précédente (ou le départ)
   cumulKm: number; // distance cumulée depuis le départ
+  etaMin: number; // minutes après le départ avant d'arriver à cette étape
+  retardRdv: boolean; // RDV horodaté dont l'arrivée estimée tombe APRÈS l'heure du RDV
 };
 
 export type Itineraire = {
@@ -25,7 +27,11 @@ export type Itineraire = {
   dureeRouteMin: number; // estimation grossière (vitesse moyenne ~50 km/h)
 };
 
+// Fenêtres horaires : heure de départ (pour les ETA) + temps passé par visite.
+export type OptsItineraire = { departISO?: string | null; dwellMin?: number };
+
 const VITESSE_MOY_KMH = 50;
+const DWELL_DEFAUT_MIN = 30;
 
 /** Ordre des points par plus proche voisin depuis `start` (indices dans `pts`). */
 function plusProcheVoisin(pts: Geo[], startIdx: number): number[] {
@@ -107,9 +113,52 @@ function deuxOpt(
  *  • sans origin : on part de la 1ʳᵉ visite (les points arrivent déjà triés par
  *    priorité — RDV d'abord), qui devient l'étape 1.
  */
+/**
+ * Quand ≥2 RDV sont horodatés, la journée est structurée par les rendez-vous :
+ * on les honore dans l'ordre CHRONOLOGIQUE (épine dorsale fixe) et on insère les
+ * prospects libres au moindre détour (insertion la moins coûteuse). Renvoie null
+ * s'il n'y a pas assez de RDV horodatés pour contraindre l'ordre.
+ */
+function ordreParHoraires(
+  points: PointTournee[],
+  pts: Geo[],
+  origine: Geo | null,
+): number[] | null {
+  const horodates = points
+    .map((p, i) => ({ i, t: p.categorie === "rdv" ? p.lead.rdv_at : null }))
+    .filter((x): x is { i: number; t: string } => Boolean(x.t) && !Number.isNaN(Date.parse(x.t!)));
+  if (horodates.length < 2) return null;
+
+  const seq = horodates
+    .sort((a, b) => Date.parse(a.t) - Date.parse(b.t))
+    .map((x) => x.i);
+  const libres = points.map((_, i) => i).filter((i) => !seq.includes(i));
+  const km = (a: Geo, b: Geo) => haversineKm(a.lat, a.lng, b.lat, b.lng);
+
+  for (const l of libres) {
+    let bestPos = seq.length;
+    let bestDelta = Infinity;
+    // Sans origine, interdit d'insérer avant l'ancre (le 1er RDV reste le départ).
+    for (let k = origine ? 0 : 1; k <= seq.length; k++) {
+      const prev = k === 0 ? origine! : pts[seq[k - 1]];
+      const next = k < seq.length ? pts[seq[k]] : null;
+      const delta = next
+        ? km(prev, pts[l]) + km(pts[l], next) - km(prev, next)
+        : km(prev, pts[l]);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestPos = k;
+      }
+    }
+    seq.splice(bestPos, 0, l);
+  }
+  return seq;
+}
+
 export function planifierItineraire(
   points: PointTournee[],
   origin?: { lat: number; lng: number; label?: string } | null,
+  opts: OptsItineraire = {},
 ): Itineraire {
   const vide: Itineraire = {
     depart: origin
@@ -122,49 +171,60 @@ export function planifierItineraire(
   if (points.length === 0) return vide;
 
   const pts: Geo[] = points.map((p) => ({ lat: p.lat, lng: p.lng }));
+  const origine: Geo | null = origin ? { lat: origin.lat, lng: origin.lng } : null;
 
-  let origine: Geo | null;
-  let depart: Itineraire["depart"];
-  let ordre: number[];
-
-  if (origin) {
-    origine = { lat: origin.lat, lng: origin.lng };
-    depart = { lat: origin.lat, lng: origin.lng, label: origin.label ?? "Ma position" };
-    // Démarre au plus proche de l'origine, puis NN.
-    let proche = 0;
-    let procheD = Infinity;
-    for (let j = 0; j < pts.length; j++) {
-      const d = haversineKm(origine.lat, origine.lng, pts[j].lat, pts[j].lng);
-      if (d < procheD) {
-        procheD = d;
-        proche = j;
+  // Priorité aux fenêtres horaires des RDV ; sinon ordre géométrique (NN + 2-opt).
+  let ordre = ordreParHoraires(points, pts, origine);
+  if (!ordre) {
+    if (origine) {
+      let proche = 0;
+      let procheD = Infinity;
+      for (let j = 0; j < pts.length; j++) {
+        const d = haversineKm(origine.lat, origine.lng, pts[j].lat, pts[j].lng);
+        if (d < procheD) {
+          procheD = d;
+          proche = j;
+        }
       }
+      ordre = deuxOpt(origine, pts, plusProcheVoisin(pts, proche), false);
+    } else {
+      ordre = deuxOpt(null, pts, plusProcheVoisin(pts, 0), true);
     }
-    ordre = plusProcheVoisin(pts, proche);
-    ordre = deuxOpt(origine, pts, ordre, false);
-  } else {
-    origine = null;
-    const ancre = points[0];
-    depart = { lat: ancre.lat, lng: ancre.lng, label: ancre.lead.entreprise };
-    ordre = plusProcheVoisin(pts, 0);
-    ordre = deuxOpt(null, pts, ordre, true);
   }
 
+  const depart: Itineraire["depart"] = origin
+    ? { lat: origin.lat, lng: origin.lng, label: origin.label ?? "Ma position" }
+    : { lat: points[ordre[0]].lat, lng: points[ordre[0]].lng, label: points[ordre[0]].lead.entreprise };
+
+  const dwell = opts.dwellMin ?? DWELL_DEFAUT_MIN;
+  const departEpoch = opts.departISO ? Date.parse(opts.departISO) : NaN;
   const etapes: EtapeItineraire[] = [];
   let prev: Geo = origine ?? pts[ordre[0]];
   let cumul = 0;
+  let cumulMin = 0;
   for (let i = 0; i < ordre.length; i++) {
     const idx = ordre[i];
     const p = pts[idx];
     const premierSansOrigine = !origine && i === 0;
     const leg = premierSansOrigine ? 0 : haversineKm(prev.lat, prev.lng, p.lat, p.lng);
     cumul += leg;
+    cumulMin += (leg / VITESSE_MOY_KMH) * 60; // temps de route jusqu'à cette étape
+    const etaMin = Math.round(cumulMin);
+    let retardRdv = false;
+    const rdvAt = points[idx].lead.rdv_at;
+    if (!Number.isNaN(departEpoch) && points[idx].categorie === "rdv" && rdvAt) {
+      const arrivee = departEpoch + etaMin * 60_000;
+      retardRdv = !Number.isNaN(Date.parse(rdvAt)) && arrivee > Date.parse(rdvAt);
+    }
     etapes.push({
       point: points[idx],
       ordre: i + 1,
       legKm: Math.round(leg * 10) / 10,
       cumulKm: Math.round(cumul * 10) / 10,
+      etaMin,
+      retardRdv,
     });
+    cumulMin += dwell; // temps passé sur place avant de repartir
     prev = p;
   }
 

@@ -7,6 +7,8 @@ import {
   type OutreachMode,
   type ReferenceChantier,
 } from "@/lib/outreach";
+import { recoAngleCible } from "@/lib/angle-reco";
+import { ANGLE_LABEL } from "@/lib/stats-angles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, latitude, longitude, verticale:verticales(nom), campaign:campaigns(client_nom)",
+      "entreprise, ville, effectif, contact_nom, libelle_naf, naf, score_raison, vision_satellite, latitude, longitude, verticale_id, verticale:verticales(nom), campaign:campaigns(client_nom)",
     )
     .eq("id", leadId)
     .maybeSingle();
@@ -56,6 +58,7 @@ export async function POST(req: NextRequest) {
     vision_satellite: Record<string, unknown> | null;
     latitude: number | null;
     longitude: number | null;
+    verticale_id: string | null;
     verticale?: { nom?: string } | { nom?: string }[];
     campaign?: { client_nom?: string | null } | { client_nom?: string | null }[];
   };
@@ -84,8 +87,19 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   const contactRole = (principal as { role: string | null } | null)?.role ?? null;
 
-  // Preuve sociale : la référence chantier la plus proche, sur l'axe du mail.
+  // Angle terrain (analyse du site). S'il est muet, on applique l'angle gagnant
+  // APPRIS sur la cible (boucle d'apprentissage refermée) — le terrain prime
+  // toujours quand il parle.
   const angle = angleOutreach(ld.vision_satellite);
+  const recoAppris = angle.pilote
+    ? null
+    : await recoAngleCible(supabase, ld.verticale_id);
+  const angleApplique = recoAppris
+    ? { cle: recoAppris.angle, label: ANGLE_LABEL[recoAppris.angle] }
+    : null;
+  const axeReference = angle.pilote ? angle.cle : angleApplique?.cle ?? null;
+
+  // Preuve sociale : la référence chantier la plus proche, sur l'axe du mail.
   const { data: refsData } = await supabase
     .from("references_chantiers")
     .select("nom, ville, lat, lng, axe, description")
@@ -93,7 +107,7 @@ export async function POST(req: NextRequest) {
   const reference = choisirReference(
     (refsData as ReferenceChantier[] | null) ?? [],
     ld,
-    angle.pilote ? angle.cle : null,
+    axeReference,
   );
 
   const draft = await generateOutreachDraft(
@@ -114,20 +128,20 @@ export async function POST(req: NextRequest) {
     client,
     telephone,
     reference,
+    angleApplique,
   );
   if (!draft.ok) {
     return NextResponse.json({ error: draft.error }, { status: draft.status });
   }
-  // `angle` : dit à l'UI si le brouillon est piloté par l'analyse du site
-  // (et sur quel axe) — transparence demandée par les retours terrain. L'axe
-  // est aussi persisté sur le lead (mail_angle) pour les stats par angle.
+  // Persiste l'axe retenu (terrain sinon appris) pour les stats + le lift par angle.
   await supabase
     .from("leads")
-    .update({ mail_angle: angle.pilote ? angle.cle : null })
+    .update({ mail_angle: axeReference })
     .eq("id", leadId);
   return NextResponse.json({
     sujet: draft.sujet,
     corps: draft.corps,
     angle,
+    angleApplique,
   });
 }

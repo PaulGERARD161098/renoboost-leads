@@ -49,10 +49,13 @@ export function LeadEditor({
           | { pilote: true; label: string; score: number }
           | { pilote: false }
           | undefined;
+        const applique = data.angleApplique as { label: string } | null | undefined;
         setMsg(
           angle?.pilote
             ? `✨ Brouillon piloté par l'analyse du site — angle : ${angle.label} (${angle.score}/10). Relis et enregistre ou envoie.`
-            : "✨ Brouillon généré — ⚠️ sans analyse du site (lance l'analyse satellite de la fiche pour un mail piloté par le terrain). Relis et enregistre ou envoie.",
+            : applique
+              ? `✨ Brouillon généré — angle ${applique.label} appliqué depuis l'apprentissage (discours qui convertit le mieux sur cette cible, faute d'analyse du site). Relis et enregistre ou envoie.`
+              : "✨ Brouillon généré — ⚠️ sans analyse du site (lance l'analyse satellite de la fiche pour un mail piloté par le terrain). Relis et enregistre ou envoie.",
         );
       }
     } catch {

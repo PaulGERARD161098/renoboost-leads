@@ -7,6 +7,7 @@ import type {
 import { AgentConfigForm } from "@/components/agent-config-form";
 import { SuggestionValue } from "@/components/suggestion-value";
 import { formatDate } from "@/lib/ui";
+import { formatEur } from "@/lib/costs";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,16 @@ export default async function AgentPage() {
     0,
   );
 
+  // Coût IA de la pré-rédaction des relances, cumulé sur la journée (porte c).
+  const { data: relJournal } = await supabase
+    .from("agent_journal")
+    .select("cout_estime_eur")
+    .eq("type", "relance_auto")
+    .gte("at", startOfDay.toISOString());
+  const coutRelancesJour = (
+    (relJournal as { cout_estime_eur: number | null }[]) ?? []
+  ).reduce((s, r) => s + Number(r.cout_estime_eur ?? 0), 0);
+
   return (
     <div className="max-w-3xl">
       <h1 className="mb-1 text-2xl font-bold">Agent — Magellan</h1>
@@ -73,7 +84,7 @@ export default async function AgentPage() {
         </div>
       ) : (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
             <Stat
               label="État"
               value={config.autonomie ? "Autonome" : "En pause"}
@@ -84,6 +95,14 @@ export default async function AgentPage() {
               value={`${Math.round(engage)} €`}
             />
             <Stat label="Max/jour" value={config.max_runs_jour} />
+            <Stat
+              label="Relances IA (jour)"
+              value={
+                config.relance_cout_max_jour > 0
+                  ? `${formatEur(coutRelancesJour)} / ${formatEur(config.relance_cout_max_jour)}`
+                  : formatEur(coutRelancesJour)
+              }
+            />
           </div>
 
           <AgentConfigForm config={config} verticales={verticales} />

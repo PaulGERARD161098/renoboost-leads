@@ -269,6 +269,9 @@ export function buildOutreachPrompt(
   client: string | null = null,
   telephone: string | null = null,
   reference: ReferenceCitable | null = null,
+  // Axe à privilégier APPRIS sur la cible — utilisé seulement si l'analyse du
+  // site est muette (le terrain prime toujours quand il parle).
+  angleAppris: { label: string } | null = null,
 ): string {
   // Quand la campagne est affectée à un client, l'email est rédigé et signé en
   // son nom (RénoBoost reste l'outil, le client est l'émetteur visible).
@@ -301,6 +304,13 @@ export function buildOutreachPrompt(
       blocTerrain = `\n\nÉléments terrain (ESTIMATION depuis vue aérienne — ordres de grandeur, jamais des mesures certifiées) : ${terrain}.`;
       consigneTerrain =
         " Tu peux t'appuyer sur les éléments terrain pour personnaliser l'accroche, mais formule-les en ordre de grandeur prudent (« de l'ordre de », « environ ») et jamais comme une mesure exacte.";
+    }
+    // Site sans analyse : on s'appuie sur l'axe qui convertit le mieux sur cette
+    // cible (appris). Aucun chiffre du site inventé — juste l'orientation du discours.
+    if (angleAppris) {
+      blocTerrain += `\n\nAxe à privilégier (appris : c'est le discours qui convertit le mieux sur cette cible) : ${angleAppris.label}.`;
+      consigneTerrain +=
+        ` Construis l'accroche autour de l'axe « ${angleAppris.label} » et relie-le à l'offre, sans prétendre avoir analysé ce site précis ni inventer de mesures.`;
     }
   }
 
@@ -377,6 +387,7 @@ export async function generateOutreachDraft(
   client: string | null = null,
   telephone: string | null = null,
   reference: ReferenceCitable | null = null,
+  angleAppris: { label: string } | null = null,
 ): Promise<DraftResult> {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -392,7 +403,16 @@ export async function generateOutreachDraft(
         messages: [
           {
             role: "user",
-            content: buildOutreachPrompt(mode, lead, offre, calendlyUrl, client, telephone, reference),
+            content: buildOutreachPrompt(
+              mode,
+              lead,
+              offre,
+              calendlyUrl,
+              client,
+              telephone,
+              reference,
+              angleAppris,
+            ),
           },
         ],
       }),
