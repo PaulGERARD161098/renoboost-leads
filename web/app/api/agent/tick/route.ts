@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { analyseSatellite } from "@/lib/satellite";
 import { generateOutreachDraft } from "@/lib/outreach";
+import { coutRelances, predraftsRestantsSousBudget } from "@/lib/costs";
 import type { AgentConfig, Run, Verticale } from "@/lib/database.types";
 
 const SATELLITE_PAR_TICK = 5;
@@ -111,8 +112,21 @@ async function handle(req: NextRequest) {
       // jamais envoyé. Désactivable, et sans clé IA on se contente de planifier.
       const apiKey = process.env.ANTHROPIC_API_KEY;
       const predraft = cfg.relance_predraft && Boolean(apiKey);
+      // Garde-fou COÛT (porte c) : on borne le nombre de pré-rédactions du jour
+      // sous le plafond € (0 = pas de plafond). Chaque brouillon = 1 appel IA.
+      let predraftBudget = Infinity;
       let calendlyUrl: string | null = null;
       if (predraft) {
+        const { count: predraftsAuj } = await admin
+          .from("lead_events")
+          .select("id", { count: "exact", head: true })
+          .eq("type", "relance")
+          .eq("payload->>predraft", "true")
+          .gte("at", sodRelance.toISOString());
+        predraftBudget = predraftsRestantsSousBudget(
+          cfg.relance_cout_max_jour,
+          predraftsAuj ?? 0,
+        );
         const { data: ctx } = await admin
           .from("app_context")
           .select("calendly_url")
@@ -168,9 +182,9 @@ async function handle(req: NextRequest) {
           .eq("id", l.id);
         if (upErr) continue;
 
-        // Brouillon de relance prêt à valider (jamais envoyé).
+        // Brouillon de relance prêt à valider (jamais envoyé), sous le budget coût.
         let redige = false;
-        if (predraft) {
+        if (predraft && relancesRedigees < predraftBudget) {
           const draft = await generateOutreachDraft(
             apiKey!,
             "relance",
@@ -204,11 +218,13 @@ async function handle(req: NextRequest) {
         relancesPlanifiees++;
       }
       if (relancesPlanifiees > 0) {
+        const coutIa = coutRelances(relancesRedigees);
         const suffixe = relancesRedigees
-          ? ` dont ${relancesRedigees} avec brouillon de relance prêt`
+          ? ` dont ${relancesRedigees} avec brouillon prêt (~${coutIa.toFixed(2)} € IA)`
           : "";
         await admin.from("agent_journal").insert({
           type: "relance_auto",
+          cout_estime_eur: coutIa,
           message: `Relances planifiées : ${relancesPlanifiees} lead(s) sans réponse depuis ${cfg.relance_delai_jours} j.${suffixe} (à valider et envoyer · budget ${cfg.relance_auto_max_jour}/j).`,
         });
       }
