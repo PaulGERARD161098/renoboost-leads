@@ -9,6 +9,9 @@ export type LeadStat = {
   mail_angle: "solaire" | "ombrieres" | "bornes" | null;
   sent_at: string | null;
   replied_at: string | null;
+  // Source de l'angle retenu — 'terrain' (analyse site) ou 'appris' (reco cible).
+  // Optionnel : null/absent pour les anciens leads (hors A/B par source).
+  mail_angle_source?: "terrain" | "appris" | null;
 };
 
 export type AngleStat = {
@@ -93,10 +96,20 @@ export type AngleReco = {
   // Avance (points de %) sur le 2ᵉ meilleur angle de la cible — null si seul angle
   // ayant assez d'envois. Sert à doser la confiance de la reco.
   avance: number | null;
+  // Auto-validée par les résultats : signal assez fort (volume + avance nette)
+  // pour ne plus seulement « proposer » mais affirmer la reco. La boucle se
+  // referme — la reco se valide elle-même sans intervention humaine.
+  validee: boolean;
 };
 
 // Sous ce seuil d'envois, pas assez de signal pour recommander honnêtement un angle.
 export const MIN_ENVOYES_RECO = 4;
+
+// Auto-validation : une reco devient « validée par les résultats » quand le signal
+// est solide — assez d'envois sur l'angle gagnant ET avance nette sur le 2ᵉ angle
+// (un comparant existe et le départage est franc, pas du bruit).
+export const MIN_ENVOYES_VALID = 8;
+export const MIN_AVANCE_VALID = 15; // points de %
 
 /**
  * Pour chaque cible (verticale), l'angle qui convertit le mieux parmi ceux ayant
@@ -128,6 +141,8 @@ export function angleGagnantParCible(
     if (candidats.length === 0) continue;
     const gagnant = candidats[0];
     const second = candidats[1];
+    const avance =
+      second != null ? (gagnant.tauxReponse ?? 0) - (second.tauxReponse ?? 0) : null;
     recos.push({
       verticaleId,
       angle: gagnant.angle as Angle,
@@ -135,8 +150,11 @@ export function angleGagnantParCible(
       repondus: gagnant.repondus,
       tauxReponse: gagnant.tauxReponse ?? 0,
       gagnes: gagnant.gagnes,
-      avance:
-        second != null ? (gagnant.tauxReponse ?? 0) - (second.tauxReponse ?? 0) : null,
+      avance,
+      validee:
+        gagnant.envoyes >= MIN_ENVOYES_VALID &&
+        avance != null &&
+        avance >= MIN_AVANCE_VALID,
     });
   }
   return recos;
@@ -188,5 +206,49 @@ export function liftAngleAppris(
     aligne: { envoyes: aE, repondus: aR, taux: taux(aR, aE) },
     autre: { envoyes: oE, repondus: oR, taux: taux(oR, oE) },
     lift: taux(aR, aE) - taux(oR, oE),
+  };
+}
+
+export type LiftAngleSource = {
+  terrain: { envoyes: number; repondus: number; taux: number };
+  appris: { envoyes: number; repondus: number; taux: number };
+  // Écart de taux de réponse (points de %), terrain − appris. Positif = le
+  // terrain (analyse site) convertit mieux que l'angle appris ; négatif = c'est
+  // l'inverse, et la règle « le terrain prime toujours » mérite d'être réexaminée.
+  ecart: number;
+};
+
+/**
+ * A/B « terrain vs appris » (charte : mesurer la valeur). On suppose aujourd'hui
+ * que l'angle terrain prime toujours sur l'angle appris ; ce helper le MESURE en
+ * comparant le taux de réponse selon la SOURCE de l'angle réellement utilisé
+ * (persistée à la génération du brouillon). Renvoie null tant qu'un des deux côtés
+ * manque (pas de comparant honnête). Helper pur, rendu sur /suivi.
+ */
+export function liftAngleSource(leads: LeadStat[]): LiftAngleSource | null {
+  let tE = 0,
+    tR = 0,
+    aE = 0,
+    aR = 0;
+  for (const l of leads) {
+    const src = l.mail_angle_source;
+    if (src !== "terrain" && src !== "appris") continue;
+    const envoye = l.sent_at != null || CONTACTES.includes(l.statut);
+    if (!envoye) continue;
+    const repondu = l.replied_at != null || A_REPONDU.includes(l.statut);
+    if (src === "terrain") {
+      tE++;
+      if (repondu) tR++;
+    } else {
+      aE++;
+      if (repondu) aR++;
+    }
+  }
+  if (tE === 0 || aE === 0) return null;
+  const taux = (r: number, e: number) => Math.round((r / e) * 100);
+  return {
+    terrain: { envoyes: tE, repondus: tR, taux: taux(tR, tE) },
+    appris: { envoyes: aE, repondus: aR, taux: taux(aR, aE) },
+    ecart: taux(tR, tE) - taux(aR, aE),
   };
 }

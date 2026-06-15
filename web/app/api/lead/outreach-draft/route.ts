@@ -98,6 +98,8 @@ export async function POST(req: NextRequest) {
     ? { cle: recoAppris.angle, label: ANGLE_LABEL[recoAppris.angle] }
     : null;
   const axeReference = angle.pilote ? angle.cle : angleApplique?.cle ?? null;
+  // Source de l'angle retenu, pour l'A/B « terrain vs appris » sur /suivi.
+  const angleSource = angle.pilote ? "terrain" : angleApplique ? "appris" : null;
 
   // Preuve sociale : la référence chantier la plus proche, sur l'axe du mail.
   const { data: refsData } = await supabase
@@ -133,10 +135,11 @@ export async function POST(req: NextRequest) {
   if (!draft.ok) {
     return NextResponse.json({ error: draft.error }, { status: draft.status });
   }
-  // Persiste l'axe retenu (terrain sinon appris) pour les stats + le lift par angle.
+  // Persiste l'axe retenu (terrain sinon appris) + sa source pour les stats,
+  // le lift par angle et l'A/B « terrain vs appris ».
   await supabase
     .from("leads")
-    .update({ mail_angle: axeReference })
+    .update({ mail_angle: axeReference, mail_angle_source: angleSource })
     .eq("id", leadId);
   return NextResponse.json({
     sujet: draft.sujet,

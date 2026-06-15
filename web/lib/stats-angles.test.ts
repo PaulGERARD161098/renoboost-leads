@@ -3,6 +3,7 @@ import {
   statsParAngle,
   angleGagnantParCible,
   liftAngleAppris,
+  liftAngleSource,
   type LeadStat,
   type LeadStatCible,
 } from "@/lib/stats-angles";
@@ -153,6 +154,88 @@ describe("liftAngleAppris", () => {
         leadC("A", "envoye", "bornes"),
         leadC("A", "envoye", "bornes"),
       ]),
+    ).toBeNull();
+  });
+});
+
+describe("angleGagnantParCible — auto-validation (validee)", () => {
+  // Volume suffisant (≥8 envois sur le gagnant) ET avance nette (≥15 pts) → validé.
+  const gagnantSolide = (verticaleId: string): LeadStatCible[] => [
+    // bornes : 8 envois, 6 réponses = 75%
+    ...Array.from({ length: 6 }, () => leadC(verticaleId, "repondu", "bornes")),
+    ...Array.from({ length: 2 }, () => leadC(verticaleId, "envoye", "bornes")),
+    // solaire : 4 envois, 0 réponse = 0% → avance 75 pts
+    ...Array.from({ length: 4 }, () => leadC(verticaleId, "envoye", "solaire")),
+  ];
+
+  it("valide la reco quand volume suffisant ET avance nette", () => {
+    const recos = angleGagnantParCible(gagnantSolide("A"));
+    expect(recos[0]).toMatchObject({ angle: "bornes", envoyes: 8, validee: true });
+  });
+
+  it("ne valide pas si l'avance manque (un seul angle a assez d'envois)", () => {
+    // 8 envois bornes mais aucun comparant → avance null → non validé.
+    const recos = angleGagnantParCible([
+      ...Array.from({ length: 6 }, () => leadC("A", "repondu", "bornes")),
+      ...Array.from({ length: 2 }, () => leadC("A", "envoye", "bornes")),
+    ]);
+    expect(recos[0]).toMatchObject({ angle: "bornes", avance: null, validee: false });
+  });
+
+  it("ne valide pas sous le volume requis même avec une grosse avance", () => {
+    // bornes 4 envois 100% vs solaire 4 envois 0% : avance 100 pts mais volume < 8.
+    const recos = angleGagnantParCible([
+      ...Array.from({ length: 4 }, () => leadC("A", "repondu", "bornes")),
+      ...Array.from({ length: 4 }, () => leadC("A", "envoye", "solaire")),
+    ]);
+    expect(recos[0]).toMatchObject({ angle: "bornes", envoyes: 4, validee: false });
+  });
+});
+
+describe("liftAngleSource", () => {
+  const src = (
+    statut: LeadStat["statut"],
+    mail_angle_source: LeadStat["mail_angle_source"],
+  ): LeadStat => ({
+    statut,
+    mail_angle: "bornes",
+    sent_at: null,
+    replied_at: null,
+    mail_angle_source,
+  });
+
+  it("compare le taux de réponse par source (terrain vs appris)", () => {
+    const lift = liftAngleSource([
+      src("repondu", "terrain"),
+      src("repondu", "terrain"),
+      src("envoye", "terrain"),
+      src("envoye", "terrain"), // terrain : 4 envois, 2 rép = 50%
+      src("repondu", "appris"),
+      src("envoye", "appris"),
+      src("envoye", "appris"),
+      src("envoye", "appris"), // appris : 4 envois, 1 rép = 25%
+    ])!;
+    expect(lift.terrain).toMatchObject({ envoyes: 4, repondus: 2, taux: 50 });
+    expect(lift.appris).toMatchObject({ envoyes: 4, repondus: 1, taux: 25 });
+    expect(lift.ecart).toBe(25);
+  });
+
+  it("ignore les leads sans source et les non-envoyés", () => {
+    const lift = liftAngleSource([
+      src("repondu", "terrain"),
+      src("envoye", "terrain"),
+      src("nouveau", "terrain"), // pas envoyé : ignoré
+      src("repondu", null), // pas de source : ignoré
+      src("repondu", "appris"),
+      src("envoye", "appris"),
+    ])!;
+    expect(lift.terrain.envoyes).toBe(2);
+    expect(lift.appris.envoyes).toBe(2);
+  });
+
+  it("null tant qu'un des deux côtés manque", () => {
+    expect(
+      liftAngleSource([src("repondu", "terrain"), src("envoye", "terrain")]),
     ).toBeNull();
   });
 });

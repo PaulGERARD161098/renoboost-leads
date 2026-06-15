@@ -7,6 +7,7 @@ import {
   statsParAngle,
   angleGagnantParCible,
   liftAngleAppris,
+  liftAngleSource,
   ANGLE_LABEL,
 } from "@/lib/stats-angles";
 
@@ -98,6 +99,8 @@ export default async function SuiviPage() {
   const recos = angleGagnantParCible(leads);
   // Mesure de la valeur : l'angle appris fait-il vraiment mieux ? (taux aligné vs autre)
   const lift = liftAngleAppris(leads);
+  // A/B « terrain vs appris » : le terrain prime-t-il vraiment ? (taux par source)
+  const liftSource = liftAngleSource(leads);
   const { data: vData } = recos.length
     ? await supabase.from("verticales").select("id, nom")
     : { data: null };
@@ -165,6 +168,24 @@ export default async function SuiviPage() {
               </span>
             </div>
           )}
+          {liftSource && (
+            <div className="mb-3 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm">
+              <span className="font-semibold">
+                🧪 A/B terrain vs appris :{" "}
+                <span className={liftSource.ecart >= 0 ? "text-emerald-600" : "text-amber-600"}>
+                  {liftSource.ecart >= 0 ? "+" : ""}
+                  {liftSource.ecart} pts
+                </span>
+              </span>
+              <span className="ml-1 text-xs text-[var(--muted)]">
+                — analyse du site {liftSource.terrain.taux}% ({liftSource.terrain.envoyes}{" "}
+                envois) vs angle appris {liftSource.appris.taux}% ({liftSource.appris.envoyes}).{" "}
+                {liftSource.ecart >= 0
+                  ? "Le terrain confirme sa priorité."
+                  : "L'angle appris prend le dessus — la règle « le terrain prime » est à réexaminer."}
+              </span>
+            </div>
+          )}
           <ul className="space-y-2 text-sm">
             {recos.map((r) => (
               <li
@@ -176,6 +197,14 @@ export default async function SuiviPage() {
                 </span>
                 <span className="text-[var(--muted)]">→ privilégie</span>
                 <span className="font-semibold">{ANGLE_LABEL[r.angle]}</span>
+                {r.validee && (
+                  <span
+                    className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700"
+                    title="Signal solide : volume suffisant et avance nette — la reco se valide d'elle-même."
+                  >
+                    ✅ validé par les résultats
+                  </span>
+                )}
                 <span className="text-xs text-[var(--muted)]">
                   {r.tauxReponse}% de réponse sur {r.envoyes} envois
                   {r.gagnes > 0 ? ` · ${r.gagnes} 🏆` : ""}
