@@ -175,12 +175,15 @@ class SupabaseRest:
         pending: int | None = None,
         last_error: str | None = None,
         keys: dict[str, bool] | None = None,
+        clear_error: bool = False,
     ) -> None:
         """Écrit le battement de cœur du worker (table singleton worker_heartbeat).
 
         L'UI déduit la liveness du process de la fraîcheur de `last_seen_at`.
         `pending`/`last_error`/`keys` ne sont écrits que s'ils sont fournis (un
         échec de run ne doit pas réinitialiser le compteur de file, et inversement).
+        `clear_error=True` efface le dernier échec (run réussi) : sans ça, une
+        erreur passée resterait affichée indéfiniment dans l'UI, même réparée.
         """
         patch: dict[str, Any] = {"last_seen_at": _now_iso(), "mode": mode, "updated_at": _now_iso()}
         if version is not None:
@@ -190,6 +193,9 @@ class SupabaseRest:
         if last_error is not None:
             patch["last_error"] = last_error[:500]
             patch["last_error_at"] = _now_iso()
+        elif clear_error:
+            patch["last_error"] = None
+            patch["last_error_at"] = None
         if keys is not None:
             patch["keys"] = keys
         self.update("worker_heartbeat", {"id": "eq.main"}, patch)
