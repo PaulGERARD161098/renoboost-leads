@@ -38,13 +38,15 @@ emetteur:
   nom_entreprise: "Rossini Energy"
 
 cibles:
-  # SIRENE-first : découverte par NAF à la source gratuite (recherche-entreprises),
-  # Places en enrichissement par nom. Évite le ~72 % de hors-filtre observé en
-  # Places-first (requêtes larges « usine »/« siège social » payées puis jetées).
-  decouverte_sirene_first: true
+  # Places-first : découverte pilotée par les `secteurs_places` ci-dessous, NAF
+  # appliqué en filtre (préfixe). SIRENE-first est désactivé ici car l'API
+  # recherche-entreprises n'accepte pas les divisions NAF (« 10 », « 25 »…) en
+  # `activite_principale` — seuls les codes APE complets (« 25.11Z ») matchent,
+  # sinon 0 résultat. Le fix SIRENE-first (divisions→sections) est suivi à part.
+  decouverte_sirene_first: false
   secteurs_places:
-    # En SIRENE-first ces requêtes ne pilotent plus la découverte (NAF natif) :
-    # conservées pour l'enrichissement Places et le proto CLI Places-first.
+    # Requêtes qui pilotent la découverte Places (zone d'activité B2B) ; le NAF
+    # ci-dessous reste appliqué en filtre préfixe sur les entreprises trouvées.
     - type: "industrie"
       query: "usine"
     - type: "logistique"
