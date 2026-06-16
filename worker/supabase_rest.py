@@ -155,6 +155,7 @@ class SupabaseRest:
         cout_eur: float,
         cout_detail: dict[str, float] | None = None,
         erreur: str | None = None,
+        qualite: str | None = None,
     ) -> None:
         patch: dict[str, Any] = {
             "status": status,
@@ -165,7 +166,21 @@ class SupabaseRest:
             "etape_courante": "Terminé" if status == "termine" else "Échec",
             "erreur": erreur,
         }
+        # `qualite` non nul → marque un run terminé mais dégradé (filtrable côté UI).
+        if qualite is not None:
+            patch["qualite"] = qualite
         self.update("runs", {"id": f"eq.{run_id}"}, patch)
+
+    def verifier_colonnes_runs(self, colonnes: list[str]) -> str | None:
+        """Préflight schéma : vérifie que `runs` expose les colonnes écrites par le
+        worker. Renvoie un message si une migration manque (cf. bug cout_detail),
+        sinon None. Évite qu'une dérive de schéma fasse boucler les runs en silence.
+        """
+        try:
+            self.select("runs", {"select": ",".join(colonnes), "limit": "0"})
+            return None
+        except requests.HTTPError as exc:
+            return f"colonnes runs manquantes ({','.join(colonnes)}) — migration ? [{exc}]"
 
     def heartbeat(
         self,

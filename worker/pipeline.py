@@ -77,6 +77,28 @@ class RunResult:
 # avec COUT_CATEGORIES dans web/lib/costs.ts.
 COUT_DETAIL_CLES = ("places", "pappers", "dropcontact", "claude")
 
+
+def raison_degradation(counts: dict[str, int]) -> str | None:
+    """Classe un run 'terminé' comme DÉGRADÉ s'il est anormalement pauvre.
+
+    Garde-fou anti-dégradation silencieuse : couvre les 3 pannes vues en prod —
+    découverte vide (ciblage), 0 lead final (filtres), scoring L4 en échec. Renvoie
+    une raison lisible à remonter (pastille/run), ou None si le run est sain.
+    """
+    decouverte = counts.get("decouverte", 0)
+    leads = counts.get("leads", 0)
+    scores_ok = counts.get("scores_ok", 0)
+    scores_ko = counts.get("scores_ko", 0)
+    if decouverte == 0:
+        return "Aucune entreprise découverte — ciblage (NAF/zone) à vérifier."
+    if leads == 0:
+        return "Découverte OK mais 0 lead final — filtres trop stricts ?"
+    if scores_ko and not scores_ok:
+        return f"Scoring en échec sur {scores_ko} lead(s) — étage 4 (Claude) KO."
+    if scores_ko:
+        return f"Scoring partiel : {scores_ko} lead(s) non scoré(s)."
+    return None
+
 # Mapping étage moteur (RunStats.etages_executes[].nom_etage) → poste de coût.
 # Les étages absents (SIRENE, scraping L3) sont gratuits et n'apparaissent pas.
 _ETAGE_VERS_POSTE: dict[str, str] = {
