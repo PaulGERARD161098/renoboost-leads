@@ -74,7 +74,7 @@ class FakeDB:
         self.leads.extend(rows)
 
     def finalize_run(
-        self, run_id, *, status, counts, cout_eur, cout_detail=None, erreur=None
+        self, run_id, *, status, counts, cout_eur, cout_detail=None, erreur=None, qualite=None
     ) -> None:
         self.runs[run_id].update(
             status=status,
@@ -82,6 +82,7 @@ class FakeDB:
             cout_eur=round(cout_eur, 2),
             cout_detail=cout_detail or {},
             erreur=erreur,
+            qualite=qualite,
             progress=100 if status == "termine" else 0,
             etape_courante="Terminé" if status == "termine" else "Échec",
         )
@@ -673,6 +674,52 @@ def test_worker_marks_failure_on_pipeline_error():
     assert "kaboom" in db.runs[run["id"]]["erreur"]
     # L'échec remonte aussi au heartbeat (visible dans l'UI sans logs Railway).
     assert any("kaboom" in (h["last_error"] or "") for h in db.heartbeats)
+
+
+def test_raison_degradation():
+    from worker.pipeline import raison_degradation
+
+    assert raison_degradation({"decouverte": 0, "leads": 0}) is not None
+    assert raison_degradation({"decouverte": 10, "leads": 0}) is not None
+    assert (
+        raison_degradation({"decouverte": 10, "leads": 5, "scores_ok": 0, "scores_ko": 5})
+        is not None
+    )
+    # Run sain : découverte + leads + scoring OK → pas de dégradation.
+    assert (
+        raison_degradation({"decouverte": 10, "leads": 5, "scores_ok": 5, "scores_ko": 0}) is None
+    )
+    # Démo (pas de compteurs de score) avec des leads → sain.
+    assert raison_degradation({"decouverte": 8, "leads": 8}) is None
+
+
+def test_worker_flags_degraded_run():
+    """Un run terminé mais à scoring KO est marqué dégradé + remonté à la pastille."""
+    run = _make_run(volume=3)
+
+    class ScoringKO:
+        def run(self, ctx, emit):
+            from worker.pipeline import RunResult
+
+            return RunResult(
+                leads=[{"entreprise": "X"}],
+                counts={
+                    "decouverte": 5,
+                    "qualifies": 1,
+                    "leads": 1,
+                    "scores_ok": 0,
+                    "scores_ko": 1,
+                },
+                cout_eur=0.1,
+            )
+
+    db = FakeDB(runs=[run], verticales={})
+    worker = Worker(_config(), db=db, pipeline=ScoringKO())
+    worker.poll_once()
+
+    assert db.runs[run["id"]]["status"] == "termine"
+    assert db.runs[run["id"]]["qualite"] == "degrade"
+    assert any(h["last_error"] and "dégradé" in h["last_error"] for h in db.heartbeats)
 
 
 def test_worker_clears_last_error_on_success():

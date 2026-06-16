@@ -61,6 +61,11 @@ def main() -> int:
 
     threading.Thread(target=_heartbeat_loop, name="heartbeat", daemon=True).start()
 
+    # Préflight : valide tôt la config critique (schéma DB, clé/modèle Claude) et
+    # remonte un éventuel souci sur la pastille — au lieu de runs qui échouent en
+    # silence. Non bloquant : le worker démarre quand même.
+    worker.preflight()
+
     while running["on"]:
         try:
             traites = worker.poll_once()

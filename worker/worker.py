@@ -7,8 +7,12 @@ import os
 from typing import Any
 
 from .config import WorkerConfig
-from .pipeline import Pipeline, RunContext, build_pipeline
+from .pipeline import Pipeline, RunContext, build_pipeline, raison_degradation
 from .supabase_rest import SupabaseRest
+
+# Colonnes de `runs` écrites par le worker — vérifiées au préflight (dérive de
+# schéma = runs qui bouclent en silence, cf. bug cout_detail).
+_COLONNES_RUNS_REQUISES = ["status", "counts", "cout_eur", "cout_detail", "erreur", "qualite"]
 
 logger = logging.getLogger("renoboost.worker")
 
@@ -89,6 +93,58 @@ class Worker:
         except Exception:  # noqa: BLE001 — la récupération ne doit pas casser la boucle
             logger.warning("Reaper échoué (non bloquant).", exc_info=True)
 
+    def preflight(self) -> list[str]:
+        """Vérifs au démarrage : signaler TÔT une config cassée plutôt que de
+        laisser des runs échouer en silence (cf. cout_detail manquant, modèle
+        Claude invalide). Non bloquant : on remonte sur la pastille et on continue.
+        """
+        problemes: list[str] = []
+
+        # 1) Schéma DB : colonnes écrites par le worker présentes ?
+        try:
+            souci = self.db.verifier_colonnes_runs(_COLONNES_RUNS_REQUISES)
+            if souci:
+                problemes.append(f"DB : {souci}")
+        except Exception as exc:  # noqa: BLE001 — le préflight ne doit jamais tuer le worker
+            problemes.append(f"DB injoignable : {exc}")
+
+        # 2) Claude joignable (mode réel) avec le modèle effectivement utilisé.
+        if self.config.mode == "real":
+            souci = self._verifier_claude()
+            if souci:
+                problemes.append(f"Claude : {souci}")
+
+        if problemes:
+            resume = " | ".join(problemes)
+            logger.error("Préflight : %s", resume)
+            self._heartbeat(last_error=f"Préflight KO — {resume}")
+        else:
+            logger.info("Préflight OK.")
+        return problemes
+
+    @staticmethod
+    def _verifier_claude() -> str | None:
+        """Ping minimal de l'API Claude (1 token) avec le modèle L4 par défaut,
+        résolu en identifiant d'API exact. Détecte clé/modèle invalides au boot."""
+        key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if not key:
+            return "ANTHROPIC_API_KEY absente."
+        try:
+            from anthropic import Anthropic
+
+            from renoboost_leads.common.anthropic_models import resolve_model_id
+            from renoboost_leads.stage4_prospection.client import ClaudeClientConfig
+
+            modele = resolve_model_id(ClaudeClientConfig.modele)
+            Anthropic(api_key=key).messages.create(
+                model=modele,
+                max_tokens=1,
+                messages=[{"role": "user", "content": "ping"}],
+            )
+            return None
+        except Exception as exc:  # noqa: BLE001
+            return f"{type(exc).__name__}: {str(exc)[:160]}"
+
     def poll_once(self) -> int:
         """Traite les runs en attente. Renvoie le nombre de runs traités."""
         # Récupère d'abord les runs orphelins (les remet en `demande`) pour
@@ -127,22 +183,31 @@ class Worker:
 
             result = self._pipeline_for(run).run(ctx, emit)
             self.db.insert_leads(result.leads)
+            # Garde-fou anti-dégradation silencieuse : un run techniquement
+            # « terminé » mais anormalement pauvre (0 découverte / 0 lead / scoring
+            # KO) est marqué dégradé et remonté, au lieu d'un faux succès vert.
+            degradation = raison_degradation(result.counts)
             self.db.finalize_run(
                 run_id,
                 status="termine",
                 counts=result.counts,
                 cout_eur=result.cout_eur,
                 cout_detail=result.cout_detail,
+                qualite="degrade" if degradation else None,
             )
             logger.info(
-                "Run %s : terminé — %d leads, %.2f €",
+                "Run %s : terminé — %d leads, %.2f €%s",
                 run_id,
                 len(result.leads),
                 result.cout_eur,
+                f" [DÉGRADÉ : {degradation}]" if degradation else "",
             )
-            # Run réussi → efface le dernier échec affiché dans l'UI (sinon une
-            # erreur passée resterait visible indéfiniment, même réparée).
-            self._heartbeat(clear_error=True)
+            if degradation:
+                # Remonte sur la pastille worker : visible sans fouiller les runs.
+                self._heartbeat(last_error=f"Run dégradé : {degradation}")
+            else:
+                # Run sain → efface le dernier échec affiché (sinon il resterait collé).
+                self._heartbeat(clear_error=True)
         except Exception as exc:  # noqa: BLE001 — on veut capturer pour marquer le run échoué
             logger.exception("Run %s : échec", run_id)
             # Remonte aussi l'erreur au heartbeat → visible dans l'UI sans logs Railway.
