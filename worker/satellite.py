@@ -17,6 +17,8 @@ from urllib.parse import urlencode
 
 import requests
 
+from renoboost_leads.common.anthropic_models import resolve_model_id
+
 log = logging.getLogger("renoboost.worker.satellite")
 
 _WMS = "https://data.geopf.fr/wms-r/wms"
@@ -107,7 +109,7 @@ def _vision_observations(
             "content-type": "application/json",
         },
         json={
-            "model": _MODEL,
+            "model": resolve_model_id(_MODEL),
             "max_tokens": 700,
             "messages": [
                 {

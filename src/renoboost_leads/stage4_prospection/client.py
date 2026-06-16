@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from ..common.anthropic_models import resolve_model_id
 from ..common.budget_guard import BudgetExceededError, BudgetGuard
 from ..common.logger import get_logger
 from ..common.rate_limiter import RateLimiter
@@ -115,7 +116,9 @@ class ClaudeClient:
         if self.config.rate_limiter:
             self.config.rate_limiter.acquire()
         return self._client.messages.create(
-            model=self.config.modele,
+            # Identifiant d'API exact (le libellé interne peut être un alias non
+            # daté rejeté en 400 par l'API).
+            model=resolve_model_id(self.config.modele),
             max_tokens=self.config.max_tokens_sortie,
             messages=[{"role": "user", "content": prompt}],
         )
