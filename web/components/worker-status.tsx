@@ -8,9 +8,11 @@ import type { WorkerHeartbeat } from "@/lib/database.types";
 const STALE_MS = 60_000;
 
 // Lien « voir le worker » : le worker est un process headless sur Railway (il
-// ne sert aucune page web), donc on pointe vers son tableau de bord. URL exacte
-// du service à poser dans NEXT_PUBLIC_WORKER_URL (Vercel) ; sinon, dashboard Railway.
-const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://railway.app/dashboard";
+// ne sert aucune page web), donc on pointe vers son tableau de bord. Override
+// possible via NEXT_PUBLIC_WORKER_URL (Vercel) ; par défaut, le service worker.
+const WORKER_URL =
+  process.env.NEXT_PUBLIC_WORKER_URL ||
+  "https://railway.com/project/fe4bca71-97dd-43f1-8fea-ac9e02bfc330/service/68cff39d-653b-4785-be8b-d20648f05a69?environmentId=aa3f72df-bf16-4ca5-9adf-9505ca4996c8";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
