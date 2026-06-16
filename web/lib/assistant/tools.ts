@@ -236,6 +236,30 @@ export const tools = [
       "Lance une veille web maintenant (ACTION, consomme des recherches web). Détecte de nouveaux signaux d'intention sur le périmètre des cibles.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "signaler_anomalie",
+    description:
+      "Consigne une ANOMALIE TECHNIQUE / un bug observé dans la file `retours` (remontée à Paul & Claude, qui corrigent — jamais appliqué sans validation de Paul). À utiliser quand un symptôme ressemble à un bug de l'outil (pas une erreur d'usage) : recherche terminée avec 0 prospect, run bloqué qui ne se termine jamais, worker à l'arrêt avec des recherches en attente, donnée manifestement incohérente. Fournis un rapport factuel et reproductible.",
+    input_schema: {
+      type: "object",
+      properties: {
+        symptome: {
+          type: "string",
+          description: "Ce qui est observé, factuel (ex: « run rossini dépt 59 terminé, 0 prospect, coût 0 € »).",
+        },
+        contexte: {
+          type: "string",
+          description:
+            "Données réelles déjà collectées via tes outils (counts, statut du run, id, cible/zone) qui étayent le diagnostic. N'invente rien.",
+        },
+        hypothese: {
+          type: "string",
+          description: "Cause probable si tu en as une (optionnel) — sinon laisse vide.",
+        },
+      },
+      required: ["symptome"],
+    },
+  },
 ];
 
 type Json = Record<string, unknown>;
@@ -881,6 +905,29 @@ export async function executeTool(
         const res = await runVeille(supabase);
         if ("error" in res) return res.error;
         return `Veille terminée : ${res.inserted} nouveau(x) signal(aux) détecté(s) (sur ${res.total} trouvés). À consulter dans l'onglet Veille.`;
+      }
+
+      case "signaler_anomalie": {
+        const symptome = String((input.symptome as string) ?? "").trim();
+        if (!symptome) return "Erreur: symptôme requis pour consigner une anomalie.";
+        const contexte = String((input.contexte as string) ?? "").trim();
+        const hypothese = String((input.hypothese as string) ?? "").trim();
+        const texte = [
+          `[ANOMALIE] ${symptome}`,
+          contexte && `Contexte : ${contexte}`,
+          hypothese && `Hypothèse : ${hypothese}`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return "Erreur: non authentifié, impossible de consigner.";
+        const { error } = await supabase
+          .from("retours")
+          .insert({ source: "magellan", texte, created_by: user.id });
+        if (error) return `Erreur: ${error.message}`;
+        return "Anomalie consignée dans la file des retours — Paul & Claude la verront et corrigeront (aucun changement appliqué sans la validation de Paul).";
       }
 
       default:
