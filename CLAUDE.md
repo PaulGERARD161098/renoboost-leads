@@ -1,5 +1,38 @@
 # CLAUDE.md — consignes session Claude Code
 
+## 🛡️ Pannes connues & doctrine anti-régression (mémoire — lire à CHAQUE session)
+
+**Fil rouge de toutes les pannes vues : la DÉGRADATION SILENCIEUSE** — un run finit
+« terminé » (vert) alors qu'il est cassé. Règle d'or : **jamais d'échec silencieux**.
+
+**Catalogue des pannes (symptôme → cause → garde-fou en place) :**
+1. **Run en boucle / PATCH 400 sur `/rest/v1/runs`** → migration non appliquée au
+   live (ex. `runs.cout_detail`, migration 0036). *Garde-fou* : préflight schéma DB
+   au boot worker (`Worker.preflight` → `verifier_colonnes_runs`). *Réflexe* : après
+   un merge, vérifier `list_migrations` vs `web/supabase/migrations/`.
+2. **Recherche « terminée » mais 0 prospect (coût 0 €)** → découverte vide. Cause
+   vue : ciblage NAF en **divisions** (`"10"`) + `decouverte_sirene_first` ; l'API
+   `recherche-entreprises` n'accepte que les **codes APE complets** (`25.11Z`).
+   *Garde-fou* : `raison_degradation` flague `decouverte==0`/`leads==0`.
+3. **Leads sans score ni mail (`claude=0 €`, `scores_ko>0`)** → étage 4 Claude en
+   échec **silencieux**. Causes vues : **crédits Anthropic épuisés** (400
+   `invalid_request_error` « credit balance too low »), id de modèle non daté.
+   *Garde-fou* : préflight ping Claude + `resolve_model_id` + `scores_ko` dans
+   `counts` + diagnostic dans `score_raison`/`runs.erreur`.
+
+**Doctrine permanente (à appliquer sans qu'on le redemande) :**
+- **Auto-check AVANT de lancer** : préflight worker au boot **et** pré-vérif par run
+  réel (Claude joignable) — sinon échec immédiat avec diagnostic, **0 budget engagé**.
+- **Toujours un diagnostic visible** : tout run qui ne tourne pas à 100% porte un
+  message « où ça a coincé » (`runs.erreur` = étape + cause), affiché à l'UI
+  (rouge=échec, ambre=dégradé) ; jamais un blanc.
+- **`worker_heartbeat.last_error` est tronqué à 80 car. dans l'UI** : toujours lire
+  la valeur **complète** en base avant de conclure (un « …supabase.co/ » trompeur
+  cachait `/rest/v1/runs?id=...`).
+- **Ne pas surcharger `runs.qualite`** : c'est la note **manuelle** de l'utilisateur
+  (bonne/moyenne/mauvaise), pas un canal de diagnostic.
+- **Magellan** sait router une anomalie via l'outil `signaler_anomalie` (#157).
+
 ## 🧭 Cap produit — exigence « agent-first » (à respecter à CHAQUE session)
 
 RénoBoost n'est **pas** une plateforme de données : c'est un **copilote de travail**.

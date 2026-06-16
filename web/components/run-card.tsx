@@ -107,8 +107,14 @@ export function RunCard({
         </div>
       )}
 
-      {run.status === "echoue" && run.erreur && (
-        <p className="mt-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-700">
+      {run.erreur && (
+        <p
+          className={`mt-2 rounded-lg px-3 py-1.5 text-xs ${
+            run.status === "echoue"
+              ? "bg-red-50 text-red-700"
+              : "bg-amber-50 text-amber-800"
+          }`}
+        >
           ⚠ {run.erreur}
         </p>
       )}

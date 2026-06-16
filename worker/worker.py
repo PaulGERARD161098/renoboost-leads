@@ -167,7 +167,26 @@ class Worker:
     def process_run(self, run: dict[str, Any]) -> None:
         run_id = run["id"]
         logger.info("Run %s : démarrage", run_id)
+        # Suit la dernière étape atteinte → on sait OÙ ça a coincé en cas d'échec.
+        etape_courante = {"nom": "Initialisation"}
         try:
+            # Auto-check AVANT de lancer (mode réel) : si une dépendance critique
+            # est KO (clé/modèle/crédits Claude), on échoue tout de suite avec un
+            # diagnostic clair, SANS engager de budget (Places/Dropcontact).
+            if self.config.mode == "real":
+                souci = self._verifier_claude()
+                if souci:
+                    msg = (
+                        f"Recherche non lancée — pré-vérification échouée à l'étape "
+                        f"« Scoring (Claude) » : {souci}. Aucun budget engagé."
+                    )
+                    logger.error("Run %s : %s", run_id, msg)
+                    self.db.finalize_run(
+                        run_id, status="echoue", counts={}, cout_eur=0.0, erreur=msg
+                    )
+                    self._heartbeat(last_error=msg)
+                    return
+
             verticale = self.db.get_verticale(run.get("verticale_id"))
             ctx = RunContext(
                 run=run,
@@ -177,6 +196,7 @@ class Worker:
             )
 
             def emit(etape: str, progress: int, counts: dict[str, int]) -> None:
+                etape_courante["nom"] = etape
                 self.db.update_run_progress(
                     run_id, etape=etape, progress=progress, counts=counts
                 )
@@ -185,7 +205,8 @@ class Worker:
             self.db.insert_leads(result.leads)
             # Garde-fou anti-dégradation silencieuse : un run techniquement
             # « terminé » mais anormalement pauvre (0 découverte / 0 lead / scoring
-            # KO) est marqué dégradé et remonté, au lieu d'un faux succès vert.
+            # KO) porte un diagnostic visible (champ erreur), au lieu d'un faux
+            # succès vert. Le statut reste « termine » (les leads restent exploitables).
             degradation = raison_degradation(result.counts)
             self.db.finalize_run(
                 run_id,
@@ -193,7 +214,7 @@ class Worker:
                 counts=result.counts,
                 cout_eur=result.cout_eur,
                 cout_detail=result.cout_detail,
-                qualite="degrade" if degradation else None,
+                erreur=(f"Recherche dégradée : {degradation}" if degradation else None),
             )
             logger.info(
                 "Run %s : terminé — %d leads, %.2f €%s",
@@ -210,11 +231,12 @@ class Worker:
                 self._heartbeat(clear_error=True)
         except Exception as exc:  # noqa: BLE001 — on veut capturer pour marquer le run échoué
             logger.exception("Run %s : échec", run_id)
-            # Remonte aussi l'erreur au heartbeat → visible dans l'UI sans logs Railway.
-            self._heartbeat(last_error=str(exc)[:500])
+            # Diagnostic « où ça a coincé » : étape atteinte + cause.
+            diag = f"Bloqué à l'étape « {etape_courante['nom']} » : {str(exc)[:400]}"
+            self._heartbeat(last_error=diag[:500])
             try:
                 self.db.finalize_run(
-                    run_id, status="echoue", counts={}, cout_eur=0.0, erreur=str(exc)[:500]
+                    run_id, status="echoue", counts={}, cout_eur=0.0, erreur=diag[:500]
                 )
             except Exception:  # noqa: BLE001
                 logger.exception("Run %s : impossible de marquer l'échec", run_id)
