@@ -372,12 +372,28 @@ def _capture_stages(monkeypatch, slug: str) -> list[float]:
     return captured["stages"]  # type: ignore[return-value]
 
 
-def test_real_pipeline_rossini_sirene_first(monkeypatch):
-    """Verticale rossini (decouverte_sirene_first=true) → découverte SIRENE (stage 0)
-    + Places en enrichissement (stage 1), pas de Places-first large."""
+def test_real_pipeline_rossini_places_first(monkeypatch):
+    """Verticale rossini est désormais Places-first (l'API recherche-entreprises
+    ne matche pas les divisions NAF en SIRENE-first) → découverte Places (stage 1),
+    pas de stage 0."""
     stages = _capture_stages(monkeypatch, "rossini")
-    assert 0 in stages  # découverte par NAF natif (gratuit)
-    assert 1 in stages  # Places en simple enrichissement par nom
+    assert 0 not in stages  # plus de découverte SIRENE-first
+    assert 1 in stages  # découverte Places
+
+
+def test_real_pipeline_sirene_first_selects_stage0(monkeypatch):
+    """Quand une verticale fichier est SIRENE-first, l'orchestrateur reçoit le
+    stage 0 (découverte NAF) + le stage 1 (Places en enrichissement)."""
+    from renoboost_leads.verticale import load_verticale
+
+    v = load_verticale("irve-flottes-b2b")
+    v.cibles.decouverte_sirene_first = True  # force le mode pour ce test
+    monkeypatch.setattr(
+        RealPipeline, "_charger_verticale_fichier", staticmethod(lambda slug: v)
+    )
+    stages = _capture_stages(monkeypatch, "irve-flottes-b2b")
+    assert 0 in stages
+    assert 1 in stages
 
 
 def test_real_pipeline_verticale_fichier_sans_flag_reste_places_first(monkeypatch):
