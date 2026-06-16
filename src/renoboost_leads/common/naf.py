@@ -12,6 +12,8 @@ prioritaire — cette table n'est qu'un repli.
 
 from __future__ import annotations
 
+import re
+
 # Divisions NAF rev. 2 (code à 2 chiffres → libellé).
 NAF_DIVISIONS: dict[str, str] = {
     "01": "Culture et production animale, chasse et services annexes",
@@ -119,4 +121,58 @@ def libelle_naf_pour_code(code_naf: str | None) -> str | None:
     return NAF_DIVISIONS.get(chiffres[:2])
 
 
-__all__ = ["NAF_DIVISIONS", "libelle_naf_pour_code"]
+# ─────────────────────────────────────────────────────────────────────────────
+# Sections NAF rev. 2 — bornes de divisions (int) → lettre A..U.
+# Utile pour la découverte SIRENE-first : l'API recherche-entreprises ne filtre
+# pas sur les divisions/préfixes NAF (« 10 », « 70.10 ») via activite_principale,
+# seulement sur des codes APE complets ; on élargit alors à la section.
+# Source : nomenclature NAF rev. 2 (INSEE).
+# ─────────────────────────────────────────────────────────────────────────────
+_SECTIONS_RANGES: tuple[tuple[int, int, str], ...] = (
+    (1, 3, "A"), (5, 9, "B"), (10, 33, "C"), (35, 35, "D"), (36, 39, "E"),
+    (41, 43, "F"), (45, 47, "G"), (49, 53, "H"), (55, 56, "I"), (58, 63, "J"),
+    (64, 66, "K"), (68, 68, "L"), (69, 75, "M"), (77, 82, "N"), (84, 84, "O"),
+    (85, 85, "P"), (86, 88, "Q"), (90, 93, "R"), (94, 96, "S"), (97, 98, "T"),
+    (99, 99, "U"),
+)
+
+# Code APE complet : 2 chiffres + 2 chiffres + 1 lettre (ex « 25.11Z », « 2511Z »).
+_RE_APE_COMPLET = re.compile(r"^\d{2}\.?\d{2}[A-Za-z]$")
+
+
+def est_code_ape_complet(code: str | None) -> bool:
+    """True si `code` est un code APE complet (« 25.11Z »), pas un préfixe.
+
+    Les divisions/classes (« 25 », « 70.10 », « 6820 ») renvoient False : elles
+    ne sont pas acceptées par l'API en `activite_principale`.
+    """
+    return bool(code and _RE_APE_COMPLET.match(code.strip()))
+
+
+def section_pour_code(code: str | None) -> str | None:
+    """Section NAF (lettre A–U) couvrant un code/préfixe, via sa division."""
+    if not code:
+        return None
+    chiffres = "".join(c for c in code if c.isdigit())
+    if len(chiffres) < 2:
+        return None
+    n = int(chiffres[:2])
+    for lo, hi, lettre in _SECTIONS_RANGES:
+        if lo <= n <= hi:
+            return lettre
+    return None
+
+
+def sections_pour_codes(codes: list[str]) -> list[str]:
+    """Sections NAF distinctes (triées) couvrant une liste de codes/préfixes."""
+    sections = {s for c in codes if (s := section_pour_code(c))}
+    return sorted(sections)
+
+
+__all__ = [
+    "NAF_DIVISIONS",
+    "est_code_ape_complet",
+    "libelle_naf_pour_code",
+    "section_pour_code",
+    "sections_pour_codes",
+]

@@ -23,6 +23,7 @@ from tenacity import (
 )
 
 from ..common.logger import get_logger
+from ..common.naf import est_code_ape_complet, sections_pour_codes
 from ..common.rate_limiter import RateLimiter
 
 logger = get_logger(__name__)
@@ -199,8 +200,10 @@ class RechercheEntreprisesClient:
 
         Args:
             departements: codes INSEE département (filtre établissement + siège).
-            activite_principale: codes NAF/APE (préfixes pas supportés par
-                l'API ; passer les codes exacts ex "49.41A").
+            activite_principale: codes NAF/APE. Les codes complets ("49.41A")
+                sont filtrés précisément ; les divisions/préfixes ("49", "70.10")
+                sont élargis à la section NAF (l'API n'accepte pas les préfixes),
+                puis resserrés côté extracteur.
             tranche_effectif_salarie: codes INSEE tranche ex ["02","03","11","12"]
                 pour 3-49 salariés.
             ca_min, ca_max: bornes du chiffre d'affaires en €.
@@ -277,9 +280,21 @@ class RechercheEntreprisesClient:
         ca_max: int | None,
         categorie_entreprise: list[str] | None,
     ) -> None:
-        """Ajoute en place les filtres entreprise natifs aux params API."""
+        """Ajoute en place les filtres entreprise natifs aux params API.
+
+        NAF : l'API n'accepte que des codes APE complets (« 25.11Z ») en
+        `activite_principale`, pas les divisions/préfixes (« 10 », « 70.10 »).
+        Si la cible contient des préfixes, on élargit à la `section` NAF
+        correspondante (l'extracteur SIRENE-first resserre ensuite au préfixe
+        exact). Si tous les codes sont complets, on garde le filtrage précis.
+        """
         if activite_principale:
-            params["activite_principale"] = ",".join(activite_principale)
+            if all(est_code_ape_complet(c) for c in activite_principale):
+                params["activite_principale"] = ",".join(activite_principale)
+            else:
+                sections = sections_pour_codes(activite_principale)
+                if sections:
+                    params["section_activite_principale"] = ",".join(sections)
         if tranche_effectif_salarie:
             params["tranche_effectif_salarie"] = ",".join(tranche_effectif_salarie)
         if ca_min is not None:

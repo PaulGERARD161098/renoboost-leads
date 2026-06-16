@@ -13,7 +13,11 @@ from __future__ import annotations
 
 from ..common.logger import get_logger
 from ..models import CampaignConfig, LeadStage2
-from ..stage2_entreprises.filters import _TRANCHES_INSEE, evaluer_filtres_entreprise
+from ..stage2_entreprises.filters import (
+    _TRANCHES_INSEE,
+    _match_naf_prefixe,
+    evaluer_filtres_entreprise,
+)
 from ..stage2_entreprises.recherche_client import (
     RechercheEntreprisesClient,
     RechercheEntreprisesTransientError,
@@ -129,6 +133,7 @@ class ExtracteurStage0:
         leads_par_siren: dict[str, LeadStage2] = {}
         nb_vus = 0
         nb_rejets_mapping = 0
+        nb_hors_naf = 0
         nb_hors_filtre = 0
         coupure_api = False
 
@@ -174,6 +179,17 @@ class ExtracteurStage0:
                     continue
                 if lead.siren in leads_par_siren:
                     continue
+                # Resserrage NAF : la cible naf_inclus a pu être élargie à la
+                # SECTION pour l'appel API (les divisions/préfixes ne sont pas
+                # acceptés en activite_principale). On exclut ici les entreprises
+                # de la section qui ne matchent pas le préfixe exact — réplique le
+                # pré-filtrage NAF que l'API faisait avec des codes complets.
+                # No-op quand la cible était déjà en codes complets.
+                if filtres.naf_inclus and not _match_naf_prefixe(
+                    lead.code_naf, filtres.naf_inclus
+                ):
+                    nb_hors_naf += 1
+                    continue
                 # Filtres entreprise (NAF/forme juridique/CA/effectif/…) :
                 # flag-not-drop, comme l'enricher L2. Sans ça, naf_exclus &
                 # consorts n'auraient aucun effet en mode SIRENE-first.
@@ -197,10 +213,11 @@ class ExtracteurStage0:
         leads = list(leads_par_siren.values())
         logger.info(
             "=== Étage 0 terminé : %d leads (dont %d hors-filtre) "
-            "sur %d vus, %d rejets mapping%s ===",
+            "sur %d vus, %d hors-NAF, %d rejets mapping%s ===",
             len(leads),
             nb_hors_filtre,
             nb_vus,
+            nb_hors_naf,
             nb_rejets_mapping,
             ", coupure API" if coupure_api else "",
         )

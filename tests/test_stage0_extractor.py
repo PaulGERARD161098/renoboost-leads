@@ -190,6 +190,22 @@ class TestZoneSupport:
 
 
 class TestFiltresEntreprise:
+    def test_naf_inclus_prefixe_droppe_hors_section(self):
+        # En SIRENE-first, naf_inclus=["25"] peut élargir l'appel API à la
+        # section C : l'extracteur doit DROPPER les entreprises de la section
+        # qui ne matchent pas le préfixe (réplique le pré-filtrage API), pas les
+        # flaguer (sinon on insère des hors-cible NAF).
+        cible = _entreprise("111")
+        cible["activite_principale"] = "25.11Z"  # matche "25"
+        hors = _entreprise("222")
+        hors["activite_principale"] = "10.13A"  # section C aussi, mais pas "25"
+        client = _FakeClient([cible, hors])
+        cfg = _config(naf_inclus=["25"], volume_cible=10)
+
+        leads = ExtracteurStage0(client, cfg).extraire()  # type: ignore[arg-type]
+
+        assert [lead.siren for lead in leads] == ["111"]  # le hors-NAF est droppé
+
     def test_naf_exclus_flague_hors_filtre(self):
         # Une SCI (NAF 68.20B) doit être conservée mais flaguée hors-filtre,
         # pas droppée (pattern flag-not-drop). Sans ce câblage, naf_exclus
