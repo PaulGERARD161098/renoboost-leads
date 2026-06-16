@@ -329,7 +329,13 @@ def test_real_pipeline_maps_leads_and_emits(monkeypatch):
 
     # Coût + counts + progression
     assert result.cout_eur == pytest.approx(1.23)
-    assert result.counts == {"decouverte": 2, "qualifies": 2, "leads": 1}
+    assert result.counts == {
+        "decouverte": 2,
+        "qualifies": 2,
+        "leads": 1,
+        "scores_ok": 1,
+        "scores_ko": 0,
+    }
     assert emitted and emitted[-1][1] == 95
 
     # Ciblage : la verticale fichier a écrasé le placeholder + override effectif.
@@ -370,6 +376,17 @@ def _capture_stages(monkeypatch, slug: str) -> list[float]:
     )
     RealPipeline().run(ctx, lambda *a: None)
     return captured["stages"]  # type: ignore[return-value]
+
+
+def test_mapper_lead_surface_erreur_scoring():
+    """Un lead non scoré (Claude en échec) fait remonter la cause dans
+    score_raison au lieu d'un blanc silencieux ; le score reste null."""
+    lead = _lead4(
+        score_interet=None, raison_score=None, scoring_erreur="api_error: AuthenticationError"
+    )
+    row = RealPipeline._mapper_lead(lead, _real_ctx())
+    assert row["score"] is None
+    assert row["score_raison"] == "Scoring indisponible : api_error: AuthenticationError"
 
 
 def test_real_pipeline_rossini_places_first(monkeypatch):
