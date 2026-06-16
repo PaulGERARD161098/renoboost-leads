@@ -718,8 +718,31 @@ def test_worker_flags_degraded_run():
     worker.poll_once()
 
     assert db.runs[run["id"]]["status"] == "termine"
-    assert db.runs[run["id"]]["qualite"] == "degrade"
+    # Le diagnostic de dégradation est porté par le champ erreur (visible UI),
+    # PAS par qualite (note manuelle de l'utilisateur).
+    assert db.runs[run["id"]]["qualite"] is None
+    assert "dégradée" in (db.runs[run["id"]]["erreur"] or "")
     assert any(h["last_error"] and "dégradé" in h["last_error"] for h in db.heartbeats)
+
+
+def test_worker_autocheck_avant_run_reel_bloque_si_claude_ko(monkeypatch):
+    """Mode réel : si la pré-vérif Claude échoue, le run est marqué échoué avec
+    diagnostic AVANT tout traitement (aucun budget engagé)."""
+    run = _make_run(volume=5)
+    db = FakeDB(runs=[run], verticales={})
+    cfg = WorkerConfig(supabase_url="https://x.supabase.co", service_role_key="k", mode="real")
+
+    class NeDoitPasTourner:
+        def run(self, ctx, emit):
+            raise AssertionError("le pipeline ne doit pas démarrer si la pré-vérif échoue")
+
+    worker = Worker(cfg, db=db, pipeline=NeDoitPasTourner())
+    monkeypatch.setattr(worker, "_verifier_claude", lambda: "crédits Anthropic épuisés")
+    worker.process_run(db.runs[run["id"]])
+
+    assert db.runs[run["id"]]["status"] == "echoue"
+    assert "non lancée" in db.runs[run["id"]]["erreur"]
+    assert db.leads == []  # aucun lead inséré → aucun budget engagé
 
 
 def test_worker_clears_last_error_on_success():
