@@ -335,7 +335,19 @@ class RealPipeline:
         qualifies = sum(
             1 for lead in (base or []) if not getattr(lead, "hors_filtre_entreprise", False)
         )
-        counts = {"decouverte": decouverte, "qualifies": qualifies, "leads": len(leads)}
+        # Santé du scoring L4 : combien de leads ont bien été scorés vs en échec
+        # (clé/modèle/parse). Visible dans runs.counts → on détecte un L4 muet sans
+        # fouiller les logs Railway.
+        finaux = result.leads_finaux or []
+        scores_ok = sum(1 for lead in finaux if getattr(lead, "score_interet", None) is not None)
+        scores_ko = sum(1 for lead in finaux if getattr(lead, "scoring_erreur", None))
+        counts = {
+            "decouverte": decouverte,
+            "qualifies": qualifies,
+            "leads": len(leads),
+            "scores_ok": scores_ok,
+            "scores_ko": scores_ko,
+        }
         return RunResult(
             leads=leads,
             counts=counts,
@@ -598,6 +610,15 @@ class RealPipeline:
             lead, "telephone", None
         )
 
+        # Scoring L4 : si Claude a échoué (clé/modèle/parse), `raison_score` est
+        # vide mais `scoring_erreur` porte la cause. On la fait remonter dans
+        # `score_raison` (affiché au CRM) au lieu de laisser un blanc silencieux —
+        # sinon un lead non scoré est indiscernable d'un lead sans intérêt.
+        raison_score = getattr(lead, "raison_score", None)
+        scoring_erreur = getattr(lead, "scoring_erreur", None)
+        if not raison_score and scoring_erreur:
+            raison_score = f"Scoring indisponible : {scoring_erreur}"
+
         return {
             "run_id": ctx.run.get("id"),
             "verticale_id": ctx.run.get("verticale_id"),
@@ -622,7 +643,7 @@ class RealPipeline:
             "raison_hors_filtre": getattr(lead, "raison_hors_filtre", None),
             "mail_sujet": getattr(lead, "email_objet", None),
             "mail_corps": getattr(lead, "email_corps", None),
-            "score_raison": getattr(lead, "raison_score", None),
+            "score_raison": raison_score,
             "statut": "a_valider",
         }
 
