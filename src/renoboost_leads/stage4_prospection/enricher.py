@@ -134,13 +134,15 @@ class EnricheurStage4:
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("Erreur API Claude sur %s : %s", lead.place_id, e)
+            # On garde le message (tronqué), pas seulement le type : la cause
+            # exacte (modèle invalide, payload, quota…) reste visible en base.
             return self._build_lead_l4(
                 lead_l3=lead,
                 score=None,
                 raison=None,
                 pitch=None,
                 modele=self.config.modele,
-                erreur=f"api_error: {type(e).__name__}",
+                erreur=f"api_error: {type(e).__name__}: {e}"[:240],
             )
 
         # 3) Stockage cache + compteurs
