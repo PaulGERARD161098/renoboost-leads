@@ -54,7 +54,13 @@ class Worker:
             )
         }
 
-    def _heartbeat(self, *, pending: int | None = None, last_error: str | None = None) -> None:
+    def _heartbeat(
+        self,
+        *,
+        pending: int | None = None,
+        last_error: str | None = None,
+        clear_error: bool = False,
+    ) -> None:
         """Écrit le battement de cœur (non bloquant : ne doit jamais tuer la boucle)."""
         try:
             self.db.heartbeat(
@@ -63,6 +69,7 @@ class Worker:
                 pending=pending,
                 last_error=last_error,
                 keys=self._keys_presence(),
+                clear_error=clear_error,
             )
         except Exception:  # noqa: BLE001 — l'observabilité ne doit pas casser le traitement
             logger.warning("Heartbeat échoué (non bloquant).", exc_info=True)
@@ -133,6 +140,9 @@ class Worker:
                 len(result.leads),
                 result.cout_eur,
             )
+            # Run réussi → efface le dernier échec affiché dans l'UI (sinon une
+            # erreur passée resterait visible indéfiniment, même réparée).
+            self._heartbeat(clear_error=True)
         except Exception as exc:  # noqa: BLE001 — on veut capturer pour marquer le run échoué
             logger.exception("Run %s : échec", run_id)
             # Remonte aussi l'erreur au heartbeat → visible dans l'UI sans logs Railway.

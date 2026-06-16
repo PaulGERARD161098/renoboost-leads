@@ -37,6 +37,7 @@ class FakeDB:
         pending: int | None = None,
         last_error: str | None = None,
         keys: dict[str, bool] | None = None,
+        clear_error: bool = False,
     ) -> None:
         self.heartbeats.append(
             {
@@ -45,6 +46,7 @@ class FakeDB:
                 "pending": pending,
                 "last_error": last_error,
                 "keys": keys,
+                "clear_error": clear_error,
             }
         )
 
@@ -638,6 +640,18 @@ def test_worker_marks_failure_on_pipeline_error():
     assert "kaboom" in db.runs[run["id"]]["erreur"]
     # L'échec remonte aussi au heartbeat (visible dans l'UI sans logs Railway).
     assert any("kaboom" in (h["last_error"] or "") for h in db.heartbeats)
+
+
+def test_worker_clears_last_error_on_success():
+    run = _make_run(volume=3)
+    db = FakeDB(runs=[run], verticales={})
+    worker = Worker(_config(), db=db, pipeline=DemoPipeline(seed=1))
+
+    worker.poll_once()
+
+    assert db.runs[run["id"]]["status"] == "termine"
+    # Un run réussi efface le dernier échec affiché (sinon il resterait collé).
+    assert any(h["clear_error"] for h in db.heartbeats)
 
 
 def test_worker_heartbeat_each_poll_reports_mode_and_pending():

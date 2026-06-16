@@ -7,6 +7,11 @@ import type { WorkerHeartbeat } from "@/lib/database.types";
 // variables manquantes).
 const STALE_MS = 60_000;
 
+// Lien « voir le worker » : le worker est un process headless sur Railway (il
+// ne sert aucune page web), donc on pointe vers son tableau de bord. URL exacte
+// du service à poser dans NEXT_PUBLIC_WORKER_URL (Vercel) ; sinon, dashboard Railway.
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://railway.app/dashboard";
+
 function ago(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
   if (s < 60) return `il y a ${s} s`;
@@ -34,9 +39,10 @@ export async function WorkerStatus() {
   const lastSeen = hb?.last_seen_at ?? null;
   const stale = !lastSeen || Date.now() - new Date(lastSeen).getTime() > STALE_MS;
 
-  // Jamais vu : worker probablement pas (re)déployé.
+  let pill: React.ReactNode;
   if (!lastSeen) {
-    return (
+    // Jamais vu : worker probablement pas (re)déployé.
+    pill = (
       <Pill tone="gray">
         <Dot tone="gray" />
         <span>
@@ -44,10 +50,8 @@ export async function WorkerStatus() {
         </span>
       </Pill>
     );
-  }
-
-  if (stale) {
-    return (
+  } else if (stale) {
+    pill = (
       <Pill tone={pending > 0 ? "red" : "amber"}>
         <Dot tone={pending > 0 ? "red" : "amber"} />
         <span>
@@ -65,24 +69,47 @@ export async function WorkerStatus() {
         </span>
       </Pill>
     );
+  } else {
+    // Actif.
+    pill = (
+      <Pill tone="green">
+        <Dot tone="green" pulse />
+        <span>
+          <strong>Worker actif</strong>
+          {hb?.mode ? ` · ${hb.mode === "real" ? "réel" : "démo"}` : ""}
+          {hb?.version ? ` · build ${hb.version}` : ""} · {ago(lastSeen)}
+          {pending > 0 ? ` · ${pending} en file` : ""}
+          {hb?.last_error ? (
+            <span className="ml-1 text-amber-700">
+              · dernier échec : {hb.last_error.slice(0, 80)}
+            </span>
+          ) : null}
+        </span>
+      </Pill>
+    );
   }
 
-  // Actif.
+  // Pastille + lien direct vers le worker (Railway) « à côté de l'état ».
   return (
-    <Pill tone="green">
-      <Dot tone="green" pulse />
-      <span>
-        <strong>Worker actif</strong>
-        {hb?.mode ? ` · ${hb.mode === "real" ? "réel" : "démo"}` : ""}
-        {hb?.version ? ` · build ${hb.version}` : ""} · {ago(lastSeen)}
-        {pending > 0 ? ` · ${pending} en file` : ""}
-        {hb?.last_error ? (
-          <span className="ml-1 text-amber-700">
-            · dernier échec : {hb.last_error.slice(0, 80)}
-          </span>
-        ) : null}
-      </span>
-    </Pill>
+    <span className="inline-flex items-center gap-2">
+      {pill}
+      <WorkerLink />
+    </span>
+  );
+}
+
+/** Lien discret « voir » à côté de la pastille → tableau de bord du worker. */
+function WorkerLink() {
+  return (
+    <a
+      href={WORKER_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Ouvrir le worker sur Railway"
+      className="inline-flex items-center gap-0.5 text-xs text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+    >
+      voir ↗
+    </a>
   );
 }
 
