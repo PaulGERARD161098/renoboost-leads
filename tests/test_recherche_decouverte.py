@@ -92,6 +92,24 @@ class TestDecouvrirParams:
         assert params["per_page"] == 25
         assert params["page"] == 1
 
+    def test_naf_divisions_passent_en_section(self):
+        # Divisions/préfixes NAF → l'API n'accepte pas activite_principale, on
+        # élargit à la SECTION (l'extracteur resserre ensuite au préfixe).
+        session = _PagedSessionMock(pages=[{"results": [], "total_pages": 0, "total_results": 0}])
+        client = _client(session)
+        list(client.decouvrir(departements=["59"], activite_principale=["10", "49", "70.10"]))
+        params = session.calls[0]["params"]
+        assert "activite_principale" not in params
+        assert params["section_activite_principale"] == "C,H,M"
+
+    def test_naf_codes_complets_restent_precis(self):
+        session = _PagedSessionMock(pages=[{"results": [], "total_pages": 0, "total_results": 0}])
+        client = _client(session)
+        list(client.decouvrir(departements=["59"], activite_principale=["25.11Z", "49.41A"]))
+        params = session.calls[0]["params"]
+        assert params["activite_principale"] == "25.11Z,49.41A"
+        assert "section_activite_principale" not in params
+
     def test_per_page_plafonne_a_25(self):
         session = _PagedSessionMock(pages=[{"results": [], "total_pages": 0, "total_results": 0}])
         client = _client(session)
