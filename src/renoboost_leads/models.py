@@ -189,8 +189,12 @@ class EnrichissementL35(BaseModel):
     poll_interval_s: float = Field(default=10.0, ge=1.0, le=60.0)
     poll_timeout_s: float = Field(default=600.0, ge=30.0, le=3600.0)
 
-    # Coût indicatif par lead enrichi (€). Sert au budget guard et aux stats.
-    cout_par_lead_eur: float = Field(default=0.50, ge=0.0, le=10.0)
+    # Coût indicatif par lead enrichi (€). Sert au budget guard ET aux stats : il
+    # DOIT refléter le coût réel Dropcontact (~0,10 €/lead). Une sur-estimation
+    # (ancien 0,50 €) faisait refuser des lots tenant dans le budget → enrichissement
+    # muet (budget_exhausted) sur des budgets normaux. C'est cette valeur (via
+    # cfg.enrichissement_l3_5) qui prime sur le défaut du client.
+    cout_par_lead_eur: float = Field(default=0.10, ge=0.0, le=10.0)
 
 
 class ClaudeScoring(BaseModel):
