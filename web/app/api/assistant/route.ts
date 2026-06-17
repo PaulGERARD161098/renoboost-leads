@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { SYSTEM_PROMPT } from "@/lib/assistant/knowledge";
 import { tools, executeTool } from "@/lib/assistant/tools";
+import { HAIKU_MODEL } from "@/lib/ai-models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = "claude-haiku-4-5";
+const MODEL = HAIKU_MODEL;
 const MAX_ITERATIONS = 6;
 const MAX_TOKENS = 1024;
 
