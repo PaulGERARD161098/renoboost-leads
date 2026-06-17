@@ -336,6 +336,8 @@ def test_real_pipeline_maps_leads_and_emits(monkeypatch):
         "leads": 1,
         "scores_ok": 1,
         "scores_ko": 0,
+        "enrich_ok": 0,
+        "enrich_ko": 0,
     }
     assert emitted and emitted[-1][1] == 95
 
@@ -722,6 +724,40 @@ def test_worker_flags_degraded_run():
     assert db.runs[run["id"]]["qualite"] is None
     assert "dégradée" in (db.runs[run["id"]]["erreur"] or "")
     assert any(h["last_error"] and "dégradé" in h["last_error"] for h in db.heartbeats)
+
+
+def test_worker_surface_enrich_erreur_dropcontact():
+    """Enrichissement L3.5 muet (0 trouvé, que des erreurs) → la cause Dropcontact
+    est remontée dans runs.erreur, plus un email à 0 inexpliqué."""
+    run = _make_run(volume=3)
+
+    class EnrichKO:
+        def run(self, ctx, emit):
+            from worker.pipeline import RunResult
+
+            return RunResult(
+                leads=[{"entreprise": "X"}],
+                counts={
+                    "decouverte": 5,
+                    "qualifies": 5,
+                    "leads": 5,
+                    "scores_ok": 5,
+                    "scores_ko": 0,
+                    "enrich_ok": 0,
+                    "enrich_ko": 5,
+                },
+                cout_eur=0.2,
+                enrich_erreur="reseau_indisponible: hote_bloque_allowlist",
+            )
+
+    db = FakeDB(runs=[run], verticales={})
+    worker = Worker(_config(), db=db, pipeline=EnrichKO())
+    worker.poll_once()
+
+    assert db.runs[run["id"]]["status"] == "termine"
+    erreur = db.runs[run["id"]]["erreur"] or ""
+    assert "Dropcontact KO" in erreur
+    assert "allowlist" in erreur
 
 
 def test_worker_autocheck_avant_run_reel_bloque_si_claude_ko(monkeypatch):

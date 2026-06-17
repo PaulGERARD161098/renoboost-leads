@@ -208,6 +208,13 @@ class Worker:
             # KO) porte un diagnostic visible (champ erreur), au lieu d'un faux
             # succès vert. Le statut reste « termine » (les leads restent exploitables).
             degradation = raison_degradation(result.counts)
+            # Diagnostic enrichissement L3.5 : si Dropcontact a échoué en bloc
+            # (0 trouvé, que des erreurs), on remonte la cause exacte (réseau /
+            # clé / budget) dans le diagnostic — au lieu d'un email à 0 sans explication.
+            c = result.counts
+            if c.get("enrich_ko") and not c.get("enrich_ok") and result.enrich_erreur:
+                enrich_diag = f"Enrichissement Dropcontact KO : {result.enrich_erreur}"
+                degradation = f"{degradation} | {enrich_diag}" if degradation else enrich_diag
             self.db.finalize_run(
                 run_id,
                 status="termine",
