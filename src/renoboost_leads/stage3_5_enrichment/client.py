@@ -76,7 +76,12 @@ class DropcontactClientConfig:
     poll_initial_delay_s: float = 10.0
     poll_interval_s: float = 10.0
     poll_timeout_s: float = 600.0
-    cout_par_lead_eur: float = 0.50
+    # Coût indicatif par lead, utilisé À LA FOIS pour le pré-check du budget guard
+    # et le coût enregistré. Doit refléter le coût RÉEL Dropcontact (~0,10 €/lead,
+    # cf. COUT_DROPCONTACT_PAR_LEAD côté UI) : une sur-estimation (ancien 0,50 €)
+    # faisait refuser des lots qui tenaient pourtant dans le budget → enrichissement
+    # muet (budget_exhausted) sur des budgets normaux.
+    cout_par_lead_eur: float = 0.10
     rate_limiter: RateLimiter | None = None
     budget: BudgetGuard | None = None
     # Hooks injectables pour tests (mock complet sans monkeypatch global)

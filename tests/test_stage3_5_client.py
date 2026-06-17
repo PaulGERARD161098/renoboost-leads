@@ -95,7 +95,8 @@ class TestDropcontactClient:
 
         assert rep.request_id == "req-1"
         assert len(rep.data) == 1
-        assert rep.cout_eur == pytest.approx(0.50)
+        # 1 lead × coût indicatif par lead (~0,10 €, aligné sur le coût réel).
+        assert rep.cout_eur == pytest.approx(0.10)
         assert captured["headers"]["X-Access-Token"] == "key123"
         assert captured["json"]["language"] == "fr"
         assert captured["json"]["siren"] is True
