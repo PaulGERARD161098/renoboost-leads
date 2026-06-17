@@ -71,6 +71,9 @@ class RunResult:
     # Ventilation du coût réel par API : {places, pappers, dropcontact, claude} en €.
     # Persistée dans runs.cout_detail → décompte précis des crédits côté UI.
     cout_detail: dict[str, float] = field(default_factory=dict)
+    # Échantillon de raison d'échec d'enrichissement L3.5 (Dropcontact), le cas
+    # échéant → remonté au diagnostic du run pour ne pas rester muet.
+    enrich_erreur: str | None = None
 
 
 # Postes de coût pilotés côté UI (3 API payantes + Claude). Doit rester aligné
@@ -363,18 +366,38 @@ class RealPipeline:
         finaux = result.leads_finaux or []
         scores_ok = sum(1 for lead in finaux if getattr(lead, "score_interet", None) is not None)
         scores_ko = sum(1 for lead in finaux if getattr(lead, "scoring_erreur", None))
+        # Santé de l'enrichissement L3.5 (Dropcontact) : email/tél trouvés vs échecs.
+        # Même logique anti-muet que le scoring.
+        enrich_ok = sum(
+            1
+            for lead in finaux
+            if getattr(lead, "email_dropcontact", None)
+            or getattr(lead, "telephone_direct_dropcontact", None)
+        )
+        enrich_ko = sum(1 for lead in finaux if getattr(lead, "enrichissement_erreur", None))
+        enrich_erreur = next(
+            (
+                lead.enrichissement_erreur
+                for lead in finaux
+                if getattr(lead, "enrichissement_erreur", None)
+            ),
+            None,
+        )
         counts = {
             "decouverte": decouverte,
             "qualifies": qualifies,
             "leads": len(leads),
             "scores_ok": scores_ok,
             "scores_ko": scores_ko,
+            "enrich_ok": enrich_ok,
+            "enrich_ko": enrich_ko,
         }
         return RunResult(
             leads=leads,
             counts=counts,
             cout_eur=round(stats.cout_total_eur, 2),
             cout_detail=cout_detail_depuis_stats(stats.etages_executes),
+            enrich_erreur=enrich_erreur,
         )
 
     @staticmethod
