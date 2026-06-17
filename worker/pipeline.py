@@ -649,6 +649,7 @@ class RealPipeline:
             "naf": getattr(lead, "code_naf", None),
             "libelle_naf": getattr(lead, "libelle_naf", None),
             "effectif": getattr(lead, "libelle_effectif", None),
+            "categorie_entreprise": getattr(lead, "categorie_entreprise", None),
             "ville": getattr(lead, "ville", None),
             "code_postal": getattr(lead, "code_postal", None),
             "adresse": getattr(lead, "adresse", None),

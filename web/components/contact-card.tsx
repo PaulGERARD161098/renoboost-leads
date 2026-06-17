@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { COUT_DROPCONTACT_PAR_LEAD } from "@/lib/costs";
 
 type Contact = {
   contact_nom: string | null;
@@ -13,13 +14,21 @@ type Contact = {
 
 type Echec = { message: string; action: string; retry: boolean };
 
+// Coût indicatif d'un clic « Enrichir » (1 lead Dropcontact), affiché à l'avance.
+const COUT_ENRICH = COUT_DROPCONTACT_PAR_LEAD.toLocaleString("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+});
+
 // Carte « Décideur » de la fiche prospect : coordonnées + liens LinkedIn, avec
 // un bouton d'enrichissement on-demand (Dropcontact → email / tél / LinkedIn).
 export function ContactCard({
   leadId,
+  siren,
   initial,
 }: {
   leadId: string;
+  siren?: string | null;
   initial: Contact;
 }) {
   const [contact, setContact] = useState<Contact>(initial);
@@ -72,18 +81,23 @@ export function ContactCard({
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-white p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-1 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
           Décideur
         </h2>
         <button
           onClick={enrichir}
           disabled={loading}
+          title="Interroge Dropcontact pour retrouver l'email, le téléphone et le LinkedIn du décideur."
           className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-slate-50 disabled:opacity-40"
         >
-          {loading ? "Enrichissement…" : "Enrichir le contact"}
+          {loading ? "Recherche en cours…" : `Trouver plus d'infos · ${COUT_ENRICH}`}
         </button>
       </div>
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Cherche email, téléphone & LinkedIn du décideur via Dropcontact ({COUT_ENRICH} par
+        recherche). {siren ? "Sinon, ouvre la fiche Pappers ci-dessous." : ""}
+      </p>
 
       <dl className="space-y-2 text-sm">
         <Field label="Nom" value={contact.contact_nom} />
@@ -101,6 +115,17 @@ export function ContactCard({
         />
         <Field label="Site" value={contact.site_web} href={contact.site_web ?? undefined} />
       </dl>
+
+      {siren && (
+        <a
+          href={`https://www.pappers.fr/entreprise/${siren}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[var(--brand)] hover:underline"
+        >
+          Voir les dirigeants sur Pappers ↗
+        </a>
+      )}
 
       {info && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-[var(--muted)]">{info}</p>}
 

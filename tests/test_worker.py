@@ -390,13 +390,12 @@ def test_mapper_lead_surface_erreur_scoring():
     assert row["score_raison"] == "Scoring indisponible : api_error: AuthenticationError"
 
 
-def test_real_pipeline_rossini_places_first(monkeypatch):
-    """Verticale rossini est désormais Places-first (l'API recherche-entreprises
-    ne matche pas les divisions NAF en SIRENE-first) → découverte Places (stage 1),
-    pas de stage 0."""
+def test_real_pipeline_rossini_sirene_first(monkeypatch):
+    """Verticale rossini cible les PME via SIRENE-first (categorie INSEE + effectif
+    filtrés à la source) → découverte SIRENE (stage 0) + Places en enrichissement."""
     stages = _capture_stages(monkeypatch, "rossini")
-    assert 0 not in stages  # plus de découverte SIRENE-first
-    assert 1 in stages  # découverte Places
+    assert 0 in stages  # découverte SIRENE-first (ciblage PME natif)
+    assert 1 in stages
 
 
 def test_real_pipeline_sirene_first_selects_stage0(monkeypatch):

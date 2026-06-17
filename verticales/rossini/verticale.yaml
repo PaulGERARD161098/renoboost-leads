@@ -38,15 +38,15 @@ emetteur:
   nom_entreprise: "Rossini Energy"
 
 cibles:
-  # Places-first : découverte pilotée par les `secteurs_places` ci-dessous, NAF
-  # appliqué en filtre (préfixe). SIRENE-first est désactivé ici car l'API
-  # recherche-entreprises n'accepte pas les divisions NAF (« 10 », « 25 »…) en
-  # `activite_principale` — seuls les codes APE complets (« 25.11Z ») matchent,
-  # sinon 0 résultat. Le fix SIRENE-first (divisions→sections) est suivi à part.
-  decouverte_sirene_first: false
+  # SIRENE-first : découverte par NAF à la source (recherche-entreprises), avec
+  # filtrage NATIF par catégorie INSEE + tranche d'effectif → on cible des PME,
+  # pas des gros sites industriels (le Places-first remontait des GE car l'effectif
+  # n'était pas fiable). Les divisions NAF (« 10 ») sont élargies en sections par
+  # le client (recherche_client), puis re-filtrées au préfixe exact.
+  decouverte_sirene_first: true
   secteurs_places:
-    # Requêtes qui pilotent la découverte Places (zone d'activité B2B) ; le NAF
-    # ci-dessous reste appliqué en filtre préfixe sur les entreprises trouvées.
+    # En SIRENE-first ces requêtes ne pilotent plus la découverte : conservées
+    # pour l'enrichissement Places par nom et le proto CLI Places-first.
     - type: "industrie"
       query: "usine"
     - type: "logistique"
@@ -57,6 +57,10 @@ cibles:
       query: "siège social"
   filtres_entreprise:
     effectif_min: 20            # exclut les TPE ; signal "site sérieux"
+    # Cible PME (INSEE : < 250 sal. & < 50 M€) → exclut nativement ETI/GE (groupes).
+    # C'est le levier fiable contre les "grosses structures".
+    categorie_entreprise_inclus:
+      - "PME"
     naf_inclus:
       - "10"                    # industries alimentaires
       - "20"                    # chimie

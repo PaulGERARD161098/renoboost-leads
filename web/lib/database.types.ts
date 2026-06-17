@@ -99,6 +99,7 @@ export interface Lead {
   naf: string | null;
   libelle_naf: string | null;
   effectif: string | null;
+  categorie_entreprise: string | null;
   ville: string | null;
   code_postal: string | null;
   adresse: string | null;
