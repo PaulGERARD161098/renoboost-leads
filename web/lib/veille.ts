@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { HAIKU_MODEL } from "@/lib/ai-models";
 
 // Veille d'intentions : l'agent cherche le web (web search de Claude) pour des
 // signaux d'achat sur le périmètre des cibles, en deux temps (large puis affiné),
 // et renvoie des "signaux-leads" qualifiés et orientés prise de contact.
 
-const MODEL = process.env.VEILLE_MODEL || "claude-haiku-4-5";
+const MODEL = process.env.VEILLE_MODEL || HAIKU_MODEL;
 const DEPARTEMENTS = "Nord (59), Pas-de-Calais (62), Somme (80), Aisne (02), Oise (60)";
 
 type Signal = {

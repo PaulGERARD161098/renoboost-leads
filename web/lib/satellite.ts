@@ -9,11 +9,12 @@ import {
   surfaceExploitableDepuis,
 } from "@/lib/potentiel";
 import { estSignalVE, signauxDuLead } from "@/lib/veille-signaux";
+import { HAIKU_MODEL } from "@/lib/ai-models";
 
 // Analyse "potentiel solaire" d'un lead via vue aérienne IGN + Claude Vision.
 // Partagé entre la route /api/lead/satellite et l'outil Magellan.
 
-const MODEL = "claude-haiku-4-5";
+const MODEL = HAIKU_MODEL;
 const R = 6378137; // rayon terrestre (Web Mercator)
 const DEMI_COTE_M = 130; // demi-côté de la vue (~260 m de large)
 // Vue de repli pour les grands sites (usines, plateformes) : si rien n'est
