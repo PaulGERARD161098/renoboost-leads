@@ -253,15 +253,31 @@ export default async function LeadPage({
               Entreprise
             </h2>
             <dl className="space-y-2 text-sm">
-              <Field label="Secteur" value={l.libelle_naf ?? l.naf} />
+              <Field label="Activité" value={l.libelle_naf ?? l.naf} />
               <Field label="Effectif" value={l.effectif} />
+              <Field label="Taille" value={tailleStructure(l.categorie_entreprise)} />
               <Field label="Ville" value={l.ville} />
-              <Field label="SIREN" value={l.siren} />
+              <Field
+                label="SIREN"
+                value={l.siren}
+                href={l.siren ? `https://www.pappers.fr/entreprise/${l.siren}` : undefined}
+              />
             </dl>
+            {l.siren && (
+              <a
+                href={`https://www.pappers.fr/entreprise/${l.siren}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[var(--brand)] hover:underline"
+              >
+                Fiche Pappers (dirigeants, finances) ↗
+              </a>
+            )}
           </div>
 
           <ContactCard
             leadId={l.id}
+            siren={l.siren}
             initial={{
               contact_nom: l.contact_nom,
               contact_email: l.contact_email,
@@ -312,6 +328,18 @@ export default async function LeadPage({
       </div>
     </div>
   );
+}
+
+// Libellé lisible de la catégorie INSEE (taille de structure).
+function tailleStructure(cat: string | null): string | null {
+  if (!cat) return null;
+  const c = cat.trim().toUpperCase();
+  const labels: Record<string, string> = {
+    PME: "PME (< 250 salariés)",
+    ETI: "ETI (250–4999)",
+    GE: "Grand groupe",
+  };
+  return labels[c] ?? cat;
 }
 
 function ScoreBar({ score }: { score: number | null }) {
