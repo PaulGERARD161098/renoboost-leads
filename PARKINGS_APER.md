@@ -134,8 +134,12 @@ représentatifs, dont 2 sous le seuil).
 **Phase C** se déclenche pour les parkings *sans enseigne ni SIREN* mais
 géolocalisés : on interroge `recherche-entreprises/near_point` dans un petit
 rayon (0,2 km par défaut) et on retient l'exploitant le plus plausible (effectif
-le plus élevé parmi les plus proches), avant l'anti-doublon (l'identifiant stable
-devient alors le SIREN). Le fallback Pappers/Societeinfo reste une évolution
+le plus élevé), avant l'anti-doublon (l'identifiant stable devient alors le
+SIREN). Le choix est **déterministe** (tri effectif décroissant puis SIREN
+croissant : un même point résout toujours vers le même exploitant) et **prudent**
+— si plusieurs voisins sont également plausibles mais sans effectif renseigné, on
+laisse le parking *non résolu* plutôt que de poser un SIREN faux qui corromprait
+le NAF et le filtrage. Le fallback Pappers/Societeinfo reste une évolution
 possible si `near_point` ne suffit pas.
 
 **Phase D** envoie un email récapitulatif (KPIs + top leads avec surface, échéance

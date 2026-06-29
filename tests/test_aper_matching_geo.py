@@ -65,6 +65,32 @@ class TestResoudreSiren:
         siren, nom = resoudre_siren_geo(_ligne_sans_enseigne(), _FakeClient([]))
         assert siren is None and nom is None
 
+    def test_resolution_deterministe_independante_de_l_ordre(self):
+        # Même jeu de candidats, ordres d'entrée différents → MÊME SIREN choisi.
+        # (Avant : `max` suivait l'ordre API non garanti → flip run à run.)
+        a = {"siren": "222222222", "nom_complet": "B SAS", "tranche_effectif_salarie": "42"}
+        b = {"siren": "111111111", "nom_complet": "A SAS", "tranche_effectif_salarie": "42"}
+        s1, _ = resoudre_siren_geo(_ligne_sans_enseigne(), _FakeClient([a, b]))
+        s2, _ = resoudre_siren_geo(_ligne_sans_enseigne(), _FakeClient([b, a]))
+        assert s1 == s2 == "111111111"  # effectif égal → SIREN croissant départage
+
+    def test_effectif_tous_inconnus_laisse_non_resolu(self):
+        # Plusieurs voisins sans effectif renseigné → pur hasard → on n'attribue
+        # pas (mieux vaut un SIREN absent qu'un SIREN faux qui corrompt le NAF).
+        client = _FakeClient([
+            {"siren": "111111111", "nom_complet": "Voisin 1"},
+            {"siren": "222222222", "nom_complet": "Voisin 2"},
+        ])
+        siren, nom = resoudre_siren_geo(_ligne_sans_enseigne(), client)
+        assert siren is None and nom is None
+
+    def test_candidat_unique_sans_effectif_reste_retenu(self):
+        # Un seul candidat dans le rayon : pas d'ambiguïté → on le garde même
+        # sans effectif (le garde-fou ne vise que les choix multiples hasardeux).
+        client = _FakeClient([{"siren": "333333333", "nom_complet": "Seul Exploitant"}])
+        siren, nom = resoudre_siren_geo(_ligne_sans_enseigne(), client)
+        assert siren == "333333333"
+
     def test_sans_coords_pas_d_appel(self):
         client = _FakeClient([{"siren": "1", "nom_complet": "X"}])
         siren, nom = resoudre_siren_geo(LigneParking(surface_m2=12000.0), client)
