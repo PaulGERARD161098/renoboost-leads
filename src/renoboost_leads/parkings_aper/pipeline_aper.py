@@ -18,6 +18,7 @@ est injecté dans le scoring L4 (sauf si un `contexte_client` est déjà fourni)
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -31,6 +32,7 @@ from ..models import (
     EnrichissementL35,
     FiltresEntreprise,
     LeadAper,
+    LeadStage1,
     LeadStage3,
     LeadStage4,
 )
@@ -56,7 +58,7 @@ from .exporter_aper import export_aper_csv
 from .filtre_parkings import filtrer_parkings
 from .mailer import ResumeAper, envoyer_resume_aper
 from .matching_geo import resoudre_lignes_sans_enseigne
-from .models import AperConfig, LigneParking
+from .models import SEUIL_APER_M2, AperConfig, LigneParking
 from .parser_parkings import lire_csv_parkings
 
 logger = get_logger(__name__)
@@ -72,6 +74,37 @@ CONTEXTE_APER_DEFAUT = (
     "jusqu'à 40 000 €/an. Ce sont des prospects contraints et datés : score élevé "
     "si grande surface + échéance proche."
 )
+
+# Contexte dédié aux PETITS parkings (< 1 500 m²), HORS obligation APER.
+# Le levier n'est pas réglementaire mais économique et RSE : on ne parle ni
+# d'amende, ni d'échéance, ni d'obligation (sinon le mail serait faux et
+# contre-productif). Cf. cible « flotte / RSE » des petits parcs (15-60 places).
+CONTEXTE_PETIT_PARKING_DEFAUT = (
+    "Rossini Energy conçoit et installe des ombrières photovoltaïques et des "
+    "bornes de recharge pour véhicules électriques. CIBLE : exploitants de PETITS "
+    "parcs de stationnement extérieurs de moins de 1 500 m² (≈ 15 à 60 places), "
+    "NON soumis à l'obligation légale de solarisation (loi APER). L'angle est donc "
+    "purement économique et RSE, JAMAIS réglementaire : autoconsommation solaire "
+    "pour baisser la facture d'électricité, recharge d'une flotte de véhicules "
+    "électriques sur site (utilitaires, véhicules de société, trajets "
+    "domicile-travail des salariés), ombrage et confort du parking, image "
+    "bas-carbone et démarche RSE. Score élevé si l'exploitant est propriétaire de "
+    "son foncier, possède (ou électrifie) une flotte, ou affiche une démarche RSE "
+    "active. N'invoque NI obligation, NI échéance, NI amende : ces parkings sont "
+    "libres de toute contrainte légale ; un argumentaire réglementaire serait faux."
+)
+
+
+def _contexte_pour_surface(surface_m2: float) -> str:
+    """Contexte L4 adapté à la surface : obligation APER vs flotte/RSE.
+
+    ≥ seuil APER (1 500 m²) → levier réglementaire (obligation, échéance, amende).
+    < seuil → levier économique/RSE (autoconsommation, recharge flotte), sans
+    aucune mention d'obligation.
+    """
+    if surface_m2 >= SEUIL_APER_M2:
+        return CONTEXTE_APER_DEFAUT
+    return CONTEXTE_PETIT_PARKING_DEFAUT
 
 
 @dataclass
@@ -204,10 +237,37 @@ def _lead_stage4_vers_lead_aper(
 
 
 def _claude_scoring_avec_contexte(base: ClaudeScoring) -> ClaudeScoring:
-    """Injecte le contexte réglementaire APER si aucun contexte n'est fourni."""
+    """Injecte un contexte réglementaire APER par défaut si aucun n'est fourni.
+
+    Ce contexte global ne sert plus que de filet (et de namespace de cache) : le
+    contexte réellement envoyé à Claude est choisi PAR LEAD via `contexte_resolver`
+    selon la surface (cf. `_construire_resolver_contexte`). On garde le contexte
+    obligation comme base car la majorité des runs APER ciblent le > 1 500 m².
+    """
     if base.contexte_client:
         return base
     return base.model_copy(update={"contexte_client": CONTEXTE_APER_DEFAUT})
+
+
+def _construire_resolver_contexte(
+    leads_l1: list[LeadStage1], lignes_filtrees: list[LigneParking]
+) -> Callable[[LeadStage3], str]:
+    """Construit un résolveur place_id → contexte L4 adapté à la surface.
+
+    Les `leads_l1` et `lignes_filtrees` sont alignés 1:1 (même ordre, même
+    cardinalité, cf. `zip(..., strict=True)` en promotion). On mémorise le
+    contexte par `place_id` (stable de L1 à L4) pour que l'enricher L4 choisisse
+    obligation (≥ 1 500 m²) ou flotte/RSE (< 1 500 m²) lead par lead.
+    """
+    ctx_par_place = {
+        l1.place_id: _contexte_pour_surface(lg.surface_m2)
+        for l1, lg in zip(leads_l1, lignes_filtrees, strict=True)
+    }
+
+    def resolver(lead: LeadStage3) -> str:
+        return ctx_par_place.get(lead.place_id, CONTEXTE_APER_DEFAUT)
+
+    return resolver
 
 
 def executer_cycle_aper(
@@ -290,8 +350,15 @@ def executer_cycle_aper(
         resultat.cout_l35_eur = cout_l35
         resultat.nb_emails_l35 = nb_emails_l35
 
-    # 7. L4 — scoring (contexte APER injecté)
+    # 7. L4 — scoring. Le contexte est choisi PAR LEAD selon la surface :
+    # obligation APER (≥ 1 500 m²) vs flotte/RSE (< 1 500 m²). Si l'appelant a
+    # imposé un contexte_client, il prime et on ne dérive rien automatiquement.
     claude_scoring = _claude_scoring_avec_contexte(config.claude_scoring)
+    contexte_resolver = (
+        None
+        if config.claude_scoring.contexte_client
+        else _construire_resolver_contexte(leads_l1, lignes_filtrees)
+    )
     if config.dry_run_l4:
         claude_client = ClaudeClientDryRun(
             modele=claude_scoring.modele,
@@ -313,7 +380,10 @@ def executer_cycle_aper(
         )
     cache_l4 = CacheStage4(output_dir / "cache_l4.sqlite")
     enricheur_l4 = EnricheurStage4(
-        client=claude_client, config=claude_scoring, cache=cache_l4
+        client=claude_client,
+        config=claude_scoring,
+        cache=cache_l4,
+        contexte_resolver=contexte_resolver,
     )
     leads_l4 = enricheur_l4.enrichir(leads_l3)
     resultat.cout_l4_eur = enricheur_l4.cout_total_eur

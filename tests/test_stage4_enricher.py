@@ -194,6 +194,44 @@ class TestEnricherFluxNominal:
         assert enr.cache_hits == 1
         assert sdk.calls == 1
 
+    def test_contexte_resolver_choisit_par_lead(self, tmp_path):
+        # Le résolveur par-lead doit primer sur le contexte global : chaque lead
+        # reçoit le contexte renvoyé par le résolveur dans son prompt.
+        prompts: list[str] = []
+
+        class _RecorderSDK:
+            def __init__(self):
+                class _Messages:
+                    def create(self, **kwargs):
+                        prompts.append(kwargs["messages"][0]["content"])
+                        return _FakeMessage(
+                            content=[_FakeBlock(
+                                text='{"score_interet": 60, "raison_score": "x"}'
+                            )],
+                            usage=_FakeUsage(),
+                        )
+
+                self.messages = _Messages()
+
+        sdk = _RecorderSDK()
+        cfg = ClaudeClientConfig(api_key="sk-fake", modele="claude-haiku-4-5", sdk_client=sdk)
+        client = ClaudeClient(cfg)
+        cache = CacheStage4(tmp_path / "l4.sqlite")
+        config = ClaudeScoring(inclure_pitch=False)
+
+        def resolver(lead: LeadStage3) -> str:
+            return "CTX_OBLIGATION" if lead.place_id == "A" else "CTX_FLOTTE"
+
+        enr = EnricheurStage4(
+            client=client, config=config, cache=cache, contexte_resolver=resolver
+        )
+        enr.enrichir([_lead("A"), _lead("B")])
+
+        assert "CTX_OBLIGATION" in prompts[0]
+        assert "CTX_FLOTTE" not in prompts[0]
+        assert "CTX_FLOTTE" in prompts[1]
+        assert "CTX_OBLIGATION" not in prompts[1]
+
     def test_score_sous_seuil_pas_top(self, tmp_path):
         client, _ = _build_client(['{"score_interet": 30, "raison_score": "faible"}'])
         cache = CacheStage4(tmp_path / "l4.sqlite")

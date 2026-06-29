@@ -27,6 +27,18 @@ class TestEcheance:
         _, prio = echeance_pour_surface(10000)
         assert prio == "haute"
 
+    def test_petit_parking_hors_obligation(self):
+        # < 1 500 m² : aucune obligation légale → pas d'échéance, priorité dédiée.
+        ech, prio = echeance_pour_surface(400)
+        assert ech is None
+        assert prio == "hors_obligation"
+
+    def test_seuil_exact_aper_reste_soumis(self):
+        # Le seuil 1 500 m² inclus reste soumis (≥), pas hors obligation.
+        ech, prio = echeance_pour_surface(SEUIL_APER_M2)
+        assert ech == ECHEANCE_STANDARD
+        assert prio == "standard"
+
 
 class TestLigneParking:
     def test_surface_ombrable_50pct(self):

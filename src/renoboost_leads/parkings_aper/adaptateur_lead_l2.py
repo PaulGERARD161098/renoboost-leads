@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from ..models import LeadStage1
-from .models import LigneParking
+from .models import SEUIL_APER_M2, LigneParking
 
 
 def _place_id_factice(ligne: LigneParking) -> str:
@@ -21,6 +21,11 @@ def _place_id_factice(ligne: LigneParking) -> str:
 def ligne_parking_vers_lead_stage1(ligne: LigneParking) -> LeadStage1:
     """Convertit une LigneParking en LeadStage1 (point d'entrée pipeline standard)."""
     echeance, priorite = ligne.echeance()
+    contexte_reg = (
+        f"soumis loi APER (échéance {echeance}, priorité {priorite})"
+        if echeance
+        else f"hors obligation APER (< {int(SEUIL_APER_M2)} m², cible flotte/RSE)"
+    )
     nom = (
         ligne.raison_sociale
         or ligne.nom
@@ -37,8 +42,5 @@ def ligne_parking_vers_lead_stage1(ligne: LigneParking) -> LeadStage1:
         latitude=ligne.latitude,
         longitude=ligne.longitude,
         secteur_recherche="aper_ombriere_parking",
-        requete_origine=(
-            f"Parking {int(ligne.surface_m2)} m² soumis loi APER "
-            f"(échéance {echeance}, priorité {priorite})"
-        ),
+        requete_origine=f"Parking {int(ligne.surface_m2)} m² {contexte_reg}",
     )

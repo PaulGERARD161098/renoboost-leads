@@ -76,6 +76,26 @@ class TestPipelineAperDryRun:
         assert moyen.echeance_aper == "2028-07-01"
         assert moyen.priorite_aper == "standard"
 
+    def test_petit_parking_hors_obligation(self, tmp_path, stub_pipeline):
+        # En abaissant le seuil, les petits parkings (< 1 500 m²) entrent dans le
+        # run mais sont marqués hors obligation (pas d'échéance, priorité dédiée).
+        from renoboost_leads.parkings_aper.models import AperConfig
+
+        config = AperRunConfig(
+            aper_config=AperConfig(surface_min_m2=300.0),
+            claude_scoring=ClaudeScoring(inclure_pitch=False),
+            dry_run_l4=True,
+        )
+        res = executer_cycle_aper(FIXTURE, tmp_path / "out", config)
+        assert res.nb_parkings_aper == 10  # tous, y compris 850 et 420 m²
+
+        petit = next(la for la in res.leads if la.surface_parking_m2 == 420.0)
+        assert petit.echeance_aper is None
+        assert petit.priorite_aper == "hors_obligation"
+
+        gros = next(la for la in res.leads if la.surface_parking_m2 == 31000.0)
+        assert gros.priorite_aper == "haute"
+
     def test_csv_ecrit(self, tmp_path, stub_pipeline):
         config = AperRunConfig(
             claude_scoring=ClaudeScoring(inclure_pitch=False), dry_run_l4=True
@@ -114,6 +134,38 @@ class TestPipelineAperDryRun:
 
         base = ClaudeScoring(contexte_client="custom")
         assert _claude_scoring_avec_contexte(base).contexte_client == "custom"
+
+    def test_contexte_pour_surface_obligation_vs_flotte(self):
+        from renoboost_leads.parkings_aper.pipeline_aper import (
+            CONTEXTE_APER_DEFAUT,
+            CONTEXTE_PETIT_PARKING_DEFAUT,
+            _contexte_pour_surface,
+        )
+
+        assert _contexte_pour_surface(5000) == CONTEXTE_APER_DEFAUT
+        assert _contexte_pour_surface(1500) == CONTEXTE_APER_DEFAUT  # seuil inclus
+        assert _contexte_pour_surface(400) == CONTEXTE_PETIT_PARKING_DEFAUT
+
+    def test_resolver_contexte_par_place_id(self):
+        from renoboost_leads.parkings_aper.adaptateur_lead_l2 import (
+            ligne_parking_vers_lead_stage1,
+        )
+        from renoboost_leads.parkings_aper.models import LigneParking
+        from renoboost_leads.parkings_aper.pipeline_aper import (
+            CONTEXTE_APER_DEFAUT,
+            CONTEXTE_PETIT_PARKING_DEFAUT,
+            _construire_resolver_contexte,
+        )
+
+        lignes = [
+            LigneParking(identifiant="big", surface_m2=5000),
+            LigneParking(identifiant="small", surface_m2=400),
+        ]
+        leads_l1 = [ligne_parking_vers_lead_stage1(lg) for lg in lignes]
+        resolver = _construire_resolver_contexte(leads_l1, lignes)
+
+        assert resolver(leads_l1[0]) == CONTEXTE_APER_DEFAUT
+        assert resolver(leads_l1[1]) == CONTEXTE_PETIT_PARKING_DEFAUT
 
 
 class TestL35Integration:

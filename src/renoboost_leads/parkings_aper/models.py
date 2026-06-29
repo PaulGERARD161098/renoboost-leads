@@ -33,10 +33,18 @@ ECHEANCE_STANDARD = "2028-07-01"  # 1 500 – 10 000 m²
 M2_PAR_PLACE = 25.0
 
 
-def echeance_pour_surface(surface_m2: float) -> tuple[str, str]:
-    """Retourne (echeance_iso, priorite) en fonction de la surface du parking."""
+def echeance_pour_surface(surface_m2: float) -> tuple[str | None, str]:
+    """Retourne (echeance_iso, priorite) en fonction de la surface du parking.
+
+    Sous le seuil APER (1 500 m²), le parking n'est soumis à AUCUNE obligation
+    légale de solarisation : pas d'échéance (`None`), priorité
+    « hors_obligation ». Ces parkings relèvent de la cible flotte/RSE
+    (autoconsommation, recharge VE), pas du levier réglementaire.
+    """
     if surface_m2 >= SEUIL_GROS_PARKING_M2:
         return ECHEANCE_GROS, "haute"
+    if surface_m2 < SEUIL_APER_M2:
+        return None, "hors_obligation"
     return ECHEANCE_STANDARD, "standard"
 
 
@@ -104,7 +112,7 @@ class LigneParking(BaseModel):
     def nb_places_estime(self) -> int:
         return int(self.surface_m2 / M2_PAR_PLACE)
 
-    def echeance(self) -> tuple[str, str]:
+    def echeance(self) -> tuple[str | None, str]:
         return echeance_pour_surface(self.surface_m2)
 
     def identifiant_stable(self) -> str:
