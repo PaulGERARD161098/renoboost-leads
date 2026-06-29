@@ -46,17 +46,38 @@ def _tranche_effectif_rang(entreprise: dict[str, Any]) -> int:
         return -1
 
 
+def _cle_tri_candidat(entreprise: dict[str, Any]) -> tuple[int, str]:
+    """Clé de tri DÉTERMINISTE : effectif décroissant, puis SIREN croissant.
+
+    Le SIREN départage les ex-aequo. Sans lui, `max`/un tri instable rendait
+    l'issue dépendante de l'ordre (non garanti) renvoyé par l'API : un même
+    point pouvait résoudre vers un SIREN — donc un NAF — différent d'un run à
+    l'autre, et faire basculer le lead hors-filtre. Dégradation silencieuse.
+    """
+    return (-_tranche_effectif_rang(entreprise), str(entreprise.get("siren") or ""))
+
+
 def _choisir_exploitant(candidats: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Choisit l'entreprise exploitante la plus probable parmi les candidats.
 
-    L'API renvoie déjà les résultats par proximité ; on garde cet ordre comme
-    critère principal et on départage à effectif décroissant (une ancre commerciale
-    — hyper, foncière — est plus plausible qu'une micro-boutique voisine).
+    Un seul candidat → on le retient. Plusieurs → tri déterministe par effectif
+    décroissant (une ancre — hyper, foncière — est plus plausible qu'une micro-
+    boutique voisine), SIREN croissant pour départager.
+
+    Garde-fou confiance : avec plusieurs candidats, on n'attribue un SIREN que si
+    le meilleur a un effectif CONNU (ancre plausible). Si aucun n'a d'effectif
+    renseigné, le choix relèverait du pur hasard entre voisins → on laisse le
+    parking NON résolu plutôt que de poser un SIREN faux (un SIREN manquant est
+    honnête ; un SIREN erroné corrompt le NAF et le filtrage en silence).
     """
     if not candidats:
         return None
-    # Tri stable : on conserve l'ordre API (proximité) et on remonte les gros effectifs.
-    return max(candidats, key=_tranche_effectif_rang) if len(candidats) > 1 else candidats[0]
+    if len(candidats) == 1:
+        return candidats[0]
+    meilleur = min(candidats, key=_cle_tri_candidat)
+    if _tranche_effectif_rang(meilleur) < 0:
+        return None
+    return meilleur
 
 
 def resoudre_siren_geo(
