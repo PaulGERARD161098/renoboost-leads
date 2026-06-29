@@ -41,9 +41,15 @@ def aper_group() -> None:
 @click.option("--source", default="aper_osm", show_default=True,
               help="Identifiant de la source (traçabilité CSV).")
 @click.option("--surface-min", "surface_min", type=float, default=None,
-              help="Seuil de surface m² (défaut 1500 = seuil légal APER).")
+              help="Seuil bas de surface m² (défaut 1500 = seuil légal APER).")
+@click.option("--surface-max", "surface_max", type=float, default=None,
+              help="Plafond de surface m² (défaut : aucun). Ex. 1250 ≈ 50 places "
+                   "pour cibler les petits parkings 'flotte'.")
 @click.option("--budget", "budget_eur", default=5.0, show_default=True, type=float,
-              help="Plafond budget € pour le scoring L4 (Claude).")
+              help="Plafond budget € pour L3.5 Dropcontact (l'étage payant ~0,10 €/lead).")
+@click.option("--budget-l4", "budget_l4_eur", default=5.0, show_default=True, type=float,
+              help="Plafond budget € pour le scoring L4 Claude (indépendant de L3.5, "
+                   "quasi-gratuit ~0,002 €/lead — ne pas affamer).")
 @click.option("--dry-run", is_flag=True,
               help="Simulation L4 (scores factices, pas d'appel Anthropic).")
 @click.option("--enrichir-l35", "enrichir_l35", is_flag=True,
@@ -57,8 +63,12 @@ def aper_group() -> None:
               help="Avec --vers-staging : adresse expéditeur du staging.")
 @click.option("--no-geo", is_flag=True,
               help="Désactive la résolution géoloc → SIREN des parkings sans enseigne (Phase C).")
-@click.option("--rayon-geo", "rayon_geo_km", type=float, default=0.2, show_default=True,
-              help="Rayon (km) de recherche near_point pour la résolution géoloc.")
+@click.option("--rayon-geo", "rayon_geo_km", type=float, default=None,
+              help="Rayon (km) near_point pour la résolution géoloc. Défaut : AUTO "
+                   "(50 m en mode flotte si --surface-max < 1500, sinon 200 m).")
+@click.option("--rate-limit", "rate_limit_per_min", type=int, default=60, show_default=True,
+              help="Débit max d'appels/min vers recherche-entreprises (Phase C + L2). "
+                   "Baisser (ex. 30) si l'API renvoie des HTTP 429.")
 @click.option("--no-email", is_flag=True,
               help="N'envoie pas l'email récapitulatif post-run même si SMTP est configuré.")
 def aper_run(
@@ -66,14 +76,17 @@ def aper_run(
     config_path: Path | None,
     source: str,
     surface_min: float | None,
+    surface_max: float | None,
     budget_eur: float,
+    budget_l4_eur: float,
     dry_run: bool,
     enrichir_l35: bool,
     vers_staging: bool,
     min_score: int | None,
     from_email: str,
     no_geo: bool,
-    rayon_geo_km: float,
+    rayon_geo_km: float | None,
+    rate_limit_per_min: int,
     no_email: bool,
 ) -> None:
     """Lance un run parkings APER sur un CSV inventaire."""
@@ -102,8 +115,13 @@ def aper_run(
         raise SystemExit(2)
 
     aper_config = AperConfig()
+    maj_surface: dict[str, float] = {}
     if surface_min is not None:
-        aper_config = aper_config.model_copy(update={"surface_min_m2": surface_min})
+        maj_surface["surface_min_m2"] = surface_min
+    if surface_max is not None:
+        maj_surface["surface_max_m2"] = surface_max
+    if maj_surface:
+        aper_config = aper_config.model_copy(update=maj_surface)
 
     date_str = datetime.now().strftime("%Y-%m-%d_%H%M")
     output_dir = PROJECT_ROOT / "data" / "parkings_aper" / f"{date_str}_{client_name}_{source}"
@@ -130,6 +148,7 @@ def aper_run(
         filtres_entreprise=filtres_entreprise,
         claude_scoring=claude_scoring,
         budget_eur=budget_eur,
+        budget_l4_eur=budget_l4_eur,
         anthropic_api_key=(
             settings.anthropic_api_key.get_secret_value() if settings.has_anthropic() else None
         ),
@@ -143,6 +162,7 @@ def aper_run(
         ),
         resoudre_geo=not no_geo,
         rayon_geo_km=rayon_geo_km,
+        rate_limit_per_min=rate_limit_per_min,
         smtp_config=smtp_config,
     )
 
@@ -182,6 +202,11 @@ def aper_run(
         f"  CSV final                 : {csv_final}"
     )
 
+    if resultat.raison_degradation:
+        console.print(
+            f"[yellow]⚠  Run dégradé : {resultat.raison_degradation}[/yellow]"
+        )
+
     _staging_post_run(vers_staging, resultat, source, output_dir, from_email, min_score)
 
 
@@ -214,10 +239,16 @@ def _staging_post_run(vers_staging, resultat, source, output_dir, from_email, mi
 @click.option("--out", "out_path", type=click.Path(dir_okay=False, path_type=Path),
               required=True, help="CSV d'inventaire à générer (consommable par `aper run`).")
 @click.option("--surface-min", "surface_min", type=float, default=None,
-              help="Seuil de surface m² (défaut 1500 = seuil légal APER).")
+              help="Seuil bas de surface m² (défaut 1500 = seuil légal APER).")
+@click.option("--surface-max", "surface_max", type=float, default=None,
+              help="Plafond de surface m² (défaut : aucun). Ex. 1250 ≈ 50 places "
+                   "pour cibler les petits parkings 'flotte'.")
 @click.option("--dry-run", is_flag=True,
               help="Données OSM simulées, aucun appel réseau (test du flux).")
-def aper_geo(bbox: str, out_path: Path, surface_min: float | None, dry_run: bool) -> None:
+def aper_geo(
+    bbox: str, out_path: Path, surface_min: float | None,
+    surface_max: float | None, dry_run: bool,
+) -> None:
     """Génère un CSV d'inventaire parkings depuis OpenStreetMap (Overpass)."""
     from .connecteur_geo import (
         Bbox,
@@ -240,9 +271,15 @@ def aper_geo(bbox: str, out_path: Path, surface_min: float | None, dry_run: bool
     if dry_run:
         console.print("[yellow]⚠  Mode dry-run : parkings OSM simulés.[/yellow]")
 
-    console.print(f"[cyan]Overpass — bbox {boite.as_overpass()} (seuil {seuil:.0f} m²)…[/cyan]")
+    plafond_txt = f"{surface_max:.0f}" if surface_max is not None else "∞"
+    console.print(
+        f"[cyan]Overpass — bbox {boite.as_overpass()} "
+        f"(fenêtre {seuil:.0f}–{plafond_txt} m²)…[/cyan]"
+    )
     try:
-        lignes = recuperer_parkings(boite, client=client, surface_min_m2=seuil)
+        lignes = recuperer_parkings(
+            boite, client=client, surface_min_m2=seuil, surface_max_m2=surface_max
+        )
     except OverpassError as e:
         msg = str(e)
         if "allowlist" in msg.lower() or "host_not_allowed" in msg.lower():
@@ -258,6 +295,90 @@ def aper_geo(bbox: str, out_path: Path, surface_min: float | None, dry_run: bool
     ecrire_inventaire_csv(lignes, out_path)
     console.print(
         f"\n[green]✓ Inventaire généré : {out_path}[/green]\n"
-        f"  Parkings ≥ {seuil:.0f} m² : {len(lignes)}\n"
+        f"  Parkings dans la fenêtre {seuil:.0f}–{plafond_txt} m² : {len(lignes)}\n"
         f"  → Lancer : [cyan]aper run --fichier {out_path}[/cyan]"
+    )
+
+
+@aper_group.command(name="signal-parking")
+@click.option("--leads", "leads_path", required=True,
+              type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="CSV de leads (PME découvertes SIRENE-first) avec latitude/longitude.")
+@click.option("--inventaire", "inventaire_path", required=True,
+              type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="CSV d'inventaire parkings (produit par `aper geo`).")
+@click.option("--out", "out_path", required=True,
+              type=click.Path(dir_okay=False, path_type=Path),
+              help="CSV de sortie : leads annotés du signal parking.")
+@click.option("--rayon-m", type=float, default=None,
+              help="Rayon de rattachement PME↔parking en mètres (défaut 80).")
+def aper_signal_parking(
+    leads_path: Path, inventaire_path: Path, out_path: Path, rayon_m: float | None,
+) -> None:
+    """Annote des leads PME du SIGNAL parking (couche qualité du mix).
+
+    Jointure spatiale GRATUITE : pour chaque PME (lat/lon), cherche un petit
+    parking privé qualifiant (250-1250 m²) à proximité immédiate. Ajoute les
+    colonnes signal_parking / parking_surface_m2 / parking_distance_m, et trie
+    les leads « avec parking » en tête (priorisation avant enrichissement payant).
+    """
+    import csv
+
+    from .parser_parkings import lire_csv_parkings
+    from .signal_parking import SIGNAL_RAYON_M, LeadGeo, annoter_signal_parking
+
+    parkings = lire_csv_parkings(inventaire_path).lignes
+    with leads_path.open(encoding="utf-8-sig") as fh:
+        lignes_leads = list(csv.DictReader(fh))
+    if not lignes_leads:
+        console.print("[red]✗ CSV de leads vide.[/red]")
+        raise SystemExit(2)
+
+    def _f(v: str | None) -> float | None:
+        try:
+            return float(v) if v not in (None, "") else None
+        except ValueError:
+            return None
+
+    def _cle(row: dict[str, str], i: int) -> str:
+        return (row.get("siren") or row.get("place_id") or f"row{i}").strip()
+
+    leads_geo = [
+        LeadGeo(cle=_cle(r, i), latitude=_f(r.get("latitude")), longitude=_f(r.get("longitude")))
+        for i, r in enumerate(lignes_leads)
+    ]
+    rayon = rayon_m if rayon_m is not None else SIGNAL_RAYON_M
+    resultats = annoter_signal_parking(leads_geo, parkings, rayon_m=rayon)
+
+    # Annotation + tri (parking qualifiant en tête, puis distance croissante).
+    enrichis: list[dict[str, str]] = []
+    nb_quali = 0
+    for i, row in enumerate(lignes_leads):
+        res = resultats.get(_cle(row, i))
+        quali = bool(res and res.qualifiant)
+        nb_quali += int(quali)
+        row = dict(row)
+        row["signal_parking"] = "oui" if quali else "non"
+        row["parking_surface_m2"] = f"{res.surface_m2:.0f}" if quali and res.surface_m2 else ""
+        row["parking_distance_m"] = f"{res.distance_m:.0f}" if quali and res.distance_m else ""
+        enrichis.append(row)
+    enrichis.sort(
+        key=lambda r: (r["signal_parking"] != "oui", _f(r.get("parking_distance_m")) or 1e9)
+    )
+
+    fieldnames = list(lignes_leads[0].keys()) + [
+        c for c in ("signal_parking", "parking_surface_m2", "parking_distance_m")
+        if c not in lignes_leads[0]
+    ]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(enrichis)
+
+    console.print(
+        f"\n[green]✓ Signal parking annoté : {out_path}[/green]\n"
+        f"  Leads             : {len(enrichis)}\n"
+        f"  Avec parking privé qualifiant (≤ {rayon:.0f} m) : {nb_quali}\n"
+        f"  → Prioriser ces {nb_quali} leads pour l'enrichissement Dropcontact."
     )

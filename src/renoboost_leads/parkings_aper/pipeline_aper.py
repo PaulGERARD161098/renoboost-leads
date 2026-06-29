@@ -18,6 +18,7 @@ est injecté dans le scoring L4 (sauf si un `contexte_client` est déjà fourni)
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -31,6 +32,7 @@ from ..models import (
     EnrichissementL35,
     FiltresEntreprise,
     LeadAper,
+    LeadStage1,
     LeadStage3,
     LeadStage4,
 )
@@ -56,10 +58,16 @@ from .exporter_aper import export_aper_csv
 from .filtre_parkings import filtrer_parkings
 from .mailer import ResumeAper, envoyer_resume_aper
 from .matching_geo import resoudre_lignes_sans_enseigne
-from .models import AperConfig, LigneParking
+from .models import SEUIL_APER_M2, AperConfig, LigneParking
 from .parser_parkings import lire_csv_parkings
 
 logger = get_logger(__name__)
+
+# Rayons near_point (km) pour la résolution géoloc Phase C.
+# Flotte (petits parkings) : serré → occupant adjacent (la PME). Obligation
+# (gros parkings) : large → ancre plausible. Cf. AperRunConfig.rayon_geo_effectif.
+RAYON_GEO_DEFAUT_KM = 0.2
+RAYON_GEO_FLOTTE_KM = 0.05
 
 
 CONTEXTE_APER_DEFAUT = (
@@ -73,6 +81,37 @@ CONTEXTE_APER_DEFAUT = (
     "si grande surface + échéance proche."
 )
 
+# Contexte dédié aux PETITS parkings (< 1 500 m²), HORS obligation APER.
+# Le levier n'est pas réglementaire mais économique et RSE : on ne parle ni
+# d'amende, ni d'échéance, ni d'obligation (sinon le mail serait faux et
+# contre-productif). Cf. cible « flotte / RSE » des petits parcs (15-60 places).
+CONTEXTE_PETIT_PARKING_DEFAUT = (
+    "Rossini Energy conçoit et installe des ombrières photovoltaïques et des "
+    "bornes de recharge pour véhicules électriques. CIBLE : exploitants de PETITS "
+    "parcs de stationnement extérieurs de moins de 1 500 m² (≈ 15 à 60 places), "
+    "NON soumis à l'obligation légale de solarisation (loi APER). L'angle est donc "
+    "purement économique et RSE, JAMAIS réglementaire : autoconsommation solaire "
+    "pour baisser la facture d'électricité, recharge d'une flotte de véhicules "
+    "électriques sur site (utilitaires, véhicules de société, trajets "
+    "domicile-travail des salariés), ombrage et confort du parking, image "
+    "bas-carbone et démarche RSE. Score élevé si l'exploitant est propriétaire de "
+    "son foncier, possède (ou électrifie) une flotte, ou affiche une démarche RSE "
+    "active. N'invoque NI obligation, NI échéance, NI amende : ces parkings sont "
+    "libres de toute contrainte légale ; un argumentaire réglementaire serait faux."
+)
+
+
+def _contexte_pour_surface(surface_m2: float) -> str:
+    """Contexte L4 adapté à la surface : obligation APER vs flotte/RSE.
+
+    ≥ seuil APER (1 500 m²) → levier réglementaire (obligation, échéance, amende).
+    < seuil → levier économique/RSE (autoconsommation, recharge flotte), sans
+    aucune mention d'obligation.
+    """
+    if surface_m2 >= SEUIL_APER_M2:
+        return CONTEXTE_APER_DEFAUT
+    return CONTEXTE_PETIT_PARKING_DEFAUT
+
 
 @dataclass
 class ResultatAper:
@@ -84,6 +123,8 @@ class ResultatAper:
     nb_nouveaux: int = 0
     nb_deja_vus: int = 0
     nb_top_leads: int = 0
+    nb_scores_ko: int = 0  # leads non scorés (budget L4 épuisé ou erreur API)
+    raison_degradation: str | None = None  # message ambre si run dégradé (non bloquant)
     nb_resolus_geo: int = 0  # Phase C : parkings sans enseigne résolus par géoloc
     cout_l4_eur: float = 0.0
     cout_l35_eur: float = 0.0  # L3.5 Dropcontact (0 si désactivé)
@@ -101,7 +142,14 @@ class AperRunConfig:
     aper_config: AperConfig = field(default_factory=AperConfig)
     filtres_entreprise: FiltresEntreprise = field(default_factory=FiltresEntreprise)
     claude_scoring: ClaudeScoring = field(default_factory=ClaudeScoring)
+    # Budget L3.5 Dropcontact (l'étage CHER, ~0,10 €/lead). C'est le plafond
+    # qu'on veut réellement piloter sur une campagne.
     budget_eur: float = 5.0
+    # Budget L4 Claude, INDÉPENDANT de L3.5. L4 est quasi-gratuit (~0,002 €/lead)
+    # mais essentiel : il ne doit JAMAIS être affamé par Dropcontact (panne vue
+    # le 2026-06-29 : L3.5 consommait tout le budget, 798/801 leads non scorés
+    # tout en affichant « terminé »). On lui réserve donc une enveloppe propre.
+    budget_l4_eur: float = 5.0
     anthropic_api_key: str | None = None
     dry_run_l4: bool = False
     # L3.5 — enrichissement contacts vérifiés (Dropcontact) entre L3 et L4.
@@ -111,9 +159,27 @@ class AperRunConfig:
     enrichissement_l3_5: EnrichissementL35 = field(default_factory=EnrichissementL35)
     dropcontact_api_key: str | None = None
     rate_limit_per_min: int = 60
-    # Phase C : résolution géoloc → SIREN des parkings sans enseigne
+    # Phase C : résolution géoloc → SIREN des parkings sans enseigne.
+    # rayon_geo_km None = AUTO : rayon serré en mode flotte (petits parkings,
+    # surface_max sous le seuil APER), large sinon (cf. rayon_geo_effectif).
     resoudre_geo: bool = True
-    rayon_geo_km: float = 0.2
+    rayon_geo_km: float | None = None
+
+    def rayon_geo_effectif(self) -> float:
+        """Rayon near_point effectif (km), auto-adapté au mode si non imposé.
+
+        Mode flotte (petits parkings ciblés via surface_max < seuil APER) : un
+        rayon SERRÉ attribue le parking au vrai occupant adjacent (la PME), pas
+        au grand groupe voisin — gain ICP mesuré ×2,4 (200 m → 50 m). Mode APER
+        obligation (gros parkings) : rayon large, l'ancre plausible est proche.
+        Un `rayon_geo_km` explicite prime toujours.
+        """
+        if self.rayon_geo_km is not None:
+            return self.rayon_geo_km
+        smax = self.aper_config.surface_max_m2
+        if smax is not None and smax < SEUIL_APER_M2:
+            return RAYON_GEO_FLOTTE_KM
+        return RAYON_GEO_DEFAUT_KM
     # Phase D : email récapitulatif post-run (None = pas d'envoi)
     smtp_config: ConfigSMTP | None = None
 
@@ -204,10 +270,37 @@ def _lead_stage4_vers_lead_aper(
 
 
 def _claude_scoring_avec_contexte(base: ClaudeScoring) -> ClaudeScoring:
-    """Injecte le contexte réglementaire APER si aucun contexte n'est fourni."""
+    """Injecte un contexte réglementaire APER par défaut si aucun n'est fourni.
+
+    Ce contexte global ne sert plus que de filet (et de namespace de cache) : le
+    contexte réellement envoyé à Claude est choisi PAR LEAD via `contexte_resolver`
+    selon la surface (cf. `_construire_resolver_contexte`). On garde le contexte
+    obligation comme base car la majorité des runs APER ciblent le > 1 500 m².
+    """
     if base.contexte_client:
         return base
     return base.model_copy(update={"contexte_client": CONTEXTE_APER_DEFAUT})
+
+
+def _construire_resolver_contexte(
+    leads_l1: list[LeadStage1], lignes_filtrees: list[LigneParking]
+) -> Callable[[LeadStage3], str]:
+    """Construit un résolveur place_id → contexte L4 adapté à la surface.
+
+    Les `leads_l1` et `lignes_filtrees` sont alignés 1:1 (même ordre, même
+    cardinalité, cf. `zip(..., strict=True)` en promotion). On mémorise le
+    contexte par `place_id` (stable de L1 à L4) pour que l'enricher L4 choisisse
+    obligation (≥ 1 500 m²) ou flotte/RSE (< 1 500 m²) lead par lead.
+    """
+    ctx_par_place = {
+        l1.place_id: _contexte_pour_surface(lg.surface_m2)
+        for l1, lg in zip(leads_l1, lignes_filtrees, strict=True)
+    }
+
+    def resolver(lead: LeadStage3) -> str:
+        return ctx_par_place.get(lead.place_id, CONTEXTE_APER_DEFAUT)
+
+    return resolver
 
 
 def executer_cycle_aper(
@@ -245,10 +338,23 @@ def executer_cycle_aper(
     # 2.5 Phase C — résolution géoloc → SIREN des parkings sans enseigne, AVANT
     # l'anti-doublon (l'identifiant stable devient SIREN une fois résolu).
     if config.resoudre_geo:
+        rayon = config.rayon_geo_effectif()
+        logger.info(
+            "Phase C : résolution géoloc (rayon %.0f m%s)",
+            rayon * 1000,
+            "" if config.rayon_geo_km is not None else " — auto",
+        )
         stats_geo = resoudre_lignes_sans_enseigne(
-            lignes_filtrees, rech_client, rayon_km=config.rayon_geo_km
+            lignes_filtrees, rech_client, rayon_km=rayon
         )
         resultat.nb_resolus_geo = stats_geo["resolu"]
+        if stats_geo.get("interrompu"):
+            resultat.raison_degradation = (
+                f"Phase C interrompue (API recherche-entreprises rate-limitée) : "
+                f"résolution partielle {stats_geo['resolu']}/{stats_geo['tente']} "
+                f"parkings — relancer pour compléter (le cache conserve l'acquis)"
+            )
+            logger.warning("APER dégradé : %s", resultat.raison_degradation)
 
     # 3. Anti-doublon (flag, pas d'exclusion)
     etat_path = etat_db_path or (output_dir.parent / "etat_parkings.sqlite")
@@ -290,8 +396,15 @@ def executer_cycle_aper(
         resultat.cout_l35_eur = cout_l35
         resultat.nb_emails_l35 = nb_emails_l35
 
-    # 7. L4 — scoring (contexte APER injecté)
+    # 7. L4 — scoring. Le contexte est choisi PAR LEAD selon la surface :
+    # obligation APER (≥ 1 500 m²) vs flotte/RSE (< 1 500 m²). Si l'appelant a
+    # imposé un contexte_client, il prime et on ne dérive rien automatiquement.
     claude_scoring = _claude_scoring_avec_contexte(config.claude_scoring)
+    contexte_resolver = (
+        None
+        if config.claude_scoring.contexte_client
+        else _construire_resolver_contexte(leads_l1, lignes_filtrees)
+    )
     if config.dry_run_l4:
         claude_client = ClaudeClientDryRun(
             modele=claude_scoring.modele,
@@ -306,14 +419,18 @@ def executer_cycle_aper(
                 modele=claude_scoring.modele,
                 max_tokens_sortie=claude_scoring.max_tokens_sortie,
                 rate_limiter=limiter,
-                budget=BudgetGuard(
-                    plafond_eur=max(0.01, config.budget_eur - resultat.cout_l35_eur)
-                ),
+                # Enveloppe L4 PROPRE, indépendante de ce que L3.5 a dépensé :
+                # l'étage de scoring (quasi-gratuit) ne doit jamais être affamé
+                # par Dropcontact (cf. AperRunConfig.budget_l4_eur).
+                budget=BudgetGuard(plafond_eur=config.budget_l4_eur),
             )
         )
     cache_l4 = CacheStage4(output_dir / "cache_l4.sqlite")
     enricheur_l4 = EnricheurStage4(
-        client=claude_client, config=claude_scoring, cache=cache_l4
+        client=claude_client,
+        config=claude_scoring,
+        cache=cache_l4,
+        contexte_resolver=contexte_resolver,
     )
     leads_l4 = enricheur_l4.enrichir(leads_l3)
     resultat.cout_l4_eur = enricheur_l4.cout_total_eur
@@ -333,6 +450,21 @@ def executer_cycle_aper(
         )
     resultat.leads = leads_aper
     resultat.nb_top_leads = sum(1 for la in leads_aper if la.top_lead)
+
+    # Garde-fou anti-dégradation silencieuse : un run où une part notable des
+    # leads n'a pas été scorée (budget L4 épuisé, erreur API) ne doit pas passer
+    # pour « terminé » sans alerte — sinon « 0 top lead » est un faux négatif.
+    resultat.nb_scores_ko = sum(1 for la in leads_aper if la.score_interet is None)
+    if resultat.nb_parkings_aper:
+        frac_ko = resultat.nb_scores_ko / resultat.nb_parkings_aper
+        if frac_ko >= 0.1:
+            resultat.raison_degradation = (
+                f"scoring L4 incomplet : {resultat.nb_scores_ko}/"
+                f"{resultat.nb_parkings_aper} leads non scorés "
+                f"(budget L4 insuffisant ou erreur API) — le décompte de top "
+                f"leads n'est pas fiable"
+            )
+            logger.warning("APER dégradé : %s", resultat.raison_degradation)
 
     # 9. Export CSV final
     csv_final = output_dir / "parkings_aper_leads.csv"

@@ -12,6 +12,7 @@ Logique :
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from typing import Any
 
 from ..common.budget_guard import BudgetExceededError
@@ -34,12 +35,17 @@ class EnricheurStage4:
         cache: CacheStage4 | None = None,
         callback_save_incremental=None,
         emetteur: Emetteur | None = None,
+        contexte_resolver: Callable[[LeadStage3], str] | None = None,
     ):
         self.client = client
         self.config = config
         self.cache = cache
         self.callback_save = callback_save_incremental
         self.emetteur = emetteur
+        # Résolveur de contexte PAR LEAD : si fourni, il prime sur le contexte
+        # global pour construire le prompt (ex. APER choisit obligation vs
+        # flotte/RSE selon la surface du parking). None = contexte unique.
+        self.contexte_resolver = contexte_resolver
 
         self.contexte_client = config.contexte_client or CONTEXTE_CLIENT_DEFAUT
         self._cache_key = calcul_cache_key(
@@ -98,9 +104,14 @@ class EnricheurStage4:
         # On construit le prompt d'abord : son hash entre dans la clé de cache,
         # ce qui invalide automatiquement le cache si les données du lead ont
         # changé (ex. ré-enrichissement L2 après panne data.gouv).
+        contexte = (
+            self.contexte_resolver(lead)
+            if self.contexte_resolver is not None
+            else self.contexte_client
+        )
         prompt = construire_prompt(
             lead=lead,
-            contexte_client=self.contexte_client,
+            contexte_client=contexte,
             inclure_pitch=self.config.inclure_pitch,
             emetteur=self.emetteur,
         )

@@ -1,0 +1,116 @@
+# ════════════════════════════════════════════════════════════════
+# Rossini — MOTEUR VOLUME « PME flotte » Hauts-de-France (SIRENE-first)
+# ════════════════════════════════════════════════════════════════
+#
+# Couche VOLUME du mix (cf. config/client_rossini_nord_flotte.yaml = couche
+# parking/qualité). On découvre les PME entreprise-d'abord via recherche-
+# entreprises (gratuit, filtres natifs NAF/effectif/catégorie/zone), ce qui
+# donne des données société COMPLÈTES (effectif, dirigeant, SIREN) → bien
+# meilleure éligibilité Dropcontact que la résolution depuis un parking.
+#
+# Cible : PME ≤ 100 salariés des secteurs à FLOTTE D'UTILITAIRES (candidats
+# naturels ombrières + recharge), région Nord (59/62/80/02/60).
+#
+# LANCEMENT :
+#   Découverte seule (GRATUIT, mesure de volume) : run --config <ce fichier> --stages 0
+#   Pipeline complet (RECOMMANDÉ)                 : run --config <ce fichier> --stages 0,1,3,3.5,4
+#
+# ⚠ L'ÉTAGE 1 (Places) EST IMPORTANT : il récupère le SITE WEB des PME par
+# nom+ville. Sans site, Dropcontact ne trouve quasi aucun email (hit-rate ~4 %
+# mesuré le 2026-06-29). Couplé à enrichissement_l3_5.exiger_domaine ci-dessous,
+# on ne dépense des crédits Dropcontact que sur les PME ayant un domaine.
+
+run:
+  client_name: "rossini-nord-flotte-pilote"
+  description: "PILOTE validé ~100 PME — hit-rate email avec Places+exiger_domaine"
+  campaign_date: "2026-06-29"
+
+stages:
+  enable_stage_1_decouverte: true
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_4_prospection: true
+
+secteurs:
+  - {type: "flotte_transport", query: "transport routier"}
+  - {type: "flotte_btp",       query: "artisan bâtiment"}
+
+zone:
+  type: "departement"
+  codes: ["59", "62", "80", "02", "60"]
+  rayon_par_point_km: 12
+  pas_grille_km: 15
+
+filtres:
+  statut_requis: "OPERATIONAL"
+  exiger_site_web: false      # SIRENE-first : Places peut ne pas matcher
+
+# Filtres entreprise — appliqués nativement par l'API (économise les appels aval).
+# ICP : PME ≤ 100 salariés, secteurs à flotte. Pas de filtre CA (recall max ;
+# beaucoup de PME n'ont pas de comptes publiés).
+filtres_entreprise:
+  effectif_min: 3
+  effectif_max: 100
+  categorie_entreprise_inclus: ["PME"]
+  # NAF en codes EXACTS (exigence API). Secteurs à flotte d'utilitaires :
+  naf_inclus:
+    # Transport / logistique
+    - "49.41A"   # transports routiers de fret interurbains
+    - "49.41B"   # transports routiers de fret de proximité
+    - "49.41C"   # location de camions avec chauffeur
+    - "49.42Z"   # déménagement
+    - "53.20Z"   # autres activités de poste et de courrier
+    # Location de véhicules
+    - "77.11A"   # location courte durée VP/VUL
+    - "77.11B"   # location longue durée VP/VUL
+    - "77.12Z"   # location de camions
+    # Garage / négoce auto (flotte + atelier)
+    - "45.20A"   # entretien et réparation de véhicules légers
+    - "45.20B"   # entretien et réparation autres véhicules
+    # BTP / artisanat (flotte d'utilitaires de chantier)
+    - "43.21A"   # travaux d'installation électrique
+    - "43.22A"   # travaux d'installation d'eau et de gaz (plomberie/chauffage)
+    - "43.22B"   # travaux d'installation d'équipements thermiques et de clim
+    - "43.99C"   # travaux de maçonnerie générale et gros œuvre
+    # Services techniques avec flotte
+    - "81.21Z"   # nettoyage courant des bâtiments
+    - "81.22Z"   # nettoyage industriel
+    - "38.11Z"   # collecte des déchets non dangereux
+
+# ─── Étage 3.5 — enrichissement contacts (Dropcontact) ──────────
+# exiger_domaine : ne tenter Dropcontact que sur les PME ayant un site/domaine
+# (couplé à l'étage 1 Places). Relève fortement le hit-rate email, évite de
+# brûler des crédits sur les PME sans présence web.
+enrichissement_l3_5:
+  exiger_domaine: true
+
+claude_scoring:
+  seuil_top_lead: 70
+  contexte_client: |
+    Rossini Energy conçoit et installe des ombrières photovoltaïques et des
+    bornes de recharge (IRVE) pour véhicules électriques.
+
+    CRITÈRE PRINCIPAL DE SCORE (proxy d'achat) — score HAUT dès que réunis, SANS
+    exiger de signal véhicule électrique explicite :
+    - PME opérationnelle ≤ 100 salariés, siège/établissement LOCAL (décideur
+      joignable), PAS un grand groupe / chaîne / franchise / administration ;
+    - secteur à flotte d'utilitaires : transport/messagerie, location de
+      véhicules, garage/négoce auto, BTP/artisanat, nettoyage, déchets ;
+    - possède probablement son foncier (atelier/dépôt) avec parking privé →
+      terrain pour ombrières + recharge de flotte sur site.
+
+    BONUS (montent le score, absence NON pénalisante) : flotte qui s'électrifie,
+    bornes installées/en projet, utilitaires visibles, engagement ZFE / RSE.
+
+    Angle ÉCONOMIQUE et RSE, JAMAIS réglementaire. Score BAS pour : grand groupe /
+    ETI, chaîne, franchise, public, pur immobilier (SCI/holding).
+
+volume:
+  cible: 100
+
+budget:
+  max_eur: 14
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

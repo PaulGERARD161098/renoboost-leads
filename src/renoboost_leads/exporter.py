@@ -211,6 +211,119 @@ def export_csv_crm(leads: list, output_path: Path) -> Path:
     return p
 
 
+# Vue "contacts" : extraction directe nom/prénom + coordonnées (si elles
+# existent) + URL LinkedIn. Une ligne = un décideur activable.
+COLONNES_CONTACTS = [
+    "entreprise",
+    "civilite",
+    "prenom",
+    "nom_contact",
+    "email",
+    "qualification_email",
+    "telephone",
+    "linkedin_url",
+    "linkedin_entreprise_url",
+    "ville",
+    "code_postal",
+    "siren",
+    "code_naf",
+    "libelle_naf",
+    "tranche_effectif",
+    "score_interet",
+    "top_lead",
+    "joignable",          # VRAI dès qu'on a email OU téléphone OU LinkedIn
+    "canaux",             # liste des canaux dispo : email|tel|linkedin
+    "signal_parking",     # présent si la jointure parking a été appliquée
+    "site_web",
+    "google_maps_url",
+]
+
+
+def _premier(*valeurs):
+    """Renvoie la première valeur non vide (gère None, '' et listes)."""
+    for v in valeurs:
+        if isinstance(v, list):
+            v = v[0] if v else None
+        if v not in (None, ""):
+            return v
+    return None
+
+
+def _ligne_contact(d: dict) -> dict:
+    """Projette un lead (dict model_dump) sur la vue contacts (champs dérivés).
+
+    On privilégie les données Dropcontact (vérifiées) puis les sources de repli
+    (dirigeant Sirene/Pappers, emails scrapés, LinkedIn Societeinfo).
+    """
+    prenom = _premier(d.get("prenom_dirigeant_dropcontact"), d.get("dirigeant_prenom"))
+    nom_contact = _premier(d.get("nom_dirigeant_dropcontact"), d.get("dirigeant_nom"))
+    email = _premier(
+        d.get("email_dropcontact"), d.get("emails_verifies"), d.get("emails_candidats")
+    )
+    telephone = _premier(
+        d.get("telephone_direct_dropcontact"),
+        d.get("societeinfo_telephone"),
+        d.get("telephone"),
+    )
+    linkedin = _premier(
+        d.get("linkedin_dirigeant_dropcontact"), d.get("societeinfo_linkedin")
+    )
+    canaux = [
+        c
+        for c, ok in (
+            ("email", bool(email)),
+            ("tel", bool(telephone)),
+            ("linkedin", bool(linkedin or d.get("linkedin_entreprise_dropcontact"))),
+        )
+        if ok
+    ]
+    return {
+        "entreprise": d.get("nom"),
+        "civilite": d.get("civilite_dirigeant_dropcontact"),
+        "prenom": prenom,
+        "nom_contact": nom_contact,
+        "email": email,
+        "qualification_email": d.get("qualification_email_dropcontact"),
+        "telephone": telephone,
+        "linkedin_url": linkedin,
+        "linkedin_entreprise_url": d.get("linkedin_entreprise_dropcontact"),
+        "ville": d.get("ville"),
+        "code_postal": d.get("code_postal"),
+        "siren": d.get("siren"),
+        "code_naf": d.get("code_naf"),
+        "libelle_naf": d.get("libelle_naf"),
+        "tranche_effectif": d.get("tranche_effectif"),
+        "score_interet": d.get("score_interet"),
+        "top_lead": d.get("top_lead"),
+        "joignable": bool(canaux),
+        "canaux": canaux,
+        "signal_parking": d.get("signal_parking"),
+        "site_web": d.get("site_web"),
+        "google_maps_url": d.get("google_maps_url"),
+    }
+
+
+def lead_est_joignable(lead) -> bool:
+    """True si le lead a AU MOINS un canal de contact (email, tél ou LinkedIn).
+
+    Reflète le correctif « le téléphone et LinkedIn sont des contacts valides »,
+    pas seulement l'email (beaucoup de petites PME n'ont pas d'email trouvable).
+    """
+    d = lead.model_dump() if hasattr(lead, "model_dump") else dict(lead)
+    ligne = _ligne_contact(d)
+    return ligne["joignable"]
+
+
+def export_contacts_csv(leads: list, output_path: Path) -> Path:
+    """Extraction CSV des CONTACTS : nom/prénom + coordonnées (si elles
+    existent) + URL LinkedIn. Une ligne par lead, champs dérivés et unifiés.
+    """
+    rows = [_ligne_contact(lead.model_dump()) for lead in leads]
+    p = _ecrire_csv(rows, COLONNES_CONTACTS, output_path)
+    logger.info("CSV contacts écrit : %s (%d lignes)", p, len(rows))
+    return p
+
+
 def export_stage4_csv(leads: list[LeadStage4], output_path: Path) -> Path:
     """CSV étage 4 (= étage 1+2+3 + scoring/pitch Claude)."""
     rows = [lead.model_dump() for lead in leads]

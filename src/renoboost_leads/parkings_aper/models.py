@@ -16,7 +16,7 @@ Les seuils sont surchargeables via `AperConfig` au cas où la réglementation
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ════════════════════════════════════════════════════════════════
 # Constantes réglementaires (loi APER art. 40 + décret 2024-1023)
@@ -33,10 +33,18 @@ ECHEANCE_STANDARD = "2028-07-01"  # 1 500 – 10 000 m²
 M2_PAR_PLACE = 25.0
 
 
-def echeance_pour_surface(surface_m2: float) -> tuple[str, str]:
-    """Retourne (echeance_iso, priorite) en fonction de la surface du parking."""
+def echeance_pour_surface(surface_m2: float) -> tuple[str | None, str]:
+    """Retourne (echeance_iso, priorite) en fonction de la surface du parking.
+
+    Sous le seuil APER (1 500 m²), le parking n'est soumis à AUCUNE obligation
+    légale de solarisation : pas d'échéance (`None`), priorité
+    « hors_obligation ». Ces parkings relèvent de la cible flotte/RSE
+    (autoconsommation, recharge VE), pas du levier réglementaire.
+    """
     if surface_m2 >= SEUIL_GROS_PARKING_M2:
         return ECHEANCE_GROS, "haute"
+    if surface_m2 < SEUIL_APER_M2:
+        return None, "hors_obligation"
     return ECHEANCE_STANDARD, "standard"
 
 
@@ -104,7 +112,7 @@ class LigneParking(BaseModel):
     def nb_places_estime(self) -> int:
         return int(self.surface_m2 / M2_PAR_PLACE)
 
-    def echeance(self) -> tuple[str, str]:
+    def echeance(self) -> tuple[str | None, str]:
         return echeance_pour_surface(self.surface_m2)
 
     def identifiant_stable(self) -> str:
@@ -146,3 +154,16 @@ class AperConfig(BaseModel):
 
     # Seuil de surface à partir duquel on garde le parking (défaut = seuil APER).
     surface_min_m2: float = Field(default=SEUIL_APER_M2, gt=0)
+    # Plafond de surface (m²) — None = pas de plafond. Sert à cibler une FENÊTRE
+    # de taille (ex. petits parkings « flotte » 250-1250 m² ≈ 10-50 places) et à
+    # exclure les très grands parcs (hyper, ZC) qui ne sont pas des PME-sièges.
+    surface_max_m2: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _verifier_fenetre_surface(self) -> AperConfig:
+        if self.surface_max_m2 is not None and self.surface_max_m2 < self.surface_min_m2:
+            raise ValueError(
+                f"surface_max_m2 ({self.surface_max_m2}) < surface_min_m2 "
+                f"({self.surface_min_m2}) : fenêtre de surface vide"
+            )
+        return self

@@ -119,23 +119,51 @@ def resoudre_lignes_sans_enseigne(
     *,
     rayon_km: float = 0.2,
     max_candidats: int = 5,
+    max_echecs_consecutifs: int = 8,
 ) -> dict[str, int]:
     """Enrichit en place les lignes sans identité via la géoloc (Phase C).
 
     Mutation : pose `siren` et `raison_sociale` sur les lignes résolues, ce qui
     suffit pour que l'enrichissement L2 retrouve l'entreprise.
 
+    Résilience : une erreur API (ex. HTTP 429 rate-limited) sur un parking ne
+    doit JAMAIS tuer le run. On la capture, on passe au suivant, et si l'API
+    rate-limite de façon SOUTENUE (`max_echecs_consecutifs` d'affilée), on
+    interrompt proprement la Phase C — le pipeline continue en résolution
+    PARTIELLE plutôt que de planter (doctrine : jamais d'échec silencieux ni de
+    crash sur aléa externe). `stats["erreurs"]`/`stats["interrompu"]` tracent.
+
     Returns:
-        Stats {tente, resolu} pour le récapitulatif du run.
+        Stats {tente, resolu, erreurs, interrompu} pour le récapitulatif du run.
     """
-    stats = {"tente": 0, "resolu": 0}
+    stats = {"tente": 0, "resolu": 0, "erreurs": 0, "interrompu": 0}
+    echecs_consecutifs = 0
     for ligne in lignes:
         if not ligne_a_resoudre(ligne):
             continue
         stats["tente"] += 1
-        siren, nom = resoudre_siren_geo(
-            ligne, client, rayon_km=rayon_km, max_candidats=max_candidats
-        )
+        try:
+            siren, nom = resoudre_siren_geo(
+                ligne, client, rayon_km=rayon_km, max_candidats=max_candidats
+            )
+        except Exception as e:  # noqa: BLE001 — frontière de résilience externe
+            stats["erreurs"] += 1
+            echecs_consecutifs += 1
+            logger.warning(
+                "Phase C : échec résolution %s (%s) — parking laissé non résolu",
+                ligne.identifiant_stable(),
+                f"{type(e).__name__}: {e}"[:120],
+            )
+            if echecs_consecutifs >= max_echecs_consecutifs:
+                stats["interrompu"] = 1
+                logger.error(
+                    "Phase C INTERROMPUE : %d échecs API consécutifs (rate-limit "
+                    "soutenu ?). Résolution partielle (%d/%d), le pipeline continue.",
+                    echecs_consecutifs, stats["resolu"], stats["tente"],
+                )
+                break
+            continue
+        echecs_consecutifs = 0
         if not (siren or nom):
             continue
         if siren:
@@ -151,9 +179,11 @@ def resoudre_lignes_sans_enseigne(
         )
     if stats["tente"]:
         logger.info(
-            "Phase C terminée : %d/%d parkings sans enseigne résolus par géoloc",
+            "Phase C terminée : %d/%d parkings résolus (%d erreurs%s)",
             stats["resolu"],
             stats["tente"],
+            stats["erreurs"],
+            ", INTERROMPUE" if stats["interrompu"] else "",
         )
     return stats
 
