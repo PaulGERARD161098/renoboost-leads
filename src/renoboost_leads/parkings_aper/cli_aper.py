@@ -10,7 +10,7 @@ from rich.console import Console
 
 from ..common.logger import setup_logger
 from ..config_loader import load_campaign_config
-from ..models import ClaudeScoring, FiltresEntreprise
+from ..models import ClaudeScoring, EnrichissementL35, FiltresEntreprise
 from ..settings import PROJECT_ROOT, get_settings
 from .models import AperConfig
 from .pipeline_aper import AperRunConfig, executer_cycle_aper
@@ -46,6 +46,9 @@ def aper_group() -> None:
               help="Plafond budget € pour le scoring L4 (Claude).")
 @click.option("--dry-run", is_flag=True,
               help="Simulation L4 (scores factices, pas d'appel Anthropic).")
+@click.option("--enrichir-l35", "enrichir_l35", is_flag=True,
+              help="Active L3.5 Dropcontact (email/tél/LinkedIn décideur) entre L3 et L4. "
+                   "Sans clé Dropcontact : dry-run (emails simulés).")
 @click.option("--vers-staging", is_flag=True,
               help="Pousse les top leads dans le staging cold-mail Instantly (validation N2).")
 @click.option("--min-score", "min_score", type=int, default=None,
@@ -65,6 +68,7 @@ def aper_run(
     surface_min: float | None,
     budget_eur: float,
     dry_run: bool,
+    enrichir_l35: bool,
     vers_staging: bool,
     min_score: int | None,
     from_email: str,
@@ -77,12 +81,14 @@ def aper_run(
 
     filtres_entreprise = FiltresEntreprise()
     claude_scoring = ClaudeScoring()
+    enrichissement_l3_5 = EnrichissementL35()
     client_name = "aper"
     if config_path is not None:
         try:
             cfg = load_campaign_config(config_path)
             filtres_entreprise = cfg.filtres_entreprise
             claude_scoring = cfg.claude_scoring
+            enrichissement_l3_5 = cfg.enrichissement_l3_5
             client_name = cfg.run.client_name
         except Exception as e:  # noqa: BLE001
             console.print(f"[red]✗ Config YAML invalide : {e}[/red]")
@@ -128,10 +134,23 @@ def aper_run(
             settings.anthropic_api_key.get_secret_value() if settings.has_anthropic() else None
         ),
         dry_run_l4=dry_run,
+        enrichir_l3_5=enrichir_l35,
+        enrichissement_l3_5=enrichissement_l3_5,
+        dropcontact_api_key=(
+            settings.dropcontact_api_key.get_secret_value()
+            if settings.has_dropcontact()
+            else None
+        ),
         resoudre_geo=not no_geo,
         rayon_geo_km=rayon_geo_km,
         smtp_config=smtp_config,
     )
+
+    if enrichir_l35 and not settings.has_dropcontact():
+        console.print(
+            "[yellow]⚠  --enrichir-l35 sans DROPCONTACT_API_KEY : "
+            "L3.5 en dry-run (emails simulés).[/yellow]"
+        )
 
     console.print(
         f"[cyan]Parkings APER {source} — fichier : {fichier_parkings.name}[/cyan]\n"
@@ -153,7 +172,13 @@ def aper_run(
         f"    ↳ nouveaux              : {resultat.nb_nouveaux}\n"
         f"    ↳ déjà vus (flagués)    : {resultat.nb_deja_vus}\n"
         f"  Top leads (score ≥ {claude_scoring.seuil_top_lead}) : {resultat.nb_top_leads}\n"
-        f"  Coût L4                   : {resultat.cout_l4_eur:.4f} €\n"
+        + (
+            f"  Emails L3.5 (Dropcontact) : {resultat.nb_emails_l35} "
+            f"(coût {resultat.cout_l35_eur:.2f} €)\n"
+            if enrichir_l35
+            else ""
+        )
+        + f"  Coût L4                   : {resultat.cout_l4_eur:.4f} €\n"
         f"  CSV final                 : {csv_final}"
     )
 

@@ -91,7 +91,8 @@ python -m renoboost_leads.cli aper run \
 | Option | Effet |
 |---|---|
 | `--surface-min 10000` | Ne garder que les parkings > 10 000 m² (échéance 2026) |
-| `--config <yaml>` | Récupère `filtres_entreprise` + `claude_scoring` + nom client |
+| `--enrichir-l35` | Active L3.5 Dropcontact (email/tél/LinkedIn décideur) entre L3 et L4. Sans `DROPCONTACT_API_KEY` : dry-run (emails simulés). C'est l'étage qui produit un **contact joignable** — sans lui, APER trouve des SIREN mais pas d'individus. |
+| `--config <yaml>` | Récupère `filtres_entreprise` + `claude_scoring` + `enrichissement_l3_5` + nom client |
 | `--source aper_ign` | Identifiant de source (traçabilité CSV) |
 | `--dry-run` | Simulation L4 (aucun appel Anthropic) |
 
