@@ -117,6 +117,8 @@ class ResultatAper:
     nb_nouveaux: int = 0
     nb_deja_vus: int = 0
     nb_top_leads: int = 0
+    nb_scores_ko: int = 0  # leads non scorés (budget L4 épuisé ou erreur API)
+    raison_degradation: str | None = None  # message ambre si run dégradé (non bloquant)
     nb_resolus_geo: int = 0  # Phase C : parkings sans enseigne résolus par géoloc
     cout_l4_eur: float = 0.0
     cout_l35_eur: float = 0.0  # L3.5 Dropcontact (0 si désactivé)
@@ -134,7 +136,14 @@ class AperRunConfig:
     aper_config: AperConfig = field(default_factory=AperConfig)
     filtres_entreprise: FiltresEntreprise = field(default_factory=FiltresEntreprise)
     claude_scoring: ClaudeScoring = field(default_factory=ClaudeScoring)
+    # Budget L3.5 Dropcontact (l'étage CHER, ~0,10 €/lead). C'est le plafond
+    # qu'on veut réellement piloter sur une campagne.
     budget_eur: float = 5.0
+    # Budget L4 Claude, INDÉPENDANT de L3.5. L4 est quasi-gratuit (~0,002 €/lead)
+    # mais essentiel : il ne doit JAMAIS être affamé par Dropcontact (panne vue
+    # le 2026-06-29 : L3.5 consommait tout le budget, 798/801 leads non scorés
+    # tout en affichant « terminé »). On lui réserve donc une enveloppe propre.
+    budget_l4_eur: float = 5.0
     anthropic_api_key: str | None = None
     dry_run_l4: bool = False
     # L3.5 — enrichissement contacts vérifiés (Dropcontact) entre L3 et L4.
@@ -373,9 +382,10 @@ def executer_cycle_aper(
                 modele=claude_scoring.modele,
                 max_tokens_sortie=claude_scoring.max_tokens_sortie,
                 rate_limiter=limiter,
-                budget=BudgetGuard(
-                    plafond_eur=max(0.01, config.budget_eur - resultat.cout_l35_eur)
-                ),
+                # Enveloppe L4 PROPRE, indépendante de ce que L3.5 a dépensé :
+                # l'étage de scoring (quasi-gratuit) ne doit jamais être affamé
+                # par Dropcontact (cf. AperRunConfig.budget_l4_eur).
+                budget=BudgetGuard(plafond_eur=config.budget_l4_eur),
             )
         )
     cache_l4 = CacheStage4(output_dir / "cache_l4.sqlite")
@@ -403,6 +413,21 @@ def executer_cycle_aper(
         )
     resultat.leads = leads_aper
     resultat.nb_top_leads = sum(1 for la in leads_aper if la.top_lead)
+
+    # Garde-fou anti-dégradation silencieuse : un run où une part notable des
+    # leads n'a pas été scorée (budget L4 épuisé, erreur API) ne doit pas passer
+    # pour « terminé » sans alerte — sinon « 0 top lead » est un faux négatif.
+    resultat.nb_scores_ko = sum(1 for la in leads_aper if la.score_interet is None)
+    if resultat.nb_parkings_aper:
+        frac_ko = resultat.nb_scores_ko / resultat.nb_parkings_aper
+        if frac_ko >= 0.1:
+            resultat.raison_degradation = (
+                f"scoring L4 incomplet : {resultat.nb_scores_ko}/"
+                f"{resultat.nb_parkings_aper} leads non scorés "
+                f"(budget L4 insuffisant ou erreur API) — le décompte de top "
+                f"leads n'est pas fiable"
+            )
+            logger.warning("APER dégradé : %s", resultat.raison_degradation)
 
     # 9. Export CSV final
     csv_final = output_dir / "parkings_aper_leads.csv"

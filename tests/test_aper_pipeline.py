@@ -206,6 +206,57 @@ class TestL35Integration:
         assert all(la.email_dropcontact == "dir@x.fr" for la in res.leads)
 
 
+class TestBudgetEtDegradation:
+    """Budget L4 indépendant de L3.5 + flag anti-dégradation silencieuse."""
+
+    def test_budget_l4_independant_par_defaut(self):
+        cfg = AperRunConfig()
+        # L4 (Claude, quasi-gratuit) a sa propre enveloppe, distincte de L3.5.
+        assert cfg.budget_l4_eur == 5.0
+        assert cfg.budget_eur == 5.0
+
+    def test_pas_de_degradation_si_tout_score(self, tmp_path, stub_pipeline):
+        config = AperRunConfig(
+            claude_scoring=ClaudeScoring(inclure_pitch=False), dry_run_l4=True
+        )
+        res = executer_cycle_aper(FIXTURE, tmp_path / "out", config)
+        assert res.nb_scores_ko == 0
+        assert res.raison_degradation is None
+
+    def test_degradation_flaggee_si_scoring_incomplet(
+        self, tmp_path, stub_pipeline, monkeypatch
+    ):
+        from renoboost_leads.models import LeadStage4
+        from renoboost_leads.parkings_aper import pipeline_aper
+
+        class _StubEnr4Affame:
+            """Simule un L4 affamé : aucun lead scoré (budget épuisé)."""
+
+            def __init__(self, *a, **kw):
+                self.cout_total_eur = 0.0
+
+            def enrichir(self, leads):
+                return [
+                    LeadStage4(
+                        **lead.model_dump(),
+                        score_interet=None,
+                        top_lead=False,
+                        scoring_erreur="budget_exhausted",
+                    )
+                    for lead in leads
+                ]
+
+        monkeypatch.setattr(pipeline_aper, "EnricheurStage4", _StubEnr4Affame)
+        config = AperRunConfig(
+            claude_scoring=ClaudeScoring(inclure_pitch=False), dry_run_l4=True
+        )
+        res = executer_cycle_aper(FIXTURE, tmp_path / "out", config)
+        assert res.nb_scores_ko == res.nb_parkings_aper
+        assert res.nb_top_leads == 0
+        assert res.raison_degradation is not None
+        assert "non scorés" in res.raison_degradation
+
+
 class TestPhaseCDIntegration:
     """Phase C (géoloc → SIREN) + Phase D (email post-run) câblées au pipeline."""
 

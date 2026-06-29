@@ -43,7 +43,10 @@ def aper_group() -> None:
 @click.option("--surface-min", "surface_min", type=float, default=None,
               help="Seuil de surface m² (défaut 1500 = seuil légal APER).")
 @click.option("--budget", "budget_eur", default=5.0, show_default=True, type=float,
-              help="Plafond budget € pour le scoring L4 (Claude).")
+              help="Plafond budget € pour L3.5 Dropcontact (l'étage payant ~0,10 €/lead).")
+@click.option("--budget-l4", "budget_l4_eur", default=5.0, show_default=True, type=float,
+              help="Plafond budget € pour le scoring L4 Claude (indépendant de L3.5, "
+                   "quasi-gratuit ~0,002 €/lead — ne pas affamer).")
 @click.option("--dry-run", is_flag=True,
               help="Simulation L4 (scores factices, pas d'appel Anthropic).")
 @click.option("--enrichir-l35", "enrichir_l35", is_flag=True,
@@ -67,6 +70,7 @@ def aper_run(
     source: str,
     surface_min: float | None,
     budget_eur: float,
+    budget_l4_eur: float,
     dry_run: bool,
     enrichir_l35: bool,
     vers_staging: bool,
@@ -130,6 +134,7 @@ def aper_run(
         filtres_entreprise=filtres_entreprise,
         claude_scoring=claude_scoring,
         budget_eur=budget_eur,
+        budget_l4_eur=budget_l4_eur,
         anthropic_api_key=(
             settings.anthropic_api_key.get_secret_value() if settings.has_anthropic() else None
         ),
@@ -181,6 +186,11 @@ def aper_run(
         + f"  Coût L4                   : {resultat.cout_l4_eur:.4f} €\n"
         f"  CSV final                 : {csv_final}"
     )
+
+    if resultat.raison_degradation:
+        console.print(
+            f"[yellow]⚠  Run dégradé : {resultat.raison_degradation}[/yellow]"
+        )
 
     _staging_post_run(vers_staging, resultat, source, output_dir, from_email, min_score)
 
