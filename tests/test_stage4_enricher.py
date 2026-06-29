@@ -210,6 +210,21 @@ class TestEnricherFluxNominal:
         l4 = enricher.enrichir([_lead("A")])[0]
         assert l4.top_lead is True
 
+    def test_hors_filtre_jamais_top_meme_score_eleve(self, tmp_path):
+        # Garde-fou central : un lead écarté par les filtres entreprise ne peut
+        # pas devenir top_lead, même noté au-dessus du seuil (cas APER : parking
+        # retail noté 72 sur sa seule surface). Le score brut reste exposé.
+        client, _ = _build_client(['{"score_interet": 95, "raison_score": "grande surface"}'])
+        cache = CacheStage4(tmp_path / "l4.sqlite")
+        config = ClaudeScoring(seuil_top_lead=70, inclure_pitch=False)
+        enricher = EnricheurStage4(client=client, config=config, cache=cache)
+        lead = _lead("A")
+        lead.hors_filtre_entreprise = True
+        lead.raison_hors_filtre = "NAF 47 (retail) exclu"
+        l4 = enricher.enrichir([lead])[0]
+        assert l4.score_interet == 95
+        assert l4.top_lead is False
+
 
 # ─────────────────────────────────────────────────────────────────
 # Cache

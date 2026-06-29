@@ -6,8 +6,10 @@ objet + corps issus du scoring L4), que l'utilisateur valide/refuse ensuite via
 `cold-mail show/validate/send`.
 
 Sélection : par défaut les `top_lead` uniquement ; `min_score` élargit aux leads
-dont `score_interet >= min_score`. Les leads sans email exploitable sont écartés
-(on ne peut pas cold-mailer sans adresse) et comptés.
+dont `score_interet >= min_score`. Les leads écartés par les filtres entreprise
+(`hors_filtre_entreprise`) ne sont JAMAIS retenus, même via `min_score` : on ne
+cold-mail pas une cible explicitement hors ICP. Les leads sans email exploitable
+sont écartés (on ne peut pas cold-mailer sans adresse) et comptés.
 """
 
 from __future__ import annotations
@@ -46,6 +48,10 @@ def _nom_dest(lead: LeadAper) -> str:
 
 
 def _retenu(lead: LeadAper, min_score: int | None) -> bool:
+    # Un lead hors filtre entreprise ne part jamais en cold-mail, quel que soit
+    # son score (la voie `min_score` court-circuitait `top_lead`).
+    if getattr(lead, "hors_filtre_entreprise", False):
+        return False
     if lead.top_lead:
         return True
     if min_score is not None and (lead.score_interet or 0) >= min_score:
