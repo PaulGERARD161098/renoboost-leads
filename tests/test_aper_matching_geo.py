@@ -106,7 +106,8 @@ class TestResoudreLignes:
         ])
         lignes = [_ligne_sans_enseigne(), LigneParking(surface_m2=9000.0, nom="Déjà connu")]
         stats = resoudre_lignes_sans_enseigne(lignes, client)
-        assert stats == {"tente": 1, "resolu": 1}
+        assert stats["tente"] == 1 and stats["resolu"] == 1
+        assert stats["erreurs"] == 0 and stats["interrompu"] == 0
         assert lignes[0].siren == "552100554"
         assert lignes[0].raison_sociale == "Foncière Parc SA"
         # La ligne avec nom n'a pas été touchée
@@ -115,5 +116,59 @@ class TestResoudreLignes:
     def test_non_resolu_laisse_la_ligne_intacte(self):
         lignes = [_ligne_sans_enseigne()]
         stats = resoudre_lignes_sans_enseigne(lignes, _FakeClient([]))
-        assert stats == {"tente": 1, "resolu": 0}
+        assert stats["tente"] == 1 and stats["resolu"] == 0
         assert lignes[0].siren is None
+
+
+class _ClientErreur:
+    """Client near_point qui lève — simule un rate-limit API (HTTP 429)."""
+
+    def __init__(self, exc: Exception, echouer_apres: int = 0):
+        self.exc = exc
+        self.echouer_apres = echouer_apres  # nb d'appels OK avant de lever
+        self.appels = 0
+
+    def decouvrir_near_point(self, latitude, longitude, radius_km, **kwargs):
+        self.appels += 1
+        if self.appels > self.echouer_apres:
+            raise self.exc
+        return iter([{"siren": "552100554", "nom_complet": "OK SA",
+                      "tranche_effectif_salarie": "32"}])
+
+
+class TestResilience:
+    """Phase C ne doit jamais crasher le run sur une erreur API transitoire."""
+
+    def _lignes(self, n: int) -> list[LigneParking]:
+        return [
+            LigneParking(surface_m2=800.0, latitude=50.4 + i / 1000, longitude=2.8)
+            for i in range(n)
+        ]
+
+    def test_erreur_api_ne_crashe_pas(self):
+        client = _ClientErreur(RuntimeError("HTTP 429 rate-limited"))
+        # 3 parkings, toutes les résolutions échouent → pas d'exception levée.
+        stats = resoudre_lignes_sans_enseigne(self._lignes(3), client)
+        assert stats["resolu"] == 0
+        assert stats["erreurs"] == 3
+        assert stats["interrompu"] == 0  # 3 < seuil par défaut (8)
+
+    def test_interruption_apres_echecs_consecutifs(self):
+        client = _ClientErreur(RuntimeError("HTTP 429 rate-limited"))
+        stats = resoudre_lignes_sans_enseigne(
+            self._lignes(20), client, max_echecs_consecutifs=3
+        )
+        # On s'arrête au 3e échec consécutif, on ne tente pas les 20.
+        assert stats["interrompu"] == 1
+        assert stats["tente"] == 3
+        assert stats["erreurs"] == 3
+
+    def test_echecs_non_consecutifs_ne_stoppent_pas(self):
+        # 1 OK puis 1 KO en alternance ne doit pas déclencher l'interruption.
+        client = _ClientErreur(RuntimeError("429"), echouer_apres=1)
+        stats = resoudre_lignes_sans_enseigne(
+            self._lignes(2), client, max_echecs_consecutifs=2
+        )
+        assert stats["resolu"] == 1  # le 1er passe
+        assert stats["erreurs"] == 1  # le 2e échoue
+        assert stats["interrompu"] == 0

@@ -66,6 +66,9 @@ def aper_group() -> None:
 @click.option("--rayon-geo", "rayon_geo_km", type=float, default=None,
               help="Rayon (km) near_point pour la résolution géoloc. Défaut : AUTO "
                    "(50 m en mode flotte si --surface-max < 1500, sinon 200 m).")
+@click.option("--rate-limit", "rate_limit_per_min", type=int, default=60, show_default=True,
+              help="Débit max d'appels/min vers recherche-entreprises (Phase C + L2). "
+                   "Baisser (ex. 30) si l'API renvoie des HTTP 429.")
 @click.option("--no-email", is_flag=True,
               help="N'envoie pas l'email récapitulatif post-run même si SMTP est configuré.")
 def aper_run(
@@ -83,6 +86,7 @@ def aper_run(
     from_email: str,
     no_geo: bool,
     rayon_geo_km: float | None,
+    rate_limit_per_min: int,
     no_email: bool,
 ) -> None:
     """Lance un run parkings APER sur un CSV inventaire."""
@@ -158,6 +162,7 @@ def aper_run(
         ),
         resoudre_geo=not no_geo,
         rayon_geo_km=rayon_geo_km,
+        rate_limit_per_min=rate_limit_per_min,
         smtp_config=smtp_config,
     )
 

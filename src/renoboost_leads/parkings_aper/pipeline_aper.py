@@ -348,6 +348,13 @@ def executer_cycle_aper(
             lignes_filtrees, rech_client, rayon_km=rayon
         )
         resultat.nb_resolus_geo = stats_geo["resolu"]
+        if stats_geo.get("interrompu"):
+            resultat.raison_degradation = (
+                f"Phase C interrompue (API recherche-entreprises rate-limitée) : "
+                f"résolution partielle {stats_geo['resolu']}/{stats_geo['tente']} "
+                f"parkings — relancer pour compléter (le cache conserve l'acquis)"
+            )
+            logger.warning("APER dégradé : %s", resultat.raison_degradation)
 
     # 3. Anti-doublon (flag, pas d'exclusion)
     etat_path = etat_db_path or (output_dir.parent / "etat_parkings.sqlite")
