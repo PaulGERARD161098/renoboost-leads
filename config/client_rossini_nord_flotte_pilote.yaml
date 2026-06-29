@@ -13,12 +13,16 @@
 #
 # LANCEMENT :
 #   Découverte seule (GRATUIT, mesure de volume) : run --config <ce fichier> --stages 0
-#   Pipeline complet                              : run --config <ce fichier> --stages 0,3,4
-#   (stage 1 Places optionnel ; L3.5 Dropcontact via le pipeline standard)
+#   Pipeline complet (RECOMMANDÉ)                 : run --config <ce fichier> --stages 0,1,3,3.5,4
+#
+# ⚠ L'ÉTAGE 1 (Places) EST IMPORTANT : il récupère le SITE WEB des PME par
+# nom+ville. Sans site, Dropcontact ne trouve quasi aucun email (hit-rate ~4 %
+# mesuré le 2026-06-29). Couplé à enrichissement_l3_5.exiger_domaine ci-dessous,
+# on ne dépense des crédits Dropcontact que sur les PME ayant un domaine.
 
 run:
   client_name: "rossini-nord-flotte-pilote"
-  description: "PILOTE ~100 PME — valider hit-rate email Dropcontact (SIRENE-first)"
+  description: "PILOTE validé ~100 PME — hit-rate email avec Places+exiger_domaine"
   campaign_date: "2026-06-29"
 
 stages:
@@ -72,6 +76,13 @@ filtres_entreprise:
     - "81.21Z"   # nettoyage courant des bâtiments
     - "81.22Z"   # nettoyage industriel
     - "38.11Z"   # collecte des déchets non dangereux
+
+# ─── Étage 3.5 — enrichissement contacts (Dropcontact) ──────────
+# exiger_domaine : ne tenter Dropcontact que sur les PME ayant un site/domaine
+# (couplé à l'étage 1 Places). Relève fortement le hit-rate email, évite de
+# brûler des crédits sur les PME sans présence web.
+enrichissement_l3_5:
+  exiger_domaine: true
 
 claude_scoring:
   seuil_top_lead: 70
