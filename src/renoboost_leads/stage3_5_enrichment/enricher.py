@@ -36,21 +36,27 @@ class _ClientProto(Protocol):
     def enrichir_batch(self, lots: list[dict[str, Any]]) -> DropcontactReponse: ...
 
 
-def _eligible(lead: LeadStage3) -> bool:
+def _eligible(lead: LeadStage3, exiger_domaine: bool = False) -> bool:
     """Filtre intelligent : on n'enrichit que si ça vaut le coup.
 
     Critères :
     - lead pas en hors-filtre entreprise
-    - on a au moins un nom de dirigeant OU un site web (sinon Dropcontact
-      ne pourra rien faire)
     - SIREN présent (Dropcontact donne de bien meilleurs résultats avec)
+    - on a au moins un nom de dirigeant OU un site web ;
+      si `exiger_domaine` : on EXIGE un site/domaine (Dropcontact ne trouve un
+      email qu'avec un domaine → évite de gaspiller les crédits sur les PME sans
+      site, hit-rate ~4 %). À coupler avec l'étage 1 Places.
     """
     if lead.hors_filtre_entreprise:
         return False
     a_dirigeant = bool(lead.dirigeant_nom or lead.dirigeant_prenom)
     a_site = bool(lead.site_web or lead.domaine_extrait)
     a_siren = bool(lead.siren)
-    return (a_dirigeant or a_site) and a_siren
+    if not a_siren:
+        return False
+    if exiger_domaine:
+        return a_site
+    return a_dirigeant or a_site
 
 
 def _extraire_email_dropcontact(item: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -147,8 +153,9 @@ class EnricheurStage35:
         budget_atteint = False
 
         # Pass 1 : cache + filtre
+        exiger_domaine = getattr(self.config, "exiger_domaine", False)
         for idx, lead in enumerate(leads_l3):
-            if not _eligible(lead):
+            if not _eligible(lead, exiger_domaine=exiger_domaine):
                 self.nb_filtres_out += 1
                 resultats[idx] = _hydrater_lead(lead, None)
                 continue

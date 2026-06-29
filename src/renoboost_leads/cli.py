@@ -18,9 +18,11 @@ from .common.logger import setup_logger
 from .common.rate_limiter import RateLimiter
 from .config_loader import load_campaign_config
 from .exporter import (
+    export_contacts_csv,
     export_csv_crm,
     export_run_stats,
     generer_registre_rgpd,
+    lead_est_joignable,
     lire_stage3_5_csv,
     lire_stage3_csv,
     lire_stage4_csv,
@@ -524,6 +526,18 @@ def resume(session_id: str, stages: str, config_path: Path) -> None:
     help="N'exporter que les leads avec au moins un email (vérifié, pattern, ou Dropcontact).",
 )
 @click.option(
+    "--vue",
+    type=click.Choice(["crm", "contacts"]),
+    default="crm",
+    help="crm = colonnes complètes ; contacts = nom/prénom + coordonnées + URL LinkedIn.",
+)
+@click.option(
+    "--joignables-uniquement",
+    "joignables_only",
+    is_flag=True,
+    help="N'exporter que les leads JOIGNABLES (≥ 1 canal : email, téléphone OU LinkedIn).",
+)
+@click.option(
     "--output",
     "output_path",
     type=click.Path(dir_okay=False, path_type=Path),
@@ -535,6 +549,8 @@ def export(
     source: str,
     top_only: bool,
     avec_email_uniquement: bool,
+    vue: str,
+    joignables_only: bool,
     output_path: Path | None,
 ) -> None:
     """Génère un CSV exportable (colonnes utiles pour démarchage / import CRM)."""
@@ -581,22 +597,32 @@ def export(
             or getattr(lead, "emails_verifies", None)
             or getattr(lead, "emails_candidats", None)
         ]
+    if joignables_only:
+        leads = [lead for lead in leads if lead_est_joignable(lead)]
 
     if output_path is None:
         suffix_parts = []
+        if vue == "contacts":
+            suffix_parts.append("contacts")
         if top_only:
             suffix_parts.append("top")
         if avec_email_uniquement:
             suffix_parts.append("avec_email")
+        if joignables_only:
+            suffix_parts.append("joignables")
         suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
         output_path = output_dir / f"leads_exportables{suffix}.csv"
 
-    p = export_csv_crm(leads, output_path)
+    if vue == "contacts":
+        p = export_contacts_csv(leads, output_path)
+    else:
+        p = export_csv_crm(leads, output_path)
     console.print(
         f"[green]✓ Export généré : {p}[/green]\n"
-        f"   Source : {chosen.name} — Leads : {len(leads)} / {nb_total} "
+        f"   Vue : {vue} — Source : {chosen.name} — Leads : {len(leads)} / {nb_total} "
         f"({'top_only' if top_only else 'tous'}"
-        f"{', avec email' if avec_email_uniquement else ''})"
+        f"{', avec email' if avec_email_uniquement else ''}"
+        f"{', joignables' if joignables_only else ''})"
     )
 
 

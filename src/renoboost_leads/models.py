@@ -196,6 +196,13 @@ class EnrichissementL35(BaseModel):
     # cfg.enrichissement_l3_5) qui prime sur le défaut du client.
     cout_par_lead_eur: float = Field(default=0.10, ge=0.0, le=10.0)
 
+    # Correctif hit-rate (pilote 2026-06-29) : Dropcontact ne trouve un email
+    # que s'il a un DOMAINE. Sur les petites PME sans site, le taux tombe à ~4 %
+    # → crédits gaspillés. Activé, on n'envoie QUE les leads ayant un site/domaine
+    # (à coupler avec l'étage 1 Places qui récupère les sites). Défaut False
+    # (rétro-compatible : on tente dès qu'on a un dirigeant OU un site).
+    exiger_domaine: bool = False
+
 
 class ClaudeScoring(BaseModel):
     """Configuration de l'étage 4 (scoring + pitch via Claude)."""

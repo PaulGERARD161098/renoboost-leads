@@ -102,6 +102,16 @@ class TestEligible:
     def test_avec_dirigeant_seul_eligible(self):
         assert _eligible(_lead(site_web=None)) is True
 
+    def test_exiger_domaine_rejette_sans_site(self):
+        # Correctif hit-rate : sans domaine, Dropcontact ne trouve rien → on
+        # n'envoie pas quand exiger_domaine est actif, même avec un dirigeant.
+        lead = _lead(site_web=None)
+        assert _eligible(lead, exiger_domaine=False) is True
+        assert _eligible(lead, exiger_domaine=True) is False
+
+    def test_exiger_domaine_accepte_avec_site(self):
+        assert _eligible(_lead(), exiger_domaine=True) is True
+
 
 # ─── _extraire_email_dropcontact ──────────────────────────────────
 
