@@ -83,22 +83,30 @@ claude_scoring:
     Rossini Energy conçoit et installe des ombrières photovoltaïques et des
     bornes de recharge (IRVE) pour véhicules électriques.
 
-    CIBLE IDÉALE (à scorer haut) : le SIÈGE d'une PME (≤ 100 salariés) propriétaire
-    de ses locaux dans une zone d'activité / industrielle / logistique, avec un
-    PETIT parking privé (10-50 places), et qui électrifie sa flotte ou s'apprête à
-    le faire. Profils types : transport/messagerie, garage/négoce auto, artisanat
-    du bâtiment, PME industrielle, négoce — des entreprises avec des véhicules
-    utilitaires à recharger sur site.
+    CRITÈRE PRINCIPAL DE SCORE (proxy d'achat) — score HAUT dès que TOUS réunis,
+    SANS exiger de signal véhicule électrique explicite :
+    - PME opérationnelle ≤ 100 salariés, siège/établissement LOCAL (décideur
+      joignable), PAS un grand groupe / chaîne / franchise / administration ;
+    - secteur à flotte d'utilitaires : transport/messagerie, garage/négoce auto,
+      artisanat & BTP, PME industrielle, négoce, services techniques ;
+    - possède (probable) son foncier avec un PETIT parking privé en zone
+      d'activité (terrain pour ombrières + recharge sur site).
+    Ces 3 éléments suffisent à un score élevé : ce sont des candidats NATURELS à
+    l'électrification de flotte + ombrières, même sans l'avoir encore annoncé.
 
-    L'angle est ÉCONOMIQUE et RSE, JAMAIS réglementaire : autoconsommation solaire
-    pour baisser la facture, recharge de la flotte sur site, ombrage du parking,
-    image bas-carbone. Ces petits parkings NE SONT PAS soumis à l'obligation APER
-    (< 1 500 m²) : n'invoque NI obligation, NI échéance, NI amende.
+    BONUS (montent encore le score, mais leur ABSENCE NE PÉNALISE PAS — la plupart
+    des PME ne l'affichent pas sur leur site) : flotte qui s'électrifie, bornes en
+    projet/installées, utilitaires d'entreprise visibles, engagement ZFE /
+    décarbonation / RSE.
 
-    Signaux forts (priorité) : flotte qui s'électrifie, bornes en projet/installées,
-    utilitaires d'entreprise, engagement ZFE/décarbonation. Un siège local
-    (décideur joignable) prime. Score BAS pour : grand groupe, chaîne, franchise,
-    administration, pur acteur immobilier (SCI/holding) sans activité opérationnelle.
+    Angle commercial : ÉCONOMIQUE et RSE, JAMAIS réglementaire (ces parkings < 1 500
+    m² ne sont PAS soumis à l'obligation APER) — n'invoque NI obligation, NI
+    échéance, NI amende. Autoconsommation solaire, recharge de flotte sur site,
+    ombrage, image bas-carbone.
+
+    Score BAS uniquement pour : grand groupe / ETI, chaîne, franchise,
+    administration/public, pur acteur immobilier (SCI/holding) sans activité
+    opérationnelle, ou établissement manifestement hors zone (siège ailleurs).
 
 volume:
   cible: 650
