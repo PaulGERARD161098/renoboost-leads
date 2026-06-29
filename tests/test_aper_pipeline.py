@@ -116,6 +116,44 @@ class TestPipelineAperDryRun:
         assert _claude_scoring_avec_contexte(base).contexte_client == "custom"
 
 
+class TestL35Integration:
+    """L3.5 Dropcontact câblé au pipeline APER (opt-in)."""
+
+    def test_l35_skippe_par_defaut(self, tmp_path, stub_pipeline):
+        config = AperRunConfig(
+            claude_scoring=ClaudeScoring(inclure_pitch=False), dry_run_l4=True
+        )
+        res = executer_cycle_aper(FIXTURE, tmp_path / "out", config)
+        assert res.cout_l35_eur == 0.0
+        assert res.nb_emails_l35 == 0
+        assert all(la.email_dropcontact is None for la in res.leads)
+
+    def test_l35_execute_si_active(self, tmp_path, stub_pipeline, monkeypatch):
+        from renoboost_leads.models import LeadStage35
+        from renoboost_leads.parkings_aper import pipeline_aper
+
+        class _StubEnr35:
+            def __init__(self, *a, **kw):
+                self.cout_total_eur = 0.40
+
+            def enrichir(self, leads):
+                return [
+                    LeadStage35(**lead.model_dump(), email_dropcontact="dir@x.fr")
+                    for lead in leads
+                ]
+
+        monkeypatch.setattr(pipeline_aper, "EnricheurStage35", _StubEnr35)
+        config = AperRunConfig(
+            claude_scoring=ClaudeScoring(inclure_pitch=False),
+            dry_run_l4=True,
+            enrichir_l3_5=True,
+        )
+        res = executer_cycle_aper(FIXTURE, tmp_path / "out", config)
+        assert res.cout_l35_eur == 0.40
+        assert res.nb_emails_l35 == 8
+        assert all(la.email_dropcontact == "dir@x.fr" for la in res.leads)
+
+
 class TestPhaseCDIntegration:
     """Phase C (géoloc → SIREN) + Phase D (email post-run) câblées au pipeline."""
 

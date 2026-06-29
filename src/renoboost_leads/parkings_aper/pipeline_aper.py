@@ -22,16 +22,27 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from ..common.budget_guard import BudgetGuard
+from ..common.budget_guard import BudgetExceededError, BudgetGuard
 from ..common.cache import SessionCache
 from ..common.logger import get_logger
 from ..common.rate_limiter import RateLimiter
-from ..models import ClaudeScoring, FiltresEntreprise, LeadAper, LeadStage4
+from ..models import (
+    ClaudeScoring,
+    EnrichissementL35,
+    FiltresEntreprise,
+    LeadAper,
+    LeadStage3,
+    LeadStage4,
+)
 from ..stage2_entreprises.enricher import EnricheurStage2
 from ..stage2_entreprises.recherche_client import (
     RechercheClientConfig,
     RechercheEntreprisesClient,
 )
+from ..stage3_5_enrichment.cache import CacheStage35
+from ..stage3_5_enrichment.client import DropcontactClient, DropcontactClientConfig
+from ..stage3_5_enrichment.dry_run import DropcontactClientDryRun
+from ..stage3_5_enrichment.enricher import EnricheurStage35
 from ..stage3_contacts.enricher import EnricheurStage3
 from ..stage3_contacts.scraper import ScraperContact
 from ..stage4_prospection.cache import CacheStage4
@@ -75,6 +86,8 @@ class ResultatAper:
     nb_top_leads: int = 0
     nb_resolus_geo: int = 0  # Phase C : parkings sans enseigne résolus par géoloc
     cout_l4_eur: float = 0.0
+    cout_l35_eur: float = 0.0  # L3.5 Dropcontact (0 si désactivé)
+    nb_emails_l35: int = 0  # leads avec email Dropcontact après L3.5
     leads: list[LeadAper] = field(default_factory=list)
     erreurs_parsing: list[str] = field(default_factory=list)
     rejets_filtre: dict[str, int] = field(default_factory=dict)
@@ -91,12 +104,73 @@ class AperRunConfig:
     budget_eur: float = 5.0
     anthropic_api_key: str | None = None
     dry_run_l4: bool = False
+    # L3.5 — enrichissement contacts vérifiés (Dropcontact) entre L3 et L4.
+    # Désactivé par défaut : opt-in car payant. Sans clé Dropcontact, l'étage
+    # tourne en dry-run (emails simulés) pour valider le câblage sans coût.
+    enrichir_l3_5: bool = False
+    enrichissement_l3_5: EnrichissementL35 = field(default_factory=EnrichissementL35)
+    dropcontact_api_key: str | None = None
     rate_limit_per_min: int = 60
     # Phase C : résolution géoloc → SIREN des parkings sans enseigne
     resoudre_geo: bool = True
     rayon_geo_km: float = 0.2
     # Phase D : email récapitulatif post-run (None = pas d'envoi)
     smtp_config: ConfigSMTP | None = None
+
+
+def _executer_l3_5(
+    leads_l3: list[LeadStage3],
+    config: AperRunConfig,
+    output_dir: Path,
+    limiter: RateLimiter,
+) -> tuple[list[LeadStage3], float, int]:
+    """Étage 3.5 — enrichissement Dropcontact des leads APER (entre L3 et L4).
+
+    Sans clé Dropcontact, bascule en dry-run (emails simulés) pour valider le
+    câblage sans coût. Retourne (leads enrichis, coût €, nb leads avec email).
+    Tout échec budget/réseau préserve les leads d'origine (jamais de perte).
+    """
+    dry_run = config.dropcontact_api_key is None
+    if dry_run:
+        logger.warning(
+            "L3.5 APER en dry-run (aucune clé Dropcontact) — emails simulés."
+        )
+        client = DropcontactClientDryRun(
+            cout_par_lead_eur=config.enrichissement_l3_5.cout_par_lead_eur,
+        )
+    else:
+        client = DropcontactClient(
+            DropcontactClientConfig(
+                api_key=config.dropcontact_api_key,
+                language=config.enrichissement_l3_5.language,
+                siren=config.enrichissement_l3_5.siren,
+                poll_initial_delay_s=config.enrichissement_l3_5.poll_initial_delay_s,
+                poll_interval_s=config.enrichissement_l3_5.poll_interval_s,
+                poll_timeout_s=config.enrichissement_l3_5.poll_timeout_s,
+                cout_par_lead_eur=config.enrichissement_l3_5.cout_par_lead_eur,
+                rate_limiter=limiter,
+                budget=BudgetGuard(plafond_eur=config.budget_eur),
+            )
+        )
+
+    cache_l35 = CacheStage35(output_dir / "cache_l3_5.sqlite")
+    enricheur = EnricheurStage35(
+        client=client, config=config.enrichissement_l3_5, cache=cache_l35
+    )
+    try:
+        leads_l35 = enricheur.enrichir(leads_l3)
+    except BudgetExceededError as e:
+        logger.error("L3.5 APER stoppé par budget guard : %s — leads préservés", e)
+        return leads_l3, enricheur.cout_total_eur, 0
+
+    nb_emails = sum(1 for lead in leads_l35 if getattr(lead, "email_dropcontact", None))
+    logger.info(
+        "=== Étage 3.5 terminé : %d leads, %d email(s) Dropcontact, coût %.2f € ===",
+        len(leads_l35),
+        nb_emails,
+        enricheur.cout_total_eur,
+    )
+    return leads_l35, enricheur.cout_total_eur, nb_emails
 
 
 def _lead_stage4_vers_lead_aper(
@@ -206,6 +280,16 @@ def executer_cycle_aper(
     enricheur_l3 = EnricheurStage3(scraper=scraper, cache=cache)
     leads_l3 = enricheur_l3.enrichir(leads_l2)
 
+    # 6.5 L3.5 — enrichissement contacts vérifiés (Dropcontact), opt-in.
+    # C'est l'étage qui produit l'email DÉCIDEUR : sans lui, APER trouve des
+    # SIREN mais pas d'individus joignables. Skippe nativement les hors-filtre.
+    if config.enrichir_l3_5:
+        leads_l3, cout_l35, nb_emails_l35 = _executer_l3_5(
+            leads_l3, config, output_dir, limiter
+        )
+        resultat.cout_l35_eur = cout_l35
+        resultat.nb_emails_l35 = nb_emails_l35
+
     # 7. L4 — scoring (contexte APER injecté)
     claude_scoring = _claude_scoring_avec_contexte(config.claude_scoring)
     if config.dry_run_l4:
@@ -222,7 +306,9 @@ def executer_cycle_aper(
                 modele=claude_scoring.modele,
                 max_tokens_sortie=claude_scoring.max_tokens_sortie,
                 rate_limiter=limiter,
-                budget=BudgetGuard(plafond_eur=config.budget_eur),
+                budget=BudgetGuard(
+                    plafond_eur=max(0.01, config.budget_eur - resultat.cout_l35_eur)
+                ),
             )
         )
     cache_l4 = CacheStage4(output_dir / "cache_l4.sqlite")
