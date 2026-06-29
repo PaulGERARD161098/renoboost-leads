@@ -298,3 +298,87 @@ def aper_geo(
         f"  Parkings dans la fenêtre {seuil:.0f}–{plafond_txt} m² : {len(lignes)}\n"
         f"  → Lancer : [cyan]aper run --fichier {out_path}[/cyan]"
     )
+
+
+@aper_group.command(name="signal-parking")
+@click.option("--leads", "leads_path", required=True,
+              type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="CSV de leads (PME découvertes SIRENE-first) avec latitude/longitude.")
+@click.option("--inventaire", "inventaire_path", required=True,
+              type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="CSV d'inventaire parkings (produit par `aper geo`).")
+@click.option("--out", "out_path", required=True,
+              type=click.Path(dir_okay=False, path_type=Path),
+              help="CSV de sortie : leads annotés du signal parking.")
+@click.option("--rayon-m", type=float, default=None,
+              help="Rayon de rattachement PME↔parking en mètres (défaut 80).")
+def aper_signal_parking(
+    leads_path: Path, inventaire_path: Path, out_path: Path, rayon_m: float | None,
+) -> None:
+    """Annote des leads PME du SIGNAL parking (couche qualité du mix).
+
+    Jointure spatiale GRATUITE : pour chaque PME (lat/lon), cherche un petit
+    parking privé qualifiant (250-1250 m²) à proximité immédiate. Ajoute les
+    colonnes signal_parking / parking_surface_m2 / parking_distance_m, et trie
+    les leads « avec parking » en tête (priorisation avant enrichissement payant).
+    """
+    import csv
+
+    from .parser_parkings import lire_csv_parkings
+    from .signal_parking import SIGNAL_RAYON_M, LeadGeo, annoter_signal_parking
+
+    parkings = lire_csv_parkings(inventaire_path).lignes
+    with leads_path.open(encoding="utf-8-sig") as fh:
+        lignes_leads = list(csv.DictReader(fh))
+    if not lignes_leads:
+        console.print("[red]✗ CSV de leads vide.[/red]")
+        raise SystemExit(2)
+
+    def _f(v: str | None) -> float | None:
+        try:
+            return float(v) if v not in (None, "") else None
+        except ValueError:
+            return None
+
+    def _cle(row: dict[str, str], i: int) -> str:
+        return (row.get("siren") or row.get("place_id") or f"row{i}").strip()
+
+    leads_geo = [
+        LeadGeo(cle=_cle(r, i), latitude=_f(r.get("latitude")), longitude=_f(r.get("longitude")))
+        for i, r in enumerate(lignes_leads)
+    ]
+    rayon = rayon_m if rayon_m is not None else SIGNAL_RAYON_M
+    resultats = annoter_signal_parking(leads_geo, parkings, rayon_m=rayon)
+
+    # Annotation + tri (parking qualifiant en tête, puis distance croissante).
+    enrichis: list[dict[str, str]] = []
+    nb_quali = 0
+    for i, row in enumerate(lignes_leads):
+        res = resultats.get(_cle(row, i))
+        quali = bool(res and res.qualifiant)
+        nb_quali += int(quali)
+        row = dict(row)
+        row["signal_parking"] = "oui" if quali else "non"
+        row["parking_surface_m2"] = f"{res.surface_m2:.0f}" if quali and res.surface_m2 else ""
+        row["parking_distance_m"] = f"{res.distance_m:.0f}" if quali and res.distance_m else ""
+        enrichis.append(row)
+    enrichis.sort(
+        key=lambda r: (r["signal_parking"] != "oui", _f(r.get("parking_distance_m")) or 1e9)
+    )
+
+    fieldnames = list(lignes_leads[0].keys()) + [
+        c for c in ("signal_parking", "parking_surface_m2", "parking_distance_m")
+        if c not in lignes_leads[0]
+    ]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(enrichis)
+
+    console.print(
+        f"\n[green]✓ Signal parking annoté : {out_path}[/green]\n"
+        f"  Leads             : {len(enrichis)}\n"
+        f"  Avec parking privé qualifiant (≤ {rayon:.0f} m) : {nb_quali}\n"
+        f"  → Prioriser ces {nb_quali} leads pour l'enrichissement Dropcontact."
+    )
