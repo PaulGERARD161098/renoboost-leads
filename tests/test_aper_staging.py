@@ -61,6 +61,20 @@ def test_min_score_elargit(tmp_path):
     assert res.nb_stages == 1
 
 
+def test_hors_filtre_jamais_stage_meme_via_min_score(tmp_path):
+    # Un lead hors ICP (retail) avec un score élevé ne doit pas partir en
+    # cold-mail, même quand min_score abaisse le seuil sous son score.
+    store = StagingStore(dir_path=tmp_path)
+    lead = _lead(nom="Retail", top=False, score=72)
+    lead.hors_filtre_entreprise = True
+    res = stager_leads_aper(
+        leads=[lead], secteur="aper", session_id="s", from_email="x@y.fr",
+        min_score=50, store=store,
+    )
+    assert res.nb_stages == 0
+    assert res.nb_sous_seuil == 1
+
+
 def test_ecarte_sans_email(tmp_path):
     store = StagingStore(dir_path=tmp_path)
     leads = [_lead(nom="NoMail", top=True, email=None)]

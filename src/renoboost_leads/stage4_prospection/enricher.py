@@ -67,7 +67,15 @@ class EnricheurStage4:
         email_objet: str | None = None,
         email_corps: str | None = None,
     ) -> LeadStage4:
-        top = score is not None and score >= self.config.seuil_top_lead
+        # Garde-fou central : un lead écarté par les filtres entreprise
+        # (`hors_filtre_entreprise=True`) ne peut JAMAIS être `top_lead`, même
+        # avec un score élevé. Sans ça, un pipeline qui score tout (APER, veille)
+        # promeut des cibles explicitement exclues (ex. parking retail noté sur
+        # sa seule surface) et les pousse vers le cold-mail. L'invariant vit ici
+        # pour couvrir tous les appelants d'un coup ; le score brut reste exposé
+        # pour le diagnostic.
+        hors_filtre = getattr(lead_l3, "hors_filtre_entreprise", False)
+        top = score is not None and score >= self.config.seuil_top_lead and not hors_filtre
         return LeadStage4(
             **lead_l3.model_dump(),
             score_interet=score,
