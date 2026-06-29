@@ -257,6 +257,44 @@ class TestBudgetEtDegradation:
         assert "non scorés" in res.raison_degradation
 
 
+class TestRayonGeoAuto:
+    """Rayon géoloc auto-adapté : serré en mode flotte, large sinon."""
+
+    def test_mode_flotte_rayon_serre(self):
+        from renoboost_leads.parkings_aper.models import AperConfig
+        from renoboost_leads.parkings_aper.pipeline_aper import RAYON_GEO_FLOTTE_KM
+
+        cfg = AperRunConfig(
+            aper_config=AperConfig(surface_min_m2=250, surface_max_m2=1250)
+        )
+        assert cfg.rayon_geo_km is None  # auto
+        assert cfg.rayon_geo_effectif() == RAYON_GEO_FLOTTE_KM
+
+    def test_mode_obligation_rayon_large(self):
+        from renoboost_leads.parkings_aper.pipeline_aper import RAYON_GEO_DEFAUT_KM
+
+        cfg = AperRunConfig()  # pas de surface_max → mode obligation
+        assert cfg.rayon_geo_effectif() == RAYON_GEO_DEFAUT_KM
+
+    def test_rayon_explicite_prime(self):
+        from renoboost_leads.parkings_aper.models import AperConfig
+
+        cfg = AperRunConfig(
+            aper_config=AperConfig(surface_min_m2=250, surface_max_m2=1250),
+            rayon_geo_km=0.1,
+        )
+        # un rayon imposé prime sur l'auto-adaptation
+        assert cfg.rayon_geo_effectif() == 0.1
+
+    def test_surface_max_au_seuil_reste_large(self):
+        from renoboost_leads.parkings_aper.models import AperConfig
+        from renoboost_leads.parkings_aper.pipeline_aper import RAYON_GEO_DEFAUT_KM
+
+        # surface_max == seuil APER (1500) → pas « sous le seuil » → mode large
+        cfg = AperRunConfig(aper_config=AperConfig(surface_max_m2=1500))
+        assert cfg.rayon_geo_effectif() == RAYON_GEO_DEFAUT_KM
+
+
 class TestPhaseCDIntegration:
     """Phase C (géoloc → SIREN) + Phase D (email post-run) câblées au pipeline."""
 

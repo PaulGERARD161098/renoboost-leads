@@ -1,0 +1,111 @@
+# ════════════════════════════════════════════════════════════════
+# Rossini — campagne « PME flotte / petit parking » (Nord, ICP serré)
+# ════════════════════════════════════════════════════════════════
+#
+# OBJECTIF : 650 décideurs/fondateurs de PME (≤ 100 salariés) en Hauts-de-France,
+# possédant un PETIT parking privé (10-50 places ≈ 250-1250 m²) en zone
+# d'activité / industrielle / logistique, en transition vers les véhicules
+# électriques. Hors grands groupes, chaînes, franchises ; parking NON mutualisé.
+#
+# CE FICHIER pilote `aper run --config` (pipeline parkings APER). Les sections
+# `secteurs`/`zone`/`stages`/`volume` sont requises par le schéma mais NON
+# utilisées par `aper run` (la découverte vient de l'inventaire `aper geo`).
+# Ce qui compte ici : `filtres_entreprise`, `claude_scoring`, `scraping_l3`.
+#
+# LANCEMENT TYPE :
+#   aper geo  --bbox <ZA logistique/industrielle> --surface-min 250 \
+#             --surface-max 1250 --out inv_<za>.csv
+#   aper run  --fichier inv_<za>.csv --config config/client_rossini_nord_flotte.yaml \
+#             --surface-min 250 --surface-max 1250 --enrichir-l35 --budget <€>
+# Le rayon géoloc s'auto-adapte (50 m en mode flotte) — laisser --rayon-geo vide.
+#
+# ── POURQUOI CE PROFIL (mesuré le 2026-06-29) ────────────────────
+# Dry-run 3 ZA (Delta3 Dourges, CRT Lesquin, La Pilaterie), fenêtre 250-1250 m² :
+#   rayon 200 m → 545 résolus mais 255 grands groupes, 48 PME ≤99 sal.
+#   rayon  50 m → 407 résolus, 110 GE, 116 PME ≤99 sal. (×2,4 sur l'ICP).
+# Le rayon serré attribue le petit parking au vrai occupant (la PME), pas au
+# grand groupe voisin. Le filtre ci-dessous écarte le résidu (GE / public / SCI).
+
+run:
+  client_name: "rossini-nord-flotte"
+  description: "PME flotte/petit parking (10-50 places) — Nord, transition VE"
+  campaign_date: "2026-06-29"
+
+stages:
+  enable_stage_1_decouverte: false   # découverte = inventaire parkings (aper geo)
+  enable_stage_2_entreprises: true
+  enable_stage_3_contacts: true
+  enable_stage_4_prospection: true
+
+# Requis par le schéma ; non utilisé par `aper run` (placeholder).
+secteurs:
+  - type: "parking_za"
+    query: "zone d'activité industrielle logistique"
+
+# Requis par le schéma ; la vraie zone = la bbox passée à `aper geo`.
+zone:
+  type: "departement"
+  codes: ["59", "62"]
+
+# ─── Filtres entreprise — cœur de l'ICP ──────────────────────────
+# PME ≤ 100 salariés, pas de grand groupe (catégorie GE/ETI exclue via PME-only),
+# on écarte le bruit public (administration 84, enseignement 85) et immobilier
+# (holdings 64.20, SCI 68.20, syndic/gestion 68.32) fréquent autour des parkings.
+filtres_entreprise:
+  effectif_min: 1
+  effectif_max: 100
+  categorie_entreprise_inclus: ["PME"]   # exclut ETI et GE (grands groupes)
+  naf_exclus:
+    - "84"      # administration publique (communes, EPCI…)
+    - "85"      # enseignement (collèges, lycées, écoles)
+    - "64.20"   # holdings
+    - "68.20"   # location/exploitation biens immobiliers (SCI)
+    - "68.32"   # gestion de biens immobiliers / syndic
+  forme_juridique_exclus:
+    - "SCI"
+  naf_inclus: []   # pas de whitelist : on prend large puis on exclut
+
+# ─── Étage 3 — signaux « flotte en transition VE » ───────────────
+# Repérés (regex sur texte normalisé minuscule SANS accents) sur le site du lead
+# en L3, puis remontés au scoring L4 comme indice d'intention d'achat.
+scraping_l3:
+  signaux_ve:
+    "flotte electrique": "\\bflottes? (de )?(vehicules? )?electriques?\\b"
+    "passage aux VE": "\\b(passage|passer|transition|electrification) (a l'|aux |de (la|notre) flotte )?electriques?\\b|\\belectrification\\b"
+    "bornes de recharge": "\\bbornes? de recharge\\b|\\birve\\b|\\bwallbox\\b|\\bpoints? de charge\\b"
+    "vehicule electrique": "\\bvehicules? electriques?\\b"
+    "engagement ZFE/decarbonation": "\\bzfe\\b|\\bzone a faibles emissions\\b|\\bdecarbonation\\b|\\bbilan carbone\\b"
+
+# ─── Étage 4 — contexte scoring orienté ICP « PME flotte VE » ────
+claude_scoring:
+  seuil_top_lead: 70
+  contexte_client: |
+    Rossini Energy conçoit et installe des ombrières photovoltaïques et des
+    bornes de recharge (IRVE) pour véhicules électriques.
+
+    CIBLE IDÉALE (à scorer haut) : le SIÈGE d'une PME (≤ 100 salariés) propriétaire
+    de ses locaux dans une zone d'activité / industrielle / logistique, avec un
+    PETIT parking privé (10-50 places), et qui électrifie sa flotte ou s'apprête à
+    le faire. Profils types : transport/messagerie, garage/négoce auto, artisanat
+    du bâtiment, PME industrielle, négoce — des entreprises avec des véhicules
+    utilitaires à recharger sur site.
+
+    L'angle est ÉCONOMIQUE et RSE, JAMAIS réglementaire : autoconsommation solaire
+    pour baisser la facture, recharge de la flotte sur site, ombrage du parking,
+    image bas-carbone. Ces petits parkings NE SONT PAS soumis à l'obligation APER
+    (< 1 500 m²) : n'invoque NI obligation, NI échéance, NI amende.
+
+    Signaux forts (priorité) : flotte qui s'électrifie, bornes en projet/installées,
+    utilitaires d'entreprise, engagement ZFE/décarbonation. Un siège local
+    (décideur joignable) prime. Score BAS pour : grand groupe, chaîne, franchise,
+    administration, pur acteur immobilier (SCI/holding) sans activité opérationnelle.
+
+volume:
+  cible: 650
+
+budget:
+  max_eur: 20    # plafond Dropcontact ; ajustable au lancement via --budget
+
+sortie:
+  format: ["csv"]
+  langue: "fr"

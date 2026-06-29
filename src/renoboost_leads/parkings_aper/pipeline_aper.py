@@ -63,6 +63,12 @@ from .parser_parkings import lire_csv_parkings
 
 logger = get_logger(__name__)
 
+# Rayons near_point (km) pour la résolution géoloc Phase C.
+# Flotte (petits parkings) : serré → occupant adjacent (la PME). Obligation
+# (gros parkings) : large → ancre plausible. Cf. AperRunConfig.rayon_geo_effectif.
+RAYON_GEO_DEFAUT_KM = 0.2
+RAYON_GEO_FLOTTE_KM = 0.05
+
 
 CONTEXTE_APER_DEFAUT = (
     "Rossini Energy conçoit et installe des ombrières photovoltaïques et des "
@@ -153,9 +159,27 @@ class AperRunConfig:
     enrichissement_l3_5: EnrichissementL35 = field(default_factory=EnrichissementL35)
     dropcontact_api_key: str | None = None
     rate_limit_per_min: int = 60
-    # Phase C : résolution géoloc → SIREN des parkings sans enseigne
+    # Phase C : résolution géoloc → SIREN des parkings sans enseigne.
+    # rayon_geo_km None = AUTO : rayon serré en mode flotte (petits parkings,
+    # surface_max sous le seuil APER), large sinon (cf. rayon_geo_effectif).
     resoudre_geo: bool = True
-    rayon_geo_km: float = 0.2
+    rayon_geo_km: float | None = None
+
+    def rayon_geo_effectif(self) -> float:
+        """Rayon near_point effectif (km), auto-adapté au mode si non imposé.
+
+        Mode flotte (petits parkings ciblés via surface_max < seuil APER) : un
+        rayon SERRÉ attribue le parking au vrai occupant adjacent (la PME), pas
+        au grand groupe voisin — gain ICP mesuré ×2,4 (200 m → 50 m). Mode APER
+        obligation (gros parkings) : rayon large, l'ancre plausible est proche.
+        Un `rayon_geo_km` explicite prime toujours.
+        """
+        if self.rayon_geo_km is not None:
+            return self.rayon_geo_km
+        smax = self.aper_config.surface_max_m2
+        if smax is not None and smax < SEUIL_APER_M2:
+            return RAYON_GEO_FLOTTE_KM
+        return RAYON_GEO_DEFAUT_KM
     # Phase D : email récapitulatif post-run (None = pas d'envoi)
     smtp_config: ConfigSMTP | None = None
 
@@ -314,8 +338,14 @@ def executer_cycle_aper(
     # 2.5 Phase C — résolution géoloc → SIREN des parkings sans enseigne, AVANT
     # l'anti-doublon (l'identifiant stable devient SIREN une fois résolu).
     if config.resoudre_geo:
+        rayon = config.rayon_geo_effectif()
+        logger.info(
+            "Phase C : résolution géoloc (rayon %.0f m%s)",
+            rayon * 1000,
+            "" if config.rayon_geo_km is not None else " — auto",
+        )
         stats_geo = resoudre_lignes_sans_enseigne(
-            lignes_filtrees, rech_client, rayon_km=config.rayon_geo_km
+            lignes_filtrees, rech_client, rayon_km=rayon
         )
         resultat.nb_resolus_geo = stats_geo["resolu"]
 

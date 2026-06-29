@@ -63,8 +63,9 @@ def aper_group() -> None:
               help="Avec --vers-staging : adresse expéditeur du staging.")
 @click.option("--no-geo", is_flag=True,
               help="Désactive la résolution géoloc → SIREN des parkings sans enseigne (Phase C).")
-@click.option("--rayon-geo", "rayon_geo_km", type=float, default=0.2, show_default=True,
-              help="Rayon (km) de recherche near_point pour la résolution géoloc.")
+@click.option("--rayon-geo", "rayon_geo_km", type=float, default=None,
+              help="Rayon (km) near_point pour la résolution géoloc. Défaut : AUTO "
+                   "(50 m en mode flotte si --surface-max < 1500, sinon 200 m).")
 @click.option("--no-email", is_flag=True,
               help="N'envoie pas l'email récapitulatif post-run même si SMTP est configuré.")
 def aper_run(
@@ -81,7 +82,7 @@ def aper_run(
     min_score: int | None,
     from_email: str,
     no_geo: bool,
-    rayon_geo_km: float,
+    rayon_geo_km: float | None,
     no_email: bool,
 ) -> None:
     """Lance un run parkings APER sur un CSV inventaire."""
