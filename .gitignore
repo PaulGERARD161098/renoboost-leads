@@ -18,6 +18,9 @@ data/cold_mail/
 !tests/fixtures_aaa/*.csv
 !tests/fixtures_parkings/*.csv
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
 *.db
 
 # === PYTHON ===
