@@ -216,18 +216,28 @@ def recuperer_parkings(
     *,
     client: OverpassClient | None = None,
     surface_min_m2: float = SEUIL_APER_M2,
+    surface_max_m2: float | None = None,
 ) -> list[LigneParking]:
-    """Récupère les parkings OSM d'une bbox, convertit, pré-filtre par surface."""
+    """Récupère les parkings OSM d'une bbox, convertit, pré-filtre par surface.
+
+    Filtre sur la FENÊTRE [surface_min_m2, surface_max_m2] (plafond optionnel,
+    None = pas de plafond). Filtrer dès la découverte évite de charger des
+    milliers de parkings hors cible.
+    """
     client = client or OverpassClient()
     elements = client.chercher_parkings(bbox)
     lignes: list[LigneParking] = []
     for el in elements:
         ligne = element_osm_vers_ligne(el)
-        if ligne is not None and ligne.surface_m2 >= surface_min_m2:
-            lignes.append(ligne)
+        if ligne is None or ligne.surface_m2 < surface_min_m2:
+            continue
+        if surface_max_m2 is not None and ligne.surface_m2 > surface_max_m2:
+            continue
+        lignes.append(ligne)
+    plafond = f"{surface_max_m2:.0f}" if surface_max_m2 is not None else "∞"
     logger.info(
-        "Overpass : %d ways → %d parkings ≥ %.0f m²",
-        len(elements), len(lignes), surface_min_m2,
+        "Overpass : %d ways → %d parkings (fenêtre %.0f–%s m²)",
+        len(elements), len(lignes), surface_min_m2, plafond,
     )
     return lignes
 

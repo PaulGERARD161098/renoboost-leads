@@ -60,3 +60,28 @@ class TestFiltre:
         )
         # surfaces > 10000 : 14500, 22000, 31000, 12500 = 4
         assert len(retenues) == 4
+
+    def test_fenetre_surface_min_et_max(self):
+        # Fenêtre « flotte » : on cible les petits parkings, on écarte les gros.
+        res = lire_csv_parkings(FIXTURE)
+        retenues, rejets = filtrer_parkings(
+            res.lignes, AperConfig(surface_min_m2=300, surface_max_m2=1500)
+        )
+        # surfaces dans [300, 1500] : 850, 420, 1800? non (>1500) → 850 et 420 = 2
+        surfaces = sorted(lg.surface_m2 for lg in retenues)
+        assert surfaces == [420.0, 850.0]
+        assert rejets["surface_excessive"] >= 1  # les gros parkings écartés
+        assert rejets["surface_insuffisante"] == 0
+
+    def test_pas_de_plafond_par_defaut(self):
+        # surface_max_m2 None → comportement historique (floor only).
+        res = lire_csv_parkings(FIXTURE)
+        retenues, rejets = filtrer_parkings(res.lignes, AperConfig(surface_min_m2=300))
+        assert len(retenues) == 10
+        assert rejets["surface_excessive"] == 0
+
+    def test_fenetre_invalide_rejetee(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="fenêtre de surface vide"):
+            AperConfig(surface_min_m2=1500, surface_max_m2=400)

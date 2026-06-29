@@ -16,7 +16,7 @@ Les seuils sont surchargeables via `AperConfig` au cas où la réglementation
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ════════════════════════════════════════════════════════════════
 # Constantes réglementaires (loi APER art. 40 + décret 2024-1023)
@@ -154,3 +154,16 @@ class AperConfig(BaseModel):
 
     # Seuil de surface à partir duquel on garde le parking (défaut = seuil APER).
     surface_min_m2: float = Field(default=SEUIL_APER_M2, gt=0)
+    # Plafond de surface (m²) — None = pas de plafond. Sert à cibler une FENÊTRE
+    # de taille (ex. petits parkings « flotte » 250-1250 m² ≈ 10-50 places) et à
+    # exclure les très grands parcs (hyper, ZC) qui ne sont pas des PME-sièges.
+    surface_max_m2: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _verifier_fenetre_surface(self) -> AperConfig:
+        if self.surface_max_m2 is not None and self.surface_max_m2 < self.surface_min_m2:
+            raise ValueError(
+                f"surface_max_m2 ({self.surface_max_m2}) < surface_min_m2 "
+                f"({self.surface_min_m2}) : fenêtre de surface vide"
+            )
+        return self

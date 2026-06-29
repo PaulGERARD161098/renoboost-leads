@@ -65,6 +65,16 @@ class TestRecuperer:
         )
         assert len(lignes) == 2
 
+    def test_fenetre_surface_exclut_les_gros(self):
+        # Fenêtre [100, 1000] : ne garde que le petit parking (~700 m²),
+        # le grand (~11k m²) est écarté dès la découverte.
+        lignes = recuperer_parkings(
+            Bbox(0, 0, 1, 1), client=OverpassClientDryRun(),
+            surface_min_m2=100, surface_max_m2=1000,
+        )
+        assert len(lignes) == 1
+        assert lignes[0].surface_m2 < 1000
+
 
 class TestCsvRoundTrip:
     def test_ecrire_puis_relire(self, tmp_path):

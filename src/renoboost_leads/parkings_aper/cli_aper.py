@@ -41,7 +41,10 @@ def aper_group() -> None:
 @click.option("--source", default="aper_osm", show_default=True,
               help="Identifiant de la source (traçabilité CSV).")
 @click.option("--surface-min", "surface_min", type=float, default=None,
-              help="Seuil de surface m² (défaut 1500 = seuil légal APER).")
+              help="Seuil bas de surface m² (défaut 1500 = seuil légal APER).")
+@click.option("--surface-max", "surface_max", type=float, default=None,
+              help="Plafond de surface m² (défaut : aucun). Ex. 1250 ≈ 50 places "
+                   "pour cibler les petits parkings 'flotte'.")
 @click.option("--budget", "budget_eur", default=5.0, show_default=True, type=float,
               help="Plafond budget € pour L3.5 Dropcontact (l'étage payant ~0,10 €/lead).")
 @click.option("--budget-l4", "budget_l4_eur", default=5.0, show_default=True, type=float,
@@ -69,6 +72,7 @@ def aper_run(
     config_path: Path | None,
     source: str,
     surface_min: float | None,
+    surface_max: float | None,
     budget_eur: float,
     budget_l4_eur: float,
     dry_run: bool,
@@ -106,8 +110,13 @@ def aper_run(
         raise SystemExit(2)
 
     aper_config = AperConfig()
+    maj_surface: dict[str, float] = {}
     if surface_min is not None:
-        aper_config = aper_config.model_copy(update={"surface_min_m2": surface_min})
+        maj_surface["surface_min_m2"] = surface_min
+    if surface_max is not None:
+        maj_surface["surface_max_m2"] = surface_max
+    if maj_surface:
+        aper_config = aper_config.model_copy(update=maj_surface)
 
     date_str = datetime.now().strftime("%Y-%m-%d_%H%M")
     output_dir = PROJECT_ROOT / "data" / "parkings_aper" / f"{date_str}_{client_name}_{source}"
@@ -224,10 +233,16 @@ def _staging_post_run(vers_staging, resultat, source, output_dir, from_email, mi
 @click.option("--out", "out_path", type=click.Path(dir_okay=False, path_type=Path),
               required=True, help="CSV d'inventaire à générer (consommable par `aper run`).")
 @click.option("--surface-min", "surface_min", type=float, default=None,
-              help="Seuil de surface m² (défaut 1500 = seuil légal APER).")
+              help="Seuil bas de surface m² (défaut 1500 = seuil légal APER).")
+@click.option("--surface-max", "surface_max", type=float, default=None,
+              help="Plafond de surface m² (défaut : aucun). Ex. 1250 ≈ 50 places "
+                   "pour cibler les petits parkings 'flotte'.")
 @click.option("--dry-run", is_flag=True,
               help="Données OSM simulées, aucun appel réseau (test du flux).")
-def aper_geo(bbox: str, out_path: Path, surface_min: float | None, dry_run: bool) -> None:
+def aper_geo(
+    bbox: str, out_path: Path, surface_min: float | None,
+    surface_max: float | None, dry_run: bool,
+) -> None:
     """Génère un CSV d'inventaire parkings depuis OpenStreetMap (Overpass)."""
     from .connecteur_geo import (
         Bbox,
@@ -250,9 +265,15 @@ def aper_geo(bbox: str, out_path: Path, surface_min: float | None, dry_run: bool
     if dry_run:
         console.print("[yellow]⚠  Mode dry-run : parkings OSM simulés.[/yellow]")
 
-    console.print(f"[cyan]Overpass — bbox {boite.as_overpass()} (seuil {seuil:.0f} m²)…[/cyan]")
+    plafond_txt = f"{surface_max:.0f}" if surface_max is not None else "∞"
+    console.print(
+        f"[cyan]Overpass — bbox {boite.as_overpass()} "
+        f"(fenêtre {seuil:.0f}–{plafond_txt} m²)…[/cyan]"
+    )
     try:
-        lignes = recuperer_parkings(boite, client=client, surface_min_m2=seuil)
+        lignes = recuperer_parkings(
+            boite, client=client, surface_min_m2=seuil, surface_max_m2=surface_max
+        )
     except OverpassError as e:
         msg = str(e)
         if "allowlist" in msg.lower() or "host_not_allowed" in msg.lower():
@@ -268,6 +289,6 @@ def aper_geo(bbox: str, out_path: Path, surface_min: float | None, dry_run: bool
     ecrire_inventaire_csv(lignes, out_path)
     console.print(
         f"\n[green]✓ Inventaire généré : {out_path}[/green]\n"
-        f"  Parkings ≥ {seuil:.0f} m² : {len(lignes)}\n"
+        f"  Parkings dans la fenêtre {seuil:.0f}–{plafond_txt} m² : {len(lignes)}\n"
         f"  → Lancer : [cyan]aper run --fichier {out_path}[/cyan]"
     )
