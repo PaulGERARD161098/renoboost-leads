@@ -11,6 +11,7 @@ avec Places, le vrai place_id remplacera le sentinel.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -24,6 +25,26 @@ logger = get_logger(__name__)
 # Qualités décisionnaires, par priorité décroissante (début, lowercase) :
 # président, gérant, directeur. Aligne stage0 sur stage2_entreprises.mapper.
 _PRIORITES_QUALITE = ("pr", "gé", "ge", "di")
+
+
+def _nettoyer_identite(valeur: str | None, *, premier_token: bool = False) -> str | None:
+    """Nettoie un nom/prénom brut SIRENE pour la liste de contacts + les patterns email.
+
+    - retire le nom de naissance entre parenthèses : "CREMADES (CREMADES)" → "Crémades" ;
+    - `premier_token` : ne garde que le 1er prénom ("BENOIT JEAN MARIE" → "Benoit",
+      "JEAN-CHRISTOPHE RAYMOND DANIEL" → "Jean-Christophe") — évite les emails
+      `benoitjeanmarie.x@…` faux ;
+    - casse propre (`.title()`) — l'API renvoie en MAJUSCULES.
+    """
+    if not valeur:
+        return None
+    v = re.sub(r"\(.*?\)", " ", valeur)  # retire (nom de naissance)
+    v = re.sub(r"\s+", " ", v).strip()
+    if premier_token and v:
+        v = v.split(" ")[0]
+    if not v:
+        return None
+    return v.title()
 
 
 def _prenom_dirigeant(d: dict[str, Any]) -> str | None:
@@ -159,8 +180,8 @@ def entreprise_to_lead_stage2(
             entreprise.get("libelle_tranche_effectif_salarie")
             or siege.get("libelle_tranche_effectif_salarie")
         ),
-        dirigeant_nom=dirigeant.get("nom"),
-        dirigeant_prenom=_prenom_dirigeant(dirigeant),
+        dirigeant_nom=_nettoyer_identite(dirigeant.get("nom")),
+        dirigeant_prenom=_nettoyer_identite(_prenom_dirigeant(dirigeant), premier_token=True),
         dirigeant_qualite=dirigeant.get("qualite"),
         adresse_normalisee=siege.get("geo_adresse"),
         date_creation=entreprise.get("date_creation"),

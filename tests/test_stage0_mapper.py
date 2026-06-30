@@ -245,4 +245,17 @@ class TestHelpers:
         lead = entreprise_to_lead_stage2(e)
         assert lead is not None
         assert lead.dirigeant_prenom == "Christophe"
-        assert lead.dirigeant_nom == "BONDUELLE"
+        assert lead.dirigeant_nom == "Bonduelle"  # casse propre (API en MAJ)
+
+    def test_nettoyage_prenom_multiple_et_nom_parenthese(self):
+        # Régression patterns email : 1er prénom seul + parenthèse (nom de
+        # naissance) retirée → évite `benoitjeanmarie.cremadescremades@…`.
+        e = _entreprise_complete()
+        e["dirigeants"] = [
+            {"type_dirigeant": "personne physique", "nom": "CREMADES (CREMADES)",
+             "prenoms": "JEAN-CHRISTOPHE RAYMOND DANIEL", "qualite": "Gérant"},
+        ]
+        lead = entreprise_to_lead_stage2(e)
+        assert lead is not None
+        assert lead.dirigeant_prenom == "Jean-Christophe"  # 1er prénom, casse propre
+        assert lead.dirigeant_nom == "Cremades"            # parenthèse retirée
