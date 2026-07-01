@@ -350,15 +350,21 @@ COLONNES_COORDONNEES = [
 
 
 def _ligne_coordonnees(d: dict) -> dict:
-    """Projette un lead sur la vue coordonnées (livrable final CRM)."""
+    """Projette un lead sur la vue coordonnées (livrable final CRM).
+
+    Fiabilité stricte : l'email est VÉRIFIÉ uniquement (Dropcontact ou scrapé
+    sur le site), jamais un pattern deviné (`emails_candidats`) — un champ vide
+    vaut mieux qu'une adresse fausse qui bounce.
+    """
     contact = _ligne_contact(d)
     cp = (d.get("code_postal") or "").strip()
+    email_verifie = _premier(d.get("email_dropcontact"), d.get("emails_verifies"))
     return {
         "entreprise": d.get("nom"),
         "prenom": contact["prenom"],
         "nom": contact["nom_contact"],
         "poste": d.get("dirigeant_qualite"),
-        "email": contact["email"],
+        "email": email_verifie,
         "linkedin_url": contact["linkedin_url"],
         "adresse": _premier(d.get("adresse_normalisee"), d.get("adresse")),
         "ville": d.get("ville"),
