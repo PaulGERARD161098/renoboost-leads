@@ -72,6 +72,15 @@ EMAIL_REGEX = re.compile(
     r"[a-zA-Z]{2,24}"
 )
 
+# URLs LinkedIn (profils /in/ et pages /company/). Capté gratuitement sur les
+# pages déjà téléchargées pour le scraping d'emails. Sous-domaine pays optionnel
+# (fr., www.), scheme optionnel. Slug = tout sauf séparateurs d'URL.
+LINKEDIN_REGEX = re.compile(
+    r"(?:https?://)?(?:[a-z0-9-]+\.)?linkedin\.com/(in|company|pub)/"
+    r"([A-Za-z0-9\-_%.]+)",
+    re.IGNORECASE,
+)
+
 # Faux positifs courants à filtrer
 EXTENSIONS_PARASITES = {
     "jpg", "jpeg", "png", "gif", "webp", "svg", "ico",
@@ -177,6 +186,7 @@ class ResultatScraping:
     raison_echec: str | None = None
     pages_visitees: list[str] = field(default_factory=list)
     signaux_ve: list[str] = field(default_factory=list)  # signaux flotte/VE détectés
+    linkedins: list[str] = field(default_factory=list)  # URLs LinkedIn trouvées
 
 
 # ════════════════════════════════════════════════════════════════
@@ -267,6 +277,69 @@ def extraire_emails_du_html(html: str, domaine_attendu: str | None = None) -> li
         emails = {e for e in emails if e.split("@", 1)[1] == domaine_attendu}
 
     return sorted(emails)
+
+
+def extraire_linkedin_du_html(html: str) -> list[str]:
+    """Extrait et normalise les URLs LinkedIn (/in/ et /company/) d'une page.
+
+    Cherche dans le HTML brut ET les href (les liens réseaux sociaux sont
+    souvent dans le footer). Normalise en `https://www.linkedin.com/<type>/<slug>`
+    (dédup, ordre stable : les /in/ avant les /company/).
+    """
+    if not html:
+        return []
+
+    trouves: dict[str, None] = {}  # dict pour dédup en gardant l'ordre
+
+    def _ajouter(match: re.Match[str]) -> None:
+        type_url = match.group(1).lower()
+        slug = match.group(2).strip("/.").lower()
+        if not slug or slug in {"in", "company", "pub"}:
+            return
+        # `pub` (ancien format profil) est traité comme un profil personnel.
+        canon = "in" if type_url in ("in", "pub") else "company"
+        url = f"https://www.linkedin.com/{canon}/{slug}"
+        trouves.setdefault(url, None)
+
+    for m in LINKEDIN_REGEX.finditer(html):
+        _ajouter(m)
+
+    # /in/ (profils personnels) d'abord, puis /company/
+    perso = [u for u in trouves if "/in/" in u]
+    entreprise = [u for u in trouves if "/company/" in u]
+    return perso + entreprise
+
+
+def _slug_normalise(s: str | None) -> str:
+    """Minuscule, sans accents, alphanumérique uniquement (pour matcher un slug)."""
+    if not s:
+        return ""
+    return "".join(c for c in _normaliser_texte(s) if c.isalnum())
+
+
+def apparier_linkedin(
+    linkedins: list[str], prenom: str | None, nom: str | None
+) -> tuple[str | None, str | None]:
+    """Sépare les URLs LinkedIn en (profil_dirigeant, page_entreprise).
+
+    Fiabilité : on n'attribue un profil /in/ au dirigeant que si son slug
+    contient à la fois le prénom ET le nom (vérification de correspondance —
+    évite d'attribuer le profil d'un employé au dirigeant). La page /company/
+    est prise telle quelle (c'est celle de l'entreprise).
+    """
+    entreprise = next((u for u in linkedins if "/company/" in u), None)
+
+    p, n = _slug_normalise(prenom), _slug_normalise(nom)
+    dirigeant = None
+    if p and len(n) >= 3:
+        for u in linkedins:
+            if "/in/" not in u:
+                continue
+            slug = _slug_normalise(u.rsplit("/in/", 1)[-1])
+            if p in slug and n in slug:
+                dirigeant = u
+                break
+    return dirigeant, entreprise
 
 
 # ════════════════════════════════════════════════════════════════
@@ -391,10 +464,13 @@ class ScraperContact:
         self._reseau_bloque = False
 
         def _accumuler_signaux_ve(html: str) -> None:
-            """Ajoute les signaux VE de cette page sans doublon (ordre stable)."""
+            """Ajoute les signaux VE + URLs LinkedIn de cette page (dédup, ordre stable)."""
             for signal in detecter_signaux_ve(html, self._signaux_regex):
                 if signal not in result.signaux_ve:
                     result.signaux_ve.append(signal)
+            for url in extraire_linkedin_du_html(html):
+                if url not in result.linkedins:
+                    result.linkedins.append(url)
 
         # Test de connectivité de base
         homepage_html = self._fetch(base_url)

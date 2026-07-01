@@ -1,6 +1,7 @@
 """CLI cold mail — validation manuelle des stagings + envoi.
 
 Commandes :
+- `cold-mail stage --session-id X --from-email Y` : crée un staging depuis le L4
 - `cold-mail list` : tableau des stagings (id, secteur, total, par état)
 - `cold-mail show <staging_id>` : preview détaillée d'un staging (chaque email)
 - `cold-mail validate --staging-id X --lead-id Y` : marque 'valide'
@@ -99,6 +100,40 @@ def cold_mail_show(staging_id: str) -> None:
                 border_style=couleur,
             )
         )
+
+
+@cold_mail_group.command(name="stage")
+@click.option("--session-id", required=True, help="Session du pipeline (dossier data/output/).")
+@click.option("--from-email", required=True, help="Email expéditeur de la campagne.")
+@click.option("--secteur", default="pipeline", show_default=True)
+@click.option(
+    "--min-score",
+    type=int,
+    default=None,
+    help="Élargit la sélection aux leads score_interet >= min-score (sinon top_lead).",
+)
+def cold_mail_stage(
+    session_id: str, from_email: str, secteur: str, min_score: int | None
+) -> None:
+    """Crée un staging cold-mail depuis le L4 d'une session (aucun envoi)."""
+    from .instantly.stager import stager_session
+
+    try:
+        res = stager_session(
+            session_id,
+            from_email=from_email,
+            secteur=secteur,
+            min_score=min_score,
+        )
+    except FileNotFoundError as e:
+        console.print(f"[red]✗ {e}[/red]")
+        sys.exit(1)
+    console.print(
+        f"[green]✓ Staging créé : {res.staging_id}[/green] — "
+        f"{res.nb_stages} email(s) en attente · "
+        f"{res.nb_sans_email} sans email · {res.nb_sous_seuil} hors sélection.\n"
+        f"Relire : [bold]cold-mail show {res.staging_id}[/bold]"
+    )
 
 
 @cold_mail_group.command(name="validate")

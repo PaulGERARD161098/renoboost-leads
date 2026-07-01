@@ -6,7 +6,7 @@ from typing import Any
 
 from renoboost_leads.stage0_sirene_first.mapper import (
     _derniere_annee_finances,
-    _premier_dirigeant_physique,
+    _meilleur_dirigeant_physique,
     entreprise_to_lead_stage2,
 )
 
@@ -51,7 +51,7 @@ def _entreprise_complete() -> dict[str, Any]:
             {
                 "type_dirigeant": "personne physique",
                 "nom": "Dupont",
-                "prenom": "Marie",
+                "prenoms": "Marie",
                 "qualite": "Gérante",
             },
         ],
@@ -198,25 +198,64 @@ class TestHelpers:
         assert _derniere_annee_finances({}) == (None, {})
         assert _derniere_annee_finances(None) == (None, {})  # type: ignore[arg-type]
 
-    def test_premier_dirigeant_physique_ignore_personne_morale(self):
+    def test_meilleur_dirigeant_physique_ignore_personne_morale(self):
         dirigeants = [
             {"type_dirigeant": "personne morale", "denomination": "HOLDING"},
-            {"type_dirigeant": "personne physique", "nom": "Martin", "prenom": "Paul"},
+            {"type_dirigeant": "personne physique", "nom": "Martin", "prenoms": "Paul"},
         ]
-        d = _premier_dirigeant_physique(dirigeants)
+        d = _meilleur_dirigeant_physique(dirigeants)
         assert d is not None
         assert d["nom"] == "Martin"
 
-    def test_premier_dirigeant_physique_detecte_par_nom_prenom(self):
+    def test_meilleur_dirigeant_physique_detecte_par_nom_prenom(self):
         # type_dirigeant absent → on prend si nom+prenom présents
         dirigeants = [
             {"qualite": "Président"},  # ni nom ni prenom
-            {"nom": "Durand", "prenom": "Sophie"},
+            {"nom": "Durand", "prenoms": "Sophie"},
         ]
-        d = _premier_dirigeant_physique(dirigeants)
+        d = _meilleur_dirigeant_physique(dirigeants)
         assert d is not None
         assert d["nom"] == "Durand"
 
-    def test_premier_dirigeant_physique_aucun(self):
-        assert _premier_dirigeant_physique([]) is None
-        assert _premier_dirigeant_physique([{"qualite": "Président"}]) is None
+    def test_meilleur_dirigeant_physique_aucun(self):
+        assert _meilleur_dirigeant_physique([]) is None
+        assert _meilleur_dirigeant_physique([{"qualite": "Président"}]) is None
+
+    def test_meilleur_dirigeant_priorise_decideur_parmi_physiques(self):
+        # Cas réel API : plusieurs personnes physiques, on veut le décideur
+        # (Président) et PAS le premier de la liste (Administrateur).
+        dirigeants = [
+            {"type_dirigeant": "personne physique", "nom": "BIAU", "prenoms": "ARMAND",
+             "qualite": "Administrateur"},
+            {"type_dirigeant": "personne physique", "nom": "BONDUELLE", "prenoms": "CHRISTOPHE",
+             "qualite": "Président du conseil d'administration"},
+        ]
+        d = _meilleur_dirigeant_physique(dirigeants)
+        assert d is not None
+        assert d["nom"] == "BONDUELLE"
+
+    def test_prenoms_pluriel_lu_depuis_api(self):
+        # Régression : l'API recherche-entreprises renvoie `prenoms` (pluriel).
+        # Lire `prenom` (singulier) laissait le prénom vide → emails Dropcontact KO.
+        e = _entreprise_complete()
+        e["dirigeants"] = [
+            {"type_dirigeant": "personne physique", "nom": "BONDUELLE",
+             "prenoms": "Christophe", "qualite": "Président"},
+        ]
+        lead = entreprise_to_lead_stage2(e)
+        assert lead is not None
+        assert lead.dirigeant_prenom == "Christophe"
+        assert lead.dirigeant_nom == "Bonduelle"  # casse propre (API en MAJ)
+
+    def test_nettoyage_prenom_multiple_et_nom_parenthese(self):
+        # Régression patterns email : 1er prénom seul + parenthèse (nom de
+        # naissance) retirée → évite `benoitjeanmarie.cremadescremades@…`.
+        e = _entreprise_complete()
+        e["dirigeants"] = [
+            {"type_dirigeant": "personne physique", "nom": "CREMADES (CREMADES)",
+             "prenoms": "JEAN-CHRISTOPHE RAYMOND DANIEL", "qualite": "Gérant"},
+        ]
+        lead = entreprise_to_lead_stage2(e)
+        assert lead is not None
+        assert lead.dirigeant_prenom == "Jean-Christophe"  # 1er prénom, casse propre
+        assert lead.dirigeant_nom == "Cremades"            # parenthèse retirée

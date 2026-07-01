@@ -20,7 +20,13 @@ from ..common.cache import SessionCache
 from ..common.logger import get_logger
 from ..models import LeadStage2, LeadStage3
 from .pattern_generator import generer_tous_patterns
-from .scraper import RESEAU_BLOQUE, ResultatScraping, ScraperContact, extraire_domaine
+from .scraper import (
+    RESEAU_BLOQUE,
+    ResultatScraping,
+    ScraperContact,
+    apparier_linkedin,
+    extraire_domaine,
+)
 
 logger = get_logger(__name__)
 
@@ -57,6 +63,7 @@ class EnricheurStage3:
                     raison_echec=cached.get("raison_echec"),
                     pages_visitees=cached.get("pages_visitees", []) or [],
                     signaux_ve=cached.get("signaux_ve", []) or [],
+                    linkedins=cached.get("linkedins", []) or [],
                 )
 
         try:
@@ -76,6 +83,7 @@ class EnricheurStage3:
                     "raison_echec": result.raison_echec,
                     "pages_visitees": list(result.pages_visitees),
                     "signaux_ve": list(result.signaux_ve),
+                    "linkedins": list(result.linkedins),
                 },
             )
         return result
@@ -100,6 +108,8 @@ class EnricheurStage3:
         emails_scrapes: list[str] = []
         page_source: str | None = None
         signaux_ve: list[str] = []
+        linkedin_dirigeant_site: str | None = None
+        linkedin_entreprise_site: str | None = None
 
         if site_web:
             scraping = self._scraper_avec_cache(site_web)
@@ -107,6 +117,9 @@ class EnricheurStage3:
             emails_scrapes = scraping.emails
             page_source = scraping.page_source
             signaux_ve = scraping.signaux_ve
+            linkedin_dirigeant_site, linkedin_entreprise_site = apparier_linkedin(
+                scraping.linkedins, lead.dirigeant_prenom, lead.dirigeant_nom
+            )
 
             if scraping.raison_echec == RESEAU_BLOQUE and not self._reseau_bloque_signale:
                 logger.warning(
@@ -156,6 +169,8 @@ class EnricheurStage3:
             source_globale=source,
             contient_dirigeant_pattern=contient_dirigeant,
             signaux_ve=signaux_ve,
+            linkedin_dirigeant_site=linkedin_dirigeant_site,
+            linkedin_entreprise_site=linkedin_entreprise_site,
         )
 
     def _enrichir_un_lead_robuste(self, lead: LeadStage2) -> LeadStage3:

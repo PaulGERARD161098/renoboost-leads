@@ -11,6 +11,7 @@ avec Places, le vrai place_id remplacera le sentinel.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,12 +22,65 @@ from ..models import LeadStage2
 logger = get_logger(__name__)
 
 
-def _premier_dirigeant_physique(dirigeants: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Renvoie le premier dirigeant personne physique (nom + prénom) trouvé."""
-    for d in dirigeants or []:
-        if d.get("type_dirigeant") == "personne physique" or (d.get("nom") and d.get("prenom")):
-            return d
-    return None
+# Qualités décisionnaires, par priorité décroissante (début, lowercase) :
+# président, gérant, directeur. Aligne stage0 sur stage2_entreprises.mapper.
+_PRIORITES_QUALITE = ("pr", "gé", "ge", "di")
+
+
+def _nettoyer_identite(valeur: str | None, *, premier_token: bool = False) -> str | None:
+    """Nettoie un nom/prénom brut SIRENE pour la liste de contacts + les patterns email.
+
+    - retire le nom de naissance entre parenthèses : "CREMADES (CREMADES)" → "Crémades" ;
+    - `premier_token` : ne garde que le 1er prénom ("BENOIT JEAN MARIE" → "Benoit",
+      "JEAN-CHRISTOPHE RAYMOND DANIEL" → "Jean-Christophe") — évite les emails
+      `benoitjeanmarie.x@…` faux ;
+    - casse propre (`.title()`) — l'API renvoie en MAJUSCULES.
+    """
+    if not valeur:
+        return None
+    v = re.sub(r"\(.*?\)", " ", valeur)  # retire (nom de naissance)
+    v = re.sub(r"\s+", " ", v).strip()
+    if premier_token and v:
+        v = v.split(" ")[0]
+    if not v:
+        return None
+    return v.title()
+
+
+def _prenom_dirigeant(d: dict[str, Any]) -> str | None:
+    """Prénom du dirigeant : l'API renvoie `prenoms` (pluriel), repli `prenom`."""
+    return d.get("prenoms") or d.get("prenom") or None
+
+
+def _est_personne_physique(d: dict[str, Any]) -> bool:
+    """Vrai si le dirigeant est une personne physique (a un nom + prénom)."""
+    if d.get("type_dirigeant") == "personne morale":
+        return False
+    if d.get("type_dirigeant") == "personne physique":
+        return True
+    # type_dirigeant absent → on retient si nom + prénom présents.
+    return bool(d.get("nom") and _prenom_dirigeant(d))
+
+
+def _score_qualite(d: dict[str, Any]) -> int:
+    q = (d.get("qualite") or "").lower()
+    for i, p in enumerate(_PRIORITES_QUALITE):
+        if q.startswith(p):
+            return len(_PRIORITES_QUALITE) - i
+    return 0
+
+
+def _meilleur_dirigeant_physique(dirigeants: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Renvoie le dirigeant personne physique le plus décisionnaire.
+
+    On retient les personnes physiques (le décideur joignable, pas une holding)
+    puis on priorise la qualité (président > gérant > directeur > autre). `max`
+    est stable : à qualité égale, l'ordre d'origine de l'API est préservé.
+    """
+    physiques = [d for d in (dirigeants or []) if _est_personne_physique(d)]
+    if not physiques:
+        return None
+    return max(physiques, key=_score_qualite)
 
 
 def _derniere_annee_finances(finances: dict[str, Any]) -> tuple[str | None, dict[str, Any]]:
@@ -67,7 +121,7 @@ def entreprise_to_lead_stage2(
     dirigeants = entreprise.get("dirigeants") or []
 
     annee_fin, fin = _derniere_annee_finances(finances)
-    dirigeant = _premier_dirigeant_physique(dirigeants) or {}
+    dirigeant = _meilleur_dirigeant_physique(dirigeants) or {}
 
     etat = entreprise.get("etat_administratif")
     statut_business = "OPERATIONAL" if etat == "A" else "CLOSED"
@@ -126,8 +180,8 @@ def entreprise_to_lead_stage2(
             entreprise.get("libelle_tranche_effectif_salarie")
             or siege.get("libelle_tranche_effectif_salarie")
         ),
-        dirigeant_nom=dirigeant.get("nom"),
-        dirigeant_prenom=dirigeant.get("prenom"),
+        dirigeant_nom=_nettoyer_identite(dirigeant.get("nom")),
+        dirigeant_prenom=_nettoyer_identite(_prenom_dirigeant(dirigeant), premier_token=True),
         dirigeant_qualite=dirigeant.get("qualite"),
         adresse_normalisee=siege.get("geo_adresse"),
         date_creation=entreprise.get("date_creation"),

@@ -453,6 +453,15 @@ class LeadStage3(LeadStage2):
     # au scoring L4. Vide si rien détecté ou site non scrapé.
     signaux_ve: list[str] = []
 
+    # URLs LinkedIn trouvées sur le site de l'entreprise (gratuit, fiable car
+    # publiées par la boîte elle-même) :
+    # - `linkedin_dirigeant_site` : profil /in/ dont le slug matche le nom du
+    #   dirigeant (vérifié par correspondance nom → on n'attribue pas un
+    #   profil d'employé au dirigeant) ;
+    # - `linkedin_entreprise_site` : page /company/ de l'entreprise.
+    linkedin_dirigeant_site: str | None = None
+    linkedin_entreprise_site: str | None = None
+
 
 # ════════════════════════════════════════════════════════════════
 # ÉTAGE 3.5 — Enrichissement contacts vérifiés (Dropcontact)
