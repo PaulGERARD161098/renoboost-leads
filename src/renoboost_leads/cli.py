@@ -19,6 +19,7 @@ from .common.rate_limiter import RateLimiter
 from .config_loader import load_campaign_config
 from .exporter import (
     export_contacts_csv,
+    export_coordonnees_csv,
     export_csv_crm,
     export_run_stats,
     generer_registre_rgpd,
@@ -527,9 +528,10 @@ def resume(session_id: str, stages: str, config_path: Path) -> None:
 )
 @click.option(
     "--vue",
-    type=click.Choice(["crm", "contacts"]),
+    type=click.Choice(["crm", "contacts", "coordonnees"]),
     default="crm",
-    help="crm = colonnes complètes ; contacts = nom/prénom + coordonnées + URL LinkedIn.",
+    help="crm = colonnes complètes ; contacts = nom/prénom + coordonnées + LinkedIn ; "
+    "coordonnees = livrable final épuré (entreprise, décideur, poste, email, LinkedIn, adresse).",
 )
 @click.option(
     "--joignables-uniquement",
@@ -602,8 +604,8 @@ def export(
 
     if output_path is None:
         suffix_parts = []
-        if vue == "contacts":
-            suffix_parts.append("contacts")
+        if vue in ("contacts", "coordonnees"):
+            suffix_parts.append(vue)
         if top_only:
             suffix_parts.append("top")
         if avec_email_uniquement:
@@ -613,7 +615,9 @@ def export(
         suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
         output_path = output_dir / f"leads_exportables{suffix}.csv"
 
-    if vue == "contacts":
+    if vue == "coordonnees":
+        p = export_coordonnees_csv(leads, output_path)
+    elif vue == "contacts":
         p = export_contacts_csv(leads, output_path)
     else:
         p = export_csv_crm(leads, output_path)

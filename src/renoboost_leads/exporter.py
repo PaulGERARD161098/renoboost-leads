@@ -77,6 +77,8 @@ COLONNES_STAGE3 = COLONNES_STAGE2 + [
     "nb_emails_candidats",
     "source_globale",
     "contient_dirigeant_pattern",
+    "linkedin_dirigeant_site",
+    "linkedin_entreprise_site",
 ]
 
 COLONNES_STAGE3_5 = COLONNES_STAGE3 + [
@@ -266,14 +268,19 @@ def _ligne_contact(d: dict) -> dict:
         d.get("telephone"),
     )
     linkedin = _premier(
-        d.get("linkedin_dirigeant_dropcontact"), d.get("societeinfo_linkedin")
+        d.get("linkedin_dirigeant_dropcontact"),
+        d.get("linkedin_dirigeant_site"),
+        d.get("societeinfo_linkedin"),
+    )
+    linkedin_entreprise = _premier(
+        d.get("linkedin_entreprise_dropcontact"), d.get("linkedin_entreprise_site")
     )
     canaux = [
         c
         for c, ok in (
             ("email", bool(email)),
             ("tel", bool(telephone)),
-            ("linkedin", bool(linkedin or d.get("linkedin_entreprise_dropcontact"))),
+            ("linkedin", bool(linkedin or linkedin_entreprise)),
         )
         if ok
     ]
@@ -286,7 +293,7 @@ def _ligne_contact(d: dict) -> dict:
         "qualification_email": d.get("qualification_email_dropcontact"),
         "telephone": telephone,
         "linkedin_url": linkedin,
-        "linkedin_entreprise_url": d.get("linkedin_entreprise_dropcontact"),
+        "linkedin_entreprise_url": linkedin_entreprise,
         "ville": d.get("ville"),
         "code_postal": d.get("code_postal"),
         "siren": d.get("siren"),
@@ -321,6 +328,52 @@ def export_contacts_csv(leads: list, output_path: Path) -> Path:
     rows = [_ligne_contact(lead.model_dump()) for lead in leads]
     p = _ecrire_csv(rows, COLONNES_CONTACTS, output_path)
     logger.info("CSV contacts écrit : %s (%d lignes)", p, len(rows))
+    return p
+
+
+# Vue "coordonnees" : le livrable final épuré — une ligne par décideur, avec
+# uniquement les coordonnées voulues. Chaque champ est soit vérifié, soit vide
+# (jamais deviné). Pensé pour un import direct dans un CRM (Salesforce).
+COLONNES_COORDONNEES = [
+    "entreprise",
+    "prenom",
+    "nom",
+    "poste",
+    "email",
+    "linkedin_url",
+    "adresse",
+    "ville",
+    "code_postal",
+    "departement",
+    "siren",
+]
+
+
+def _ligne_coordonnees(d: dict) -> dict:
+    """Projette un lead sur la vue coordonnées (livrable final CRM)."""
+    contact = _ligne_contact(d)
+    cp = (d.get("code_postal") or "").strip()
+    return {
+        "entreprise": d.get("nom"),
+        "prenom": contact["prenom"],
+        "nom": contact["nom_contact"],
+        "poste": d.get("dirigeant_qualite"),
+        "email": contact["email"],
+        "linkedin_url": contact["linkedin_url"],
+        "adresse": _premier(d.get("adresse_normalisee"), d.get("adresse")),
+        "ville": d.get("ville"),
+        "code_postal": cp,
+        "departement": cp[:2] if cp[:2].isdigit() else None,
+        "siren": d.get("siren"),
+    }
+
+
+def export_coordonnees_csv(leads: list, output_path: Path) -> Path:
+    """Livrable final : CSV coordonnées (entreprise, décideur, poste, email,
+    LinkedIn, adresse). Prêt pour import CRM."""
+    rows = [_ligne_coordonnees(lead.model_dump()) for lead in leads]
+    p = _ecrire_csv(rows, COLONNES_COORDONNEES, output_path)
+    logger.info("CSV coordonnées écrit : %s (%d lignes)", p, len(rows))
     return p
 
 
@@ -609,6 +662,8 @@ def lire_stage3_csv(csv_path: Path) -> list[LeadStage3]:
                 nb_emails_candidats=int(nb_c_raw) if nb_c_raw not in ("", "None") else 0,
                 source_globale=source,
                 contient_dirigeant_pattern=(dirig_raw == "VRAI"),
+                linkedin_dirigeant_site=row.get("linkedin_dirigeant_site") or None,
+                linkedin_entreprise_site=row.get("linkedin_entreprise_site") or None,
             )
         )
     return leads_l3
