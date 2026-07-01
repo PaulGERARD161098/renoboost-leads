@@ -102,6 +102,18 @@ class TestExportCoordonnees:
         d = _ligne_coordonnees(lead.model_dump())
         assert d["linkedin_url"] == "https://www.linkedin.com/in/verifie"
 
+    def test_email_verifie_seulement_pas_de_pattern(self):
+        # Fiabilité : un pattern deviné ne doit JAMAIS remplir la colonne email
+        # du livrable coordonnées (vérifié ou vide).
+        lead = self._lead(dirigeant_prenom="Jean", dirigeant_nom="Dupont",
+                          emails_candidats=["jean.dupont@acme.fr"])  # pattern seul
+        d = _ligne_coordonnees(lead.model_dump())
+        assert d["email"] is None
+        # avec un email Dropcontact vérifié → il remplit
+        lead2 = self._lead(email_dropcontact="verifie@acme.fr",
+                           emails_candidats=["pattern@acme.fr"])
+        assert _ligne_coordonnees(lead2.model_dump())["email"] == "verifie@acme.fr"
+
     def test_export_csv_colonnes_et_departement(self, tmp_path):
         lead = self._lead(code_postal="59000", ville="Lille", siren="123456789")
         p = export_coordonnees_csv([lead], tmp_path / "coord.csv")
