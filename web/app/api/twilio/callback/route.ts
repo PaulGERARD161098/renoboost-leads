@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeEqual } from "@/lib/security/safe-equal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
   const secret = process.env.TWILIO_WEBHOOK_SECRET;
   const provided =
     req.headers.get("x-webhook-secret") ?? req.nextUrl.searchParams.get("secret");
-  if (!secret || provided !== secret)
+  if (!secret || !provided || !safeEqual(provided, secret))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
