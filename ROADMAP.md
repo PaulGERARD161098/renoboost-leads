@@ -148,3 +148,24 @@ du chargement du YAML — fail-fast plutôt que constater à la fin du run.
 | P1 | Brancher Pappers L2 | SIREN 70→95%, dirigeant 30→85% | 49 € flat ou ~10 € PAYG |
 | P2 | Hunter en fallback L3 | email 50→70% | ~50 €/mois starter |
 | P3 | Apollo/Phantombuster LinkedIn | tél direct 30→60% + intitulé | 80-120 €/mois |
+
+## Sécurité (audit 2026-07-02 — voir AUDIT-2026-07-02.md)
+
+Backlog complet et statut par constat dans `AUDIT-2026-07-02.md` (source de vérité).
+
+**Livré (branche `claude/renobost-audit-remediation-4oqcr0`)** : SSRF scraper L3,
+timeouts (robots.txt, SMTP), path-traversal `session_id`, PII hors diagnostics,
+auth Streamlit fail-closed, comparaisons secret timing-safe, `ilike→eq`, erreurs
+génériques client, dump PII retiré du suivi git.
+
+**À valider par Paul (⏸, non appliqué) :**
+- **S1 — RLS** : migration `0046` déposée. Décider le modèle de tenance
+  (par-commercial `created_by` vs équipe-partagée) puis activer le scoping des
+  policies `*_all_auth` (aujourd'hui `USING (true)`). Activer leaked-password
+  protection (dashboard Supabase).
+- **S2** : purge de l'historique git du dump PII (`git filter-repo` + force-push).
+- **S3d/S3e** : secrets webhook/cron en header only ; gating admin + throttle sur
+  `bornes/ingest`.
+
+**Reporté (⏭)** : HMAC natif Twilio/Instantly, Zod généralisé sur les routes,
+mise à jour `next`/`postcss` (fix npm actuel = downgrade cassant).

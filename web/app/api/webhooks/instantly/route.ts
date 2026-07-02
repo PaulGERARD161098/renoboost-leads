@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeEqual } from "@/lib/security/safe-equal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   const provided =
     req.headers.get("x-webhook-secret") ??
     req.nextUrl.searchParams.get("secret");
-  if (!secret || provided !== secret) {
+  if (!secret || !provided || !safeEqual(provided, secret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     .limit(1);
   query = instantlyId
     ? query.eq("instantly_id", instantlyId)
-    : query.ilike("contact_email", email!);
+    : query.eq("contact_email", email!);
   const { data: found, error: findErr } = await query.maybeSingle();
   if (findErr) {
     console.error("Webhook Instantly : lookup", findErr.message);

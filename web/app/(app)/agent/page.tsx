@@ -117,6 +117,7 @@ export default async function AgentPage() {
                   Rien pour l&apos;instant.
                 </p>
               ) : (
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <tbody>
                     {journal.map((j) => (
@@ -137,6 +138,7 @@ export default async function AgentPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           </div>

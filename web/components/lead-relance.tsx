@@ -14,11 +14,14 @@ export function LeadRelance({
   const router = useRouter();
   const [date, setDate] = useState(relanceAt ? relanceAt.slice(0, 10) : "");
   const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
 
   function set(value: string | null) {
+    setMsg(null);
     startTransition(async () => {
       const res = await planifierRelance(leadId, value);
-      if (!res.error) router.refresh();
+      if (res.error) setMsg(`❌ ${res.error}`);
+      else router.refresh();
     });
   }
 
@@ -51,6 +54,11 @@ export function LeadRelance({
         >
           Effacer
         </button>
+      )}
+      {msg && (
+        <p role="alert" aria-live="polite" className="w-full text-xs text-red-600">
+          {msg}
+        </p>
       )}
     </div>
   );

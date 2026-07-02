@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { analyseSatellite } from "@/lib/satellite";
 import { generateOutreachDraft } from "@/lib/outreach";
 import { coutRelances, predraftsRestantsSousBudget } from "@/lib/costs";
+import { safeEqual } from "@/lib/security/safe-equal";
 import type { AgentConfig, Run, Verticale } from "@/lib/database.types";
 
 const SATELLITE_PAR_TICK = 5;
@@ -23,7 +24,7 @@ async function handle(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const agentSecret = process.env.AGENT_CRON_SECRET;
   const ok =
-    (cronSecret && auth === `Bearer ${cronSecret}`) ||
+    (cronSecret && auth && safeEqual(auth, `Bearer ${cronSecret}`)) ||
     (agentSecret && querySecret === agentSecret);
   if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

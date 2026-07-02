@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeEqual } from "@/lib/security/safe-equal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,12 +15,6 @@ export const dynamic = "force-dynamic";
 //      `Calendly-Webhook-Signature: t=...,v1=...`, signature = HMAC-SHA256 sur `t.body`).
 //   2. CALENDLY_WEBHOOK_SECRET → secret partagé via `?secret=` ou header.
 //   3. sinon → 401 (non configuré).
-
-function safeEqual(a: string, b: string): boolean {
-  const ba = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ba.length === bb.length && timingSafeEqual(ba, bb);
-}
 
 function verifySignature(signingKey: string, header: string | null, raw: string): boolean {
   if (!header) return false;

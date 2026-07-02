@@ -140,7 +140,7 @@ def envoyer_message(config: ConfigSMTP, msg: EmailMessage) -> None:
     Raises:
         smtplib.SMTPException si l'envoi échoue.
     """
-    with smtplib.SMTP(config.host, config.port) as smtp:
+    with smtplib.SMTP(config.host, config.port, timeout=20) as smtp:
         if config.use_tls:
             smtp.starttls()
         smtp.login(config.user, config.password)

@@ -20,3 +20,9 @@ body {
 * {
   box-sizing: border-box;
 }
+
+:is(a, button):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 8px;
+}

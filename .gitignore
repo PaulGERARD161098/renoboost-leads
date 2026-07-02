@@ -80,3 +80,6 @@ logs/
 # === DOCS BUILD ===
 docs/_build/
 site/
+
+# Dumps DB — PII, jamais committés (audit S2)
+backups/*.json

@@ -13,7 +13,9 @@ Logique :
 
 from __future__ import annotations
 
+import ipaddress
 import re
+import socket
 import threading
 import time
 import unicodedata
@@ -396,10 +398,17 @@ class ScraperContact:
                 try:
                     rp.set_url(robots_url)
                     self._attendre_rate_limit(host)
-                    rp.read()
-                    self._robots_cache[host] = rp
-                except Exception:  # noqa: BLE001
-                    # Pas de robots.txt accessible → on accepte par défaut
+                    # Fetch via requests (timeout strict) plutôt que rp.read()
+                    # qui utilise urlopen SANS timeout et peut figer le worker.
+                    resp = self.session.get(robots_url, timeout=TIMEOUT_SECONDS)
+                    if resp.status_code == 200:
+                        rp.parse(resp.text.splitlines())
+                        self._robots_cache[host] = rp
+                    else:
+                        # Pas de robots.txt accessible → on accepte par défaut
+                        self._robots_cache[host] = None  # type: ignore[assignment]
+                except requests.RequestException:
+                    # robots.txt injoignable → on accepte par défaut
                     self._robots_cache[host] = None  # type: ignore[assignment]
 
             rp = self._robots_cache[host]
@@ -434,7 +443,12 @@ class ScraperContact:
             raise
 
     def _construire_base_url(self, site_web: str) -> str | None:
-        """Construit l'URL de base en gérant http/https et trailing slash."""
+        """Construit l'URL de base en gérant http/https et trailing slash.
+
+        `site_web` provient de données externes (hostile par défaut) : on
+        n'autorise que http/https et on rejette les hôtes résolvant vers une
+        adresse privée/loopback/link-local/réservée (anti-SSRF).
+        """
         if not site_web:
             return None
         site_web = site_web.strip()
@@ -442,9 +456,27 @@ class ScraperContact:
             site_web = "https://" + site_web
         try:
             parsed = urllib.parse.urlparse(site_web)
-            return f"{parsed.scheme}://{parsed.netloc}"
-        except Exception:  # noqa: BLE001
+        except (ValueError, UnicodeError):
             return None
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return None
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        # Anti-SSRF : bloquer si l'hôte RÉSOUT vers une adresse non routable
+        # (privée / loopback / link-local / réservée). Une résolution qui échoue
+        # n'est pas un risque SSRF (aucune IP interne atteinte) → on laisse le
+        # fetch échouer naturellement (comportement historique préservé).
+        try:
+            infos = socket.getaddrinfo(parsed.hostname, None)
+        except socket.gaierror:
+            return base
+        for info in infos:
+            try:
+                ip = ipaddress.ip_address(info[4][0])
+            except ValueError:
+                continue
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return None
+        return base
 
     def scraper(self, site_web: str | None) -> ResultatScraping:
         """Scrape les emails depuis le site web.

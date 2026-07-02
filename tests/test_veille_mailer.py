@@ -98,3 +98,37 @@ class TestConstruireMessage:
         assert html_parts
         for p in html_parts:
             assert "<table" not in p.get_content()
+
+
+class TestEnvoiTimeout:
+    """[S4d] envoyer_message doit poser un timeout SMTP (anti-freeze worker)."""
+
+    def test_smtp_connecte_avec_timeout(self, monkeypatch):
+        from email.message import EmailMessage
+
+        from renoboost_leads.veille_immatriculations import mailer
+
+        captured: dict = {}
+
+        class _FakeSMTP:
+            def __init__(self, host, port, timeout=None):
+                captured["timeout"] = timeout
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def starttls(self):
+                pass
+
+            def login(self, user, password):
+                pass
+
+            def send_message(self, msg):
+                pass
+
+        monkeypatch.setattr(mailer.smtplib, "SMTP", _FakeSMTP)
+        mailer.envoyer_message(_config_factice(), EmailMessage())
+        assert captured["timeout"] == 20

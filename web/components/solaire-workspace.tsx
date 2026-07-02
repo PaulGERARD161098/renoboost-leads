@@ -344,6 +344,7 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-[var(--muted)]">
               <tr>
@@ -446,6 +447,7 @@ export function SolaireWorkspace({ leads: initial }: { leads: SolaireLead[] }) {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

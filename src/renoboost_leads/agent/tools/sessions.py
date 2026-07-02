@@ -20,6 +20,24 @@ from ...settings import PROJECT_ROOT
 
 OUTPUT_ROOT = PROJECT_ROOT / "data" / "output"
 
+
+def _dossier_session(session_id: str) -> Path:
+    """Résout `OUTPUT_ROOT / session_id` en refusant toute évasion de dossier.
+
+    `session_id` vient d'un appel outil (hostile par défaut) : un id contenant
+    `..` ou un chemin absolu pourrait pointer hors de `data/output/`. On résout
+    puis on vérifie l'appartenance à OUTPUT_ROOT (anti path-traversal).
+
+    Raises:
+        ValueError si le chemin résolu sort de OUTPUT_ROOT.
+    """
+    root = OUTPUT_ROOT.resolve()
+    p = (OUTPUT_ROOT / session_id).resolve()
+    if not p.is_relative_to(root):
+        raise ValueError(f"session_id invalide : '{session_id}'")
+    return p
+
+
 STAGE_FILES = {
     "1": "etage1_decouverte.csv",
     "2": "etage2_entreprises.csv",
@@ -79,7 +97,10 @@ def read_session(session_id: str, stage: str = "3", sample_size: int = 5) -> dic
         return {
             "error": f"stage inconnu : '{stage}'. Valides : {list(STAGE_FILES.keys())}"
         }
-    dossier = OUTPUT_ROOT / session_id
+    try:
+        dossier = _dossier_session(session_id)
+    except ValueError as e:
+        return {"error": str(e)}
     if not dossier.is_dir():
         return {"error": f"session inconnue : '{session_id}'"}
     fichier = dossier / STAGE_FILES[stage]

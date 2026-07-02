@@ -35,7 +35,18 @@ async function handle(req: NextRequest) {
   try {
     result = await ingestIrve(admin);
   } catch (e) {
-    result = { error: String(e) };
+    // Détail complet côté serveur (logs + journal), jamais renvoyé au client.
+    console.error("Bornes ingest : échec", e);
+    try {
+      await admin.from("agent_journal").insert({
+        type: "bornes_ingest",
+        message: "Ingestion bornes IRVE : échec",
+        payload: { error: String(e) },
+      });
+    } catch {
+      /* le log ne doit jamais casser l'ingestion */
+    }
+    return NextResponse.json({ error: "traitement échoué" }, { status: 500 });
   }
   // Trace en base (observabilité sans logs Vercel).
   try {

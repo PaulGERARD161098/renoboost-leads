@@ -111,3 +111,19 @@ def test_read_session_complete(fake_output_root: Path) -> None:
     assert res["row_count"] == 8
     assert len(res["sample"]) == 3
     assert res["sample"][0]["nom"] == "E0"
+
+
+def test_read_session_rejette_path_traversal(fake_output_root: Path) -> None:
+    """[S4e] un session_id qui s'évade de OUTPUT_ROOT est refusé, pas suivi."""
+    res = sess.read_session("../../etc", stage="3")
+    assert "error" in res
+    assert "invalide" in res["error"]
+
+
+def test_dossier_session_bloque_evasion(fake_output_root: Path) -> None:
+    """[S4e] _dossier_session : ValueError hors racine, OK sinon."""
+    with pytest.raises(ValueError):
+        sess._dossier_session("../secret")
+    ok = sess._dossier_session("bonne-session")
+    assert ok.name == "bonne-session"
+    assert ok.is_relative_to(fake_output_root.resolve())

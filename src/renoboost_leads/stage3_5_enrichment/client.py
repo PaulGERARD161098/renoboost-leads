@@ -54,6 +54,28 @@ def _hote_bloque_par_reseau(status_code: int, corps: str) -> bool:
     return "allowlist" in corps_l or "host_not_allowed" in corps_l
 
 
+def _detail_erreur_http(resp: requests.Response) -> str:
+    """Message d'erreur HTTP sans PII : status + champ error/reason du JSON.
+
+    `resp.text` brut peut contenir des données personnelles (nom/prénom du
+    dirigeant renvoyés en écho par Dropcontact) qui finiraient dans
+    `runs.erreur` / heartbeat. On n'expose que le code HTTP et, si présent, le
+    champ structuré `error`/`reason`/`message` de la réponse JSON.
+    """
+    detail = ""
+    try:
+        corps = resp.json()
+    except ValueError:
+        corps = None
+    if isinstance(corps, dict):
+        for cle in ("error", "reason", "message"):
+            valeur = corps.get(cle)
+            if valeur:
+                detail = f" — {cle}: {valeur}"
+                break
+    return f"HTTP {resp.status_code}{detail}"
+
+
 @dataclass
 class DropcontactReponse:
     """Réponse brute Dropcontact pour un lot, indexée par position d'entrée.
@@ -122,9 +144,7 @@ class DropcontactClient:
                 f"(HTTP {resp.status_code} : {resp.text[:200]})"
             )
         if resp.status_code >= 400:
-            raise DropcontactError(
-                f"POST /batch HTTP {resp.status_code} : {resp.text[:200]}"
-            )
+            raise DropcontactError(f"POST /batch {_detail_erreur_http(resp)}")
         try:
             return resp.json()
         except ValueError as e:
@@ -146,7 +166,7 @@ class DropcontactClient:
             )
         if resp.status_code >= 400:
             raise DropcontactError(
-                f"GET /batch/{request_id} HTTP {resp.status_code} : {resp.text[:200]}"
+                f"GET /batch/{request_id} {_detail_erreur_http(resp)}"
             )
         try:
             return resp.json()
@@ -186,7 +206,8 @@ class DropcontactClient:
         request_id = post_response.get("request_id")
         if not request_id:
             raise DropcontactError(
-                f"Pas de request_id dans la réponse POST : {post_response}"
+                "Pas de request_id dans la réponse POST : "
+                f"clés={list(post_response.keys())}"
             )
 
         logger.info(

@@ -115,9 +115,13 @@ def email_report(
     # Import paresseux pour éviter les boucles d'import si report importe notify
     from ...settings import PROJECT_ROOT
     from .report import generate_report
-    from .sessions import OUTPUT_ROOT
+    from .sessions import _dossier_session
 
-    rapport_path = OUTPUT_ROOT / session_id / "rapport.html"
+    try:
+        dossier = _dossier_session(session_id)
+    except ValueError as e:
+        return {"error": str(e)}
+    rapport_path = dossier / "rapport.html"
     if regenerer or not rapport_path.exists():
         gen_res = generate_report(session_id)
         if "error" in gen_res:

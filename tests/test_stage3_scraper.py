@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from renoboost_leads.models import LeadStage2
 from renoboost_leads.stage3_contacts.enricher import EnricheurStage3
 from renoboost_leads.stage3_contacts.scraper import (
@@ -13,6 +15,19 @@ from renoboost_leads.stage3_contacts.scraper import (
     compiler_signaux_ve,
     detecter_signaux_ve,
 )
+
+
+@pytest.fixture(autouse=True)
+def _stub_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Résout tout hôte vers une IP publique par défaut (garde-fou SSRF anti
+    coupure réseau en test). Les tests SSRF dédiés surchargent ce stub."""
+    from renoboost_leads.stage3_contacts import scraper as _scr
+
+    monkeypatch.setattr(
+        _scr.socket,
+        "getaddrinfo",
+        lambda host, *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
+    )
 
 
 class TestDetecterSignauxVe:
@@ -282,3 +297,75 @@ def test_403_allowlist_donne_reseau_bloque():
 
     res2 = _scraper(_Resp(403, "Forbidden")).scraper("http://acme.fr")
     assert res2.raison_echec == SITE_INACCESSIBLE
+
+
+def test_verifier_robots_utilise_timeout_et_ne_fige_pas():
+    """[S3c] robots.txt lu via session.get(timeout) ; injoignable → autorisé."""
+    import requests
+
+    from renoboost_leads.stage3_contacts.scraper import (
+        TIMEOUT_SECONDS,
+        ScraperContact,
+    )
+
+    captured: dict = {}
+
+    class _Resp:
+        status_code = 404
+        text = ""
+
+    def _get(url, timeout=None, **k):
+        captured["url"] = url
+        captured["timeout"] = timeout
+        return _Resp()
+
+    sc = ScraperContact(rate_limit_seconds=0.0)
+    sc.session.get = _get  # type: ignore[assignment]
+    # 404 robots.txt → autorisé par défaut, avec timeout posé.
+    assert sc._verifier_robots("https://acme.fr", "/contact") is True
+    assert captured["timeout"] == TIMEOUT_SECONDS
+    assert captured["url"].endswith("/robots.txt")
+
+    # RequestException (ex : timeout réseau) → autorisé, jamais de levée.
+    def _boom(url, timeout=None, **k):
+        raise requests.RequestException("boom")
+
+    sc2 = ScraperContact(rate_limit_seconds=0.0)
+    sc2.session.get = _boom  # type: ignore[assignment]
+    assert sc2._verifier_robots("https://acme.fr", "/x") is True
+
+
+def test_construire_base_url_bloque_ssrf(monkeypatch):
+    """[S3b] SSRF : hôte résolvant vers adresse privée/loopback → None."""
+    from renoboost_leads.stage3_contacts import scraper as scr
+
+    sc = scr.ScraperContact(rate_limit_seconds=0.0)
+
+    mapping = {
+        "public.example.com": "93.184.216.34",
+        "intra.local": "10.0.0.5",
+        "localhost": "127.0.0.1",
+        "link.local": "169.254.1.1",
+    }
+
+    def _fake_getaddrinfo(host, *a, **k):
+        return [(2, 1, 6, "", (mapping[host], 0))]
+
+    monkeypatch.setattr(scr.socket, "getaddrinfo", _fake_getaddrinfo)
+
+    assert (
+        sc._construire_base_url("public.example.com")
+        == "https://public.example.com"
+    )
+    assert sc._construire_base_url("http://intra.local") is None
+    assert sc._construire_base_url("localhost") is None
+    assert sc._construire_base_url("link.local") is None
+
+    # Échec de résolution DNS → on laisse passer (pas un risque SSRF : aucune IP
+    # interne atteinte ; le fetch échouera naturellement). Ne PAS sur-bloquer,
+    # sinon tout domaine transitoirement injoignable serait rejeté à tort.
+    def _boom(host, *a, **k):
+        raise scr.socket.gaierror("no dns")
+
+    monkeypatch.setattr(scr.socket, "getaddrinfo", _boom)
+    assert sc._construire_base_url("http://nxdomain.invalid") == "http://nxdomain.invalid"

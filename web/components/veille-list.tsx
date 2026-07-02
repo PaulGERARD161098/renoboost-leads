@@ -36,9 +36,11 @@ export function VeilleList({ signaux }: { signaux: VeilleSignal[] }) {
   }
 
   function act(fn: () => Promise<{ error?: string }>) {
+    setMsg(null);
     startTransition(async () => {
       const res = await fn();
-      if (!res.error) router.refresh();
+      if (res.error) setMsg(`❌ ${res.error}`);
+      else router.refresh();
     });
   }
 
@@ -52,7 +54,15 @@ export function VeilleList({ signaux }: { signaux: VeilleSignal[] }) {
         >
           {loading ? "Recherche en cours…" : "Lancer la veille maintenant"}
         </button>
-        {msg && <span className="text-sm text-[var(--muted)]">{msg}</span>}
+        {msg && (
+          <span
+            role="alert"
+            aria-live="polite"
+            className={`text-sm ${msg.startsWith("❌") ? "text-red-600" : "text-[var(--muted)]"}`}
+          >
+            {msg}
+          </span>
+        )}
       </div>
 
       {signaux.length === 0 ? (
