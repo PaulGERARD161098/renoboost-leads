@@ -212,3 +212,36 @@ class TestDropcontactClient:
         with pytest.raises(DropcontactError) as exc:
             client.enrichir_batch([{"first_name": "P"}])
         assert not isinstance(exc.value, DropcontactHostBlockedError)
+
+
+def test_detail_erreur_http_ne_fuit_pas_de_pii():
+    """[S4f] les erreurs HTTP n'exposent que status + error/reason, jamais le
+    corps brut (qui peut contenir nom/prénom du dirigeant renvoyés en écho)."""
+    from renoboost_leads.stage3_5_enrichment.client import _detail_erreur_http
+
+    class _RespJson:
+        status_code = 400
+        text = '{"data":[{"first_name":"Jean","last_name":"Dupont"}]}'
+
+        def json(self):
+            return {
+                "error": "quota exceeded",
+                "data": [{"first_name": "Jean", "last_name": "Dupont"}],
+            }
+
+    msg = _detail_erreur_http(_RespJson())
+    assert "400" in msg
+    assert "quota exceeded" in msg
+    assert "Jean" not in msg
+    assert "Dupont" not in msg
+
+    class _RespText:
+        status_code = 500
+        text = "Jean Dupont — PII brute"
+
+        def json(self):
+            raise ValueError("non-json")
+
+    msg2 = _detail_erreur_http(_RespText())
+    assert "500" in msg2
+    assert "Jean" not in msg2
