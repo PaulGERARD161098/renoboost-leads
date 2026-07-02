@@ -30,7 +30,7 @@ from ...instantly.staging import (
 )
 from .leads import prioritize_leads
 from .notify import alert_human
-from .sessions import OUTPUT_ROOT
+from .sessions import _dossier_session
 
 FROM_EMAIL_DEFAUT = "paul@renoboost.fr"
 
@@ -42,7 +42,10 @@ def _from_email_session(session_id: str) -> str | None:
     alors sur le défaut). Permet le from_email « auto depuis la session » :
     l'émetteur est configuré une fois dans le YAML, repris ici sans ressaisie.
     """
-    stats_path = OUTPUT_ROOT / session_id / "run_stats.json"
+    try:
+        stats_path = _dossier_session(session_id) / "run_stats.json"
+    except ValueError:
+        return None
     if not stats_path.exists():
         return None
     try:

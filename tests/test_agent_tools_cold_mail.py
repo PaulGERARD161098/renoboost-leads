@@ -101,10 +101,7 @@ def _ecrire_run_stats(d: Path, emetteur_email: str | None) -> None:
     )
 
 
-def test_from_email_auto_depuis_session(
-    fake_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(cm, "OUTPUT_ROOT", fake_root)
+def test_from_email_auto_depuis_session(fake_root: Path) -> None:
     d = fake_root / "s_emetteur"
     d.mkdir()
     _ecrire_l4(d, [{"nom": "A", "email_dropcontact": "a@x.fr", "score_interet": "90"}])
@@ -114,10 +111,7 @@ def test_from_email_auto_depuis_session(
     assert res["from_email"] == "contact@toitures-rossini.fr"
 
 
-def test_from_email_explicite_prioritaire(
-    fake_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(cm, "OUTPUT_ROOT", fake_root)
+def test_from_email_explicite_prioritaire(fake_root: Path) -> None:
     d = fake_root / "s_override"
     d.mkdir()
     _ecrire_l4(d, [{"nom": "A", "email_dropcontact": "a@x.fr", "score_interet": "90"}])
@@ -126,10 +120,7 @@ def test_from_email_explicite_prioritaire(
     assert res["from_email"] == "paul@x.fr"
 
 
-def test_from_email_fallback_defaut(
-    fake_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(cm, "OUTPUT_ROOT", fake_root)
+def test_from_email_fallback_defaut(fake_root: Path) -> None:
     d = fake_root / "s_nofallback"
     d.mkdir()
     _ecrire_l4(d, [{"nom": "A", "email_dropcontact": "a@x.fr", "score_interet": "90"}])
