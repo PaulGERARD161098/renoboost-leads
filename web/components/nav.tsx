@@ -43,14 +43,14 @@ export function Nav({
   }
 
   return (
-    <aside className="group fixed left-0 top-0 z-30 flex h-screen w-16 flex-col border-r border-[var(--border)] bg-white transition-[width] duration-200 ease-out hover:w-60 hover:shadow-xl">
+    <aside className="group fixed left-0 top-0 z-30 flex h-screen w-16 flex-col border-r border-[var(--border)] bg-white transition-[width] duration-200 ease-out hover:w-60 hover:shadow-xl focus-within:w-60 focus-within:shadow-xl">
       {/* Logo */}
       <Link
         href="/accueil"
         className="flex h-14 shrink-0 items-center gap-2 overflow-hidden px-4 text-[var(--brand)]"
       >
         <span className="text-xl">🧭</span>
-        <span className="flex flex-col whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <span className="flex flex-col whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
           {/* Le nom = voyant de santé (vert OK / ambre dégradé / rouge incident). */}
           <HealthName name="Leads" severite={health} className="text-lg font-bold leading-none" />
           <span className="text-[10px] font-medium leading-tight text-[var(--muted)]">
@@ -65,7 +65,7 @@ export function Nav({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Rechercher…"
-          className="w-full rounded-lg border border-[var(--border)] px-2 py-1.5 text-sm opacity-0 outline-none transition-opacity duration-200 focus:border-[var(--brand)] group-hover:opacity-100"
+          className="w-full rounded-lg border border-[var(--border)] px-2 py-1.5 text-sm opacity-0 outline-none transition-opacity duration-200 focus:border-[var(--brand)] group-hover:opacity-100 group-focus-within:opacity-100"
         />
       </form>
 
@@ -87,7 +87,7 @@ export function Nav({
               <span className="w-5 shrink-0 text-center text-base leading-none">
                 {l.icon}
               </span>
-              <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
                 {l.label}
               </span>
             </Link>
@@ -97,7 +97,7 @@ export function Nav({
 
       {/* Bas : email + compte + déconnexion */}
       <div className="shrink-0 border-t border-[var(--border)] p-3">
-        <div className="mb-2 truncate text-xs text-[var(--muted)] opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="mb-2 truncate text-xs text-[var(--muted)] opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
           {email}
         </div>
         <Link
@@ -110,7 +110,7 @@ export function Nav({
           }`}
         >
           <span className="w-5 shrink-0 text-center leading-none">⚙️</span>
-          <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
             Mon compte
           </span>
         </Link>
@@ -120,7 +120,7 @@ export function Nav({
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[var(--muted)] hover:bg-slate-100"
           >
             <span className="w-5 shrink-0 text-center leading-none">⏻</span>
-            <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
               Déconnexion
             </span>
           </button>
