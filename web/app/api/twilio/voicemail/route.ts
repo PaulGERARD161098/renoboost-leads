@@ -54,7 +54,10 @@ export async function POST(req: NextRequest) {
     })
     .select("*")
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Voicemail : insertion échouée", error.message);
+    return NextResponse.json({ error: "traitement échoué" }, { status: 500 });
+  }
 
   await supabase.from("leads").update({ call_statut: "message_depose" }).eq("id", leadId);
   await supabase.from("lead_events").insert({

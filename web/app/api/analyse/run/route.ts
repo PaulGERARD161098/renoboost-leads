@@ -68,10 +68,8 @@ export async function POST(req: NextRequest) {
     upsert: false,
   });
   if (up.error) {
-    return NextResponse.json(
-      { error: `Upload image: ${up.error.message}` },
-      { status: 500 },
-    );
+    console.error("Analyse : upload image échoué", up.error.message);
+    return NextResponse.json({ error: "traitement échoué" }, { status: 500 });
   }
 
   // 2) Analyse Vision.
@@ -100,8 +98,9 @@ export async function POST(req: NextRequest) {
     .select("id, created_at")
     .single();
   if (insErr) {
+    console.error("Analyse : persistance résultat échouée", insErr.message);
     await supabase.storage.from("analyses").remove([path]).catch(() => {});
-    return NextResponse.json({ error: insErr.message }, { status: 500 });
+    return NextResponse.json({ error: "traitement échoué" }, { status: 500 });
   }
 
   return NextResponse.json({
