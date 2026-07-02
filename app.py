@@ -185,7 +185,8 @@ def _read_app_password() -> str | None:
 def _require_auth() -> None:
     """Bloque le rendu de l'app tant que l'utilisateur n'est pas authentifié.
 
-    No-op si aucun APP_PASSWORD configuré (mode dev local ouvert).
+    Fail-closed : sans APP_PASSWORD, l'accès est refusé sauf échappatoire dev
+    explicite (APP_ALLOW_OPEN=1/true).
     Sinon affiche un formulaire de mdp et `st.stop()` jusqu'à validation.
     Comparaison constant-time (hmac.compare_digest) pour éviter timing attacks.
     """
@@ -193,7 +194,11 @@ def _require_auth() -> None:
 
     expected = _read_app_password()
     if not expected:
-        # Pas de mdp configuré → app ouverte (dev local)
+        # Fail-closed : sans APP_PASSWORD, on refuse l'accès par défaut.
+        # Échappatoire dev explicite : APP_ALLOW_OPEN=1/true ouvre l'app.
+        if os.environ.get("APP_ALLOW_OPEN", "").lower() not in ("1", "true"):
+            st.error("APP_PASSWORD non configuré — accès refusé.")
+            st.stop()
         return
 
     if st.session_state.get("authenticated"):
