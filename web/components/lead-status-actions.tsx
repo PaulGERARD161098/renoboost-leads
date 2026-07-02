@@ -11,11 +11,14 @@ export function LeadStatusActions({ lead }: { lead: Lead }) {
   // Clôture en deux temps : choisir gagné/perdu, puis raison + confirmation.
   const [cloture, setCloture] = useState<"gagne" | "perdu" | null>(null);
   const [raison, setRaison] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
 
   function go(fn: () => Promise<{ error?: string }>) {
+    setMsg(null);
     startTransition(async () => {
       const res = await fn();
-      if (!res.error) router.refresh();
+      if (res.error) setMsg(`❌ ${res.error}`);
+      else router.refresh();
     });
   }
 
@@ -96,6 +99,12 @@ export function LeadStatusActions({ lead }: { lead: Lead }) {
             Confirmer {cloture === "gagne" ? "🏆" : "✖️"}
           </button>
         </div>
+      )}
+
+      {msg && (
+        <p role="alert" aria-live="polite" className="text-xs text-red-600">
+          {msg}
+        </p>
       )}
     </div>
   );

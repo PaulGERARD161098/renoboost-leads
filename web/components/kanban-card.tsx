@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Lead, LeadStatus } from "@/lib/database.types";
@@ -17,11 +17,14 @@ type Action = { label: string; run: () => Promise<{ error?: string }>; primary?:
 export function KanbanCard({ lead }: { lead: Lead }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
 
   function go(fn: () => Promise<{ error?: string }>) {
+    setMsg(null);
     startTransition(async () => {
       const res = await fn();
-      if (!res.error) router.refresh();
+      if (res.error) setMsg(`❌ ${res.error}`);
+      else router.refresh();
     });
   }
 
@@ -76,7 +79,7 @@ export function KanbanCard({ lead }: { lead: Lead }) {
               key={a.label}
               disabled={pending}
               onClick={() => go(a.run)}
-              className={`rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-40 ${
+              className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-40 ${
                 a.primary
                   ? "bg-[var(--brand)] text-white hover:opacity-90"
                   : "border border-[var(--border)] text-[var(--muted)] hover:bg-slate-50"
@@ -86,6 +89,11 @@ export function KanbanCard({ lead }: { lead: Lead }) {
             </button>
           ))}
         </div>
+      )}
+      {msg && (
+        <p role="alert" aria-live="polite" className="mt-2 text-xs text-red-600">
+          {msg}
+        </p>
       )}
     </div>
   );

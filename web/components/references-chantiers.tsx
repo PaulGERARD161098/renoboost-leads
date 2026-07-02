@@ -56,9 +56,11 @@ export function ReferencesChantiers({ refs }: { refs: ReferenceRow[] }) {
   }
 
   function go(fn: () => Promise<{ error?: string }>) {
+    setMsg(null);
     startTransition(async () => {
       const res = await fn();
-      if (!res.error) router.refresh();
+      if (res.error) setMsg(`❌ ${res.error}`);
+      else router.refresh();
     });
   }
 
@@ -79,6 +81,12 @@ export function ReferencesChantiers({ refs }: { refs: ReferenceRow[] }) {
           {ouvert ? "Fermer" : "+ Ajouter une référence"}
         </button>
       </div>
+
+      {msg?.startsWith("❌") && (
+        <p role="alert" aria-live="polite" className="mb-3 text-xs text-red-600">
+          {msg}
+        </p>
+      )}
 
       {ouvert && (
         <div className="mb-3 grid gap-3 rounded-xl border border-[var(--border)] bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
