@@ -180,6 +180,7 @@ export default async function TableauDeBordPage() {
                 Rien en attente. Lance une recherche pour alimenter le pipeline.
               </p>
             ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <tbody>
                   {priorite.map((l) => (
@@ -210,6 +211,7 @@ export default async function TableauDeBordPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
@@ -245,6 +247,7 @@ export default async function TableauDeBordPage() {
             ⏰ Relances à faire ({relancesDues.length})
           </h2>
           <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <tbody>
                 {relancesDues.slice(0, 10).map((l) => (
@@ -268,6 +271,7 @@ export default async function TableauDeBordPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}
@@ -285,6 +289,7 @@ export default async function TableauDeBordPage() {
             </Link>
           </h2>
           <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <tbody>
                 {topSolaire.map((l) => (
@@ -312,6 +317,7 @@ export default async function TableauDeBordPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}
@@ -332,6 +338,7 @@ export default async function TableauDeBordPage() {
         Meilleurs départements
       </h2>
       <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs text-[var(--muted)]">
             <tr>
@@ -360,6 +367,7 @@ export default async function TableauDeBordPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

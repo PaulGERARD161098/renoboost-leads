@@ -163,7 +163,7 @@ function RunReportModal({ report, onClose }: { report: RunReport; onClose: () =>
             {report.entreprises.length === 0 ? (
               <p className="text-sm text-[var(--muted)]">Aucune entreprise.</p>
             ) : (
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--border)]">
+              <div className="max-h-64 overflow-auto rounded-lg border border-[var(--border)]">
                 <table className="w-full text-sm">
                   <tbody>
                     {report.entreprises.map((e, i) => (

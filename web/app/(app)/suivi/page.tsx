@@ -225,6 +225,7 @@ export default async function SuiviPage() {
             Tunnel par angle du mail (l&apos;angle est mémorisé à la génération du
             brouillon) — la boucle d&apos;apprentissage du ciblage.
           </p>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-[var(--muted)]">
@@ -254,10 +255,11 @@ export default async function SuiviPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-7">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         {COLUMNS.map((col) => {
           const items = byStatus(col.statut);
           return (
