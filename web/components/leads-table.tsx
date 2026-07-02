@@ -137,6 +137,8 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
 
   const arrow = (key: SortKey) =>
     sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+  const ariaSort = (key: SortKey): React.AriaAttributes["aria-sort"] =>
+    sortKey === key ? (sortDir === "asc" ? "ascending" : "descending") : "none";
 
   return (
     <div>
@@ -214,7 +216,6 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
           >
             Annuler
           </button>
-          {msg && <span>{msg}</span>}
         </div>
       )}
 
@@ -223,13 +224,26 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
           <thead className="border-b border-[var(--border)] bg-slate-50 text-left text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
               <th className="w-10 px-4 py-3">
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                <input
+                  type="checkbox"
+                  aria-label="Tout sélectionner"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                />
               </th>
-              <Th onClick={() => sortBy("entreprise")}>Entreprise{arrow("entreprise")}</Th>
-              <Th onClick={() => sortBy("ville")}>Ville{arrow("ville")}</Th>
-              <Th onClick={() => sortBy("effectif")}>Effectif{arrow("effectif")}</Th>
+              <Th onClick={() => sortBy("entreprise")} sort={ariaSort("entreprise")}>
+                Entreprise{arrow("entreprise")}
+              </Th>
+              <Th onClick={() => sortBy("ville")} sort={ariaSort("ville")}>
+                Ville{arrow("ville")}
+              </Th>
+              <Th onClick={() => sortBy("effectif")} sort={ariaSort("effectif")}>
+                Effectif{arrow("effectif")}
+              </Th>
               <th className="px-4 py-3">Contact</th>
-              <Th onClick={() => sortBy("score")}>Score{arrow("score")}</Th>
+              <Th onClick={() => sortBy("score")} sort={ariaSort("score")}>
+                Score{arrow("score")}
+              </Th>
               <th className="px-4 py-3">Statut</th>
             </tr>
           </thead>
@@ -244,6 +258,7 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
                 <td className="px-4 py-3">
                   <input
                     type="checkbox"
+                    aria-label={`Sélectionner ${lead.entreprise}`}
                     checked={selected.has(lead.id)}
                     onChange={() => toggle(lead.id)}
                   />
@@ -313,6 +328,16 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
           </tbody>
         </table>
       </div>
+
+      {msg && (
+        <span
+          role="status"
+          aria-live="polite"
+          className={`mt-3 block text-sm ${msg.startsWith("❌") ? "text-red-600" : "text-[var(--muted)]"}`}
+        >
+          {msg}
+        </span>
+      )}
     </div>
   );
 }
@@ -320,16 +345,21 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
 function Th({
   children,
   onClick,
+  sort = "none",
 }: {
   children: React.ReactNode;
   onClick: () => void;
+  sort?: React.AriaAttributes["aria-sort"];
 }) {
   return (
-    <th
-      onClick={onClick}
-      className="cursor-pointer select-none px-4 py-3 hover:text-[var(--brand)]"
-    >
-      {children}
+    <th aria-sort={sort} className="px-4 py-3">
+      <button
+        type="button"
+        onClick={onClick}
+        className="cursor-pointer select-none hover:text-[var(--brand)]"
+      >
+        {children}
+      </button>
     </th>
   );
 }
